@@ -13,13 +13,13 @@
     "author": "por el Equipo de Desarrollo de {brand}"
   },
   "about": {
-    "title": "Acerca de Nosotros",
-    "content": "Qullqa es una plataforma de gestión de inventario diseñada para bodegas y farmacias independientes en el Perú."
+    "title": "Acerca de Bodega Platform",
+    "content": "Bodega Platform es el sistema de gestión de inventario, ventas y proveedores de tu negocio."
   },
   "home": {
-    "title": "Bienvenido a Qullqa",
-    "content": "Gestiona tu inventario, ventas, proveedores y entregas desde un solo lugar.",
-    "content-personalized": "Hola {name}, gestiona tu inventario, ventas, proveedores y entregas desde un solo lugar.",
+    "title": "Bienvenido a Bodega Platform",
+    "content": "Gestiona tu inventario, ventas y proveedores desde un solo lugar.",
+    "content-personalized": "Hola {name}, gestiona tu inventario, ventas y proveedores desde un solo lugar.",
     "go-dashboard": "Ir al Panel"
   },
   "page-not-found": {
@@ -34,6 +34,14 @@
     "toast-success-title": "Listo",
     "toast-error-title": "Error"
   },
+  "auth-hero": {
+    "eyebrow": "Tu bodega, en orden",
+    "title": "Todo tu negocio en un solo lugar",
+    "body": "Controla el inventario, registra tus ventas y no te quedes sin stock — desde el mostrador o desde el celular.",
+    "feature-inventory": "Alertas de vencimiento y de stock bajo",
+    "feature-sales": "Ventas con cuotas para tus clientes de confianza",
+    "feature-reports": "Reportes claros de lo que entra y lo que sale"
+  },
   "sign-in": {
     "title": "Iniciar sesión",
     "subtitle": "Ingresa tus credenciales para continuar.",
@@ -46,7 +54,7 @@
     "submit": "Iniciar sesión",
     "loading": "Verificando...",
     "no-account": "¿Aún no tienes cuenta?",
-    "register": "Crear cuenta gratis",
+    "register": "Crear cuenta",
     "error-empty": "Por favor ingresa tu correo y contraseña.",
     "error-invalid-email": "Por favor ingresa un correo válido.",
     "error-credentials": "Credenciales inválidas. Revisa tu correo y contraseña."
@@ -56,10 +64,12 @@
     "strength-fair": "Regular",
     "strength-good": "Buena",
     "strength-strong": "Fuerte",
-    "title": "Crear cuenta gratis",
-    "subtitle": "Comienza sin costo. Actualiza tu plan cuando lo necesites.",
-    "full-name": "Nombre completo",
-    "full-name-placeholder": "Juan Pérez",
+    "title": "Crear tu cuenta",
+    "subtitle": "Vas a poder empezar a usar tu bodega en un par de minutos.",
+    "first-name": "Nombre",
+    "first-name-placeholder": "Juan",
+    "last-name": "Apellido",
+    "last-name-placeholder": "Pérez",
     "business-name": "Nombre del negocio",
     "business-placeholder": "Bodega El Sol",
     "business-type": "Tipo de negocio",
@@ -73,15 +83,12 @@
     "password-placeholder": "Mínimo 8 caracteres",
     "submit": "Crear cuenta",
     "loading": "Creando cuenta...",
-    "terms-pre": "Al registrarte aceptas nuestros",
-    "terms-link": "Términos de servicio",
-    "terms-and": "y",
-    "privacy-link": "Política de privacidad",
     "has-account": "¿Ya tienes una cuenta?",
     "back-to-login": "Iniciar sesión",
     "back-link": "Volver al inicio de sesión",
     "success": "Cuenta creada exitosamente. Redirigiendo...",
-    "error-full-name": "El nombre completo es obligatorio.",
+    "error-first-name": "El nombre es obligatorio.",
+    "error-last-name": "El apellido es obligatorio.",
     "error-business-name": "El nombre del negocio es obligatorio.",
     "error-business-type": "Selecciona un tipo de negocio.",
     "error-email": "Ingresa un correo válido.",
@@ -91,16 +98,10 @@
   },
   "forgot-password": {
     "title": "Recuperar contraseña",
-    "subtitle": "Ingresa tu correo y te enviaremos un enlace para restablecer tu contraseña.",
-    "email": "Correo electrónico",
-    "email-placeholder": "usuario\\@negocio.com",
-    "submit": "Enviar enlace de recuperación",
-    "loading": "Enviando...",
+    "subtitle": "Todavía no hay recuperación automática por correo.",
     "back-link": "Volver al inicio de sesión",
-    "success-title": "Correo enviado",
-    "success-body": "Revisa tu bandeja de entrada en {email}. El enlace expirará en 30 minutos.",
-    "resend-question": "¿No recibiste el correo?",
-    "resend-link": "Reenviar",
+    "unavailable-title": "Pide ayuda a un administrador",
+    "unavailable-body": "Por ahora, si olvidaste tu contraseña, la persona administradora de tu negocio puede darte de baja y volver a invitarte con una contraseña nueva.",
     "back-to-login": "Volver al inicio de sesión"
   },
   "sidebar": {
@@ -108,7 +109,8 @@
     "admin-label": "Administrador",
     "open-menu": "Abrir menú",
     "close-menu": "Cerrar menú",
-    "language-label": "Idioma"
+    "language-label": "Idioma",
+    "tagline": "Gestión de tienda"
   },
   "settings": {
     "title": "Configuración",

@@ -13,13 +13,13 @@
     "author": "by {brand} Developer Team"
   },
   "about": {
-    "title": "About Us",
-    "content": "Qullqa is an inventory management platform designed for independent convenience stores and pharmacies across Peru."
+    "title": "About Bodega Platform",
+    "content": "Bodega Platform is your business's inventory, sales and supplier management system."
   },
   "home": {
-    "title": "Welcome to Qullqa",
-    "content": "Manage your inventory, sales, suppliers and deliveries all in one place.",
-    "content-personalized": "Hi {name}, manage your inventory, sales, suppliers and deliveries all in one place.",
+    "title": "Welcome to Bodega Platform",
+    "content": "Manage your inventory, sales and suppliers all in one place.",
+    "content-personalized": "Hi {name}, manage your inventory, sales and suppliers all in one place.",
     "go-dashboard": "Go to Dashboard"
   },
   "page-not-found": {
@@ -34,6 +34,14 @@
     "toast-success-title": "Done",
     "toast-error-title": "Error"
   },
+  "auth-hero": {
+    "eyebrow": "Your store, in order",
+    "title": "Your whole business in one place",
+    "body": "Track inventory, log sales, and never run out of stock — from the counter or from your phone.",
+    "feature-inventory": "Expiration and low-stock alerts",
+    "feature-sales": "Installment sales for trusted customers",
+    "feature-reports": "Clear reports of what comes in and goes out"
+  },
   "sign-in": {
     "title": "Sign in",
     "subtitle": "Enter your credentials to continue.",
@@ -46,7 +54,7 @@
     "submit": "Sign in",
     "loading": "Verifying...",
     "no-account": "Don't have an account yet?",
-    "register": "Create free account",
+    "register": "Create account",
     "error-empty": "Please enter your email and password.",
     "error-invalid-email": "Please enter a valid email address.",
     "error-credentials": "Invalid credentials. Please check your email and password."
@@ -56,10 +64,12 @@
     "strength-fair": "Fair",
     "strength-good": "Good",
     "strength-strong": "Strong",
-    "title": "Create free account",
-    "subtitle": "Start for free. Upgrade your plan whenever you need.",
-    "full-name": "Full name",
-    "full-name-placeholder": "Juan Pérez",
+    "title": "Create your account",
+    "subtitle": "You'll be able to start using your store in a couple of minutes.",
+    "first-name": "First name",
+    "first-name-placeholder": "Juan",
+    "last-name": "Last name",
+    "last-name-placeholder": "Pérez",
     "business-name": "Business name",
     "business-placeholder": "Bodega El Sol",
     "business-type": "Business type",
@@ -73,15 +83,12 @@
     "password-placeholder": "Minimum 8 characters",
     "submit": "Create account",
     "loading": "Creating account...",
-    "terms-pre": "By registering you accept our",
-    "terms-link": "Terms of service",
-    "terms-and": "and",
-    "privacy-link": "Privacy policy",
     "has-account": "Already have an account?",
     "back-to-login": "Sign in",
     "back-link": "Back to sign in",
     "success": "Account created successfully. Redirecting...",
-    "error-full-name": "Full name is required.",
+    "error-first-name": "First name is required.",
+    "error-last-name": "Last name is required.",
     "error-business-name": "Business name is required.",
     "error-business-type": "Please select a business type.",
     "error-email": "Please enter a valid email address.",
@@ -91,16 +98,10 @@
   },
   "forgot-password": {
     "title": "Recover password",
-    "subtitle": "Enter your email and we will send you a link to reset your password.",
-    "email": "Email address",
-    "email-placeholder": "user\\@business.com",
-    "submit": "Send recovery link",
-    "loading": "Sending...",
+    "subtitle": "There's no automatic email recovery yet.",
     "back-link": "Back to sign in",
-    "success-title": "Email sent",
-    "success-body": "Check your inbox at {email}. The link will expire in 30 minutes.",
-    "resend-question": "Didn't receive the email?",
-    "resend-link": "Resend",
+    "unavailable-title": "Ask an administrator for help",
+    "unavailable-body": "For now, if you forgot your password, your business's administrator can remove your account and re-invite you with a new one.",
     "back-to-login": "Back to sign in"
   },
   "sidebar": {
@@ -108,7 +109,8 @@
     "admin-label": "Administrator",
     "open-menu": "Open menu",
     "close-menu": "Close menu",
-    "language-label": "Language"
+    "language-label": "Language",
+    "tagline": "Store management"
   },
   "settings": {
     "title": "Settings",
