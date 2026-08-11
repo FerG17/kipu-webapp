@@ -4,7 +4,7 @@ import { Supplier } from '../domain/model/supplier.entity.js';
  * Assembler responsible for converting raw API resource objects
  * into Supplier domain entities and vice-versa.
  *
- * Follows the Assembler pattern used across all bounded contexts in Qullqa.
+ * Follows the Assembler pattern used across all bounded contexts in this app.
  *
  * @class SupplierAssembler
  */

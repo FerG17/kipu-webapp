@@ -1,0 +1,30 @@
+/**
+ * Local font files — never a Google Fonts <link>, so the app keeps working
+ * (with a system-font fallback) if the network is down or the CDN is
+ * blocked, and nothing about the shop's data ever calls out to a third party
+ * just to render text.
+ */
+
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/work-sans-variable.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Zilla Slab';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/zilla-slab-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Zilla Slab';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/zilla-slab-700.woff2') format('woff2');
+}

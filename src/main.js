@@ -4,7 +4,7 @@ import App from './app.vue';
 import i18n from './i18n.js';
 import 'primeflex/primeflex.css';
 import 'primeicons/primeicons.css';
-import Material from '@primeuix/themes/material';
+import BodegaPreset from './styles/theme.js';
 import PrimeVue from 'primevue/config';
 import {
     Button,
@@ -41,7 +41,7 @@ import pinia from './pinia.js';
 // noinspection JSCheckFunctionSignatures
 createApp(App)
     .use(i18n)
-    .use(PrimeVue, { theme: { preset: Material }, ripple: true })
+    .use(PrimeVue, { theme: { preset: BodegaPreset }, ripple: true })
     .use(ConfirmationService)
     .use(DialogService)
     .use(ToastService)

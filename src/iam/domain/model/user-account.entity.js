@@ -1,6 +1,6 @@
 /**
  * UserAccount entity within the Identity & Access Management bounded context.
- * Represents a registered user of the Qullqa platform.
+ * Represents a registered user of the Bodega Platform.
  *
  * Business rules:
  * - Email must be a valid address (contains '@' and a domain).

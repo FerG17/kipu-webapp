@@ -190,33 +190,30 @@ const useIamStore = defineStore('iam', () => {
 
     /**
      * Registers a new user and business account.
-     * Business rule: businessName, fullName, valid email, password >= 6 chars,
-     * and password confirmation must match (enforced by the Sign Up view).
+     * Business rule: firstName, lastName, businessName, a valid email and a
+     * password of at least 8 characters (matching the backend's
+     * SignUpCommandValidator) are all required — enforced by the Sign Up view.
      *
-     * Phase 2: the backend creates the User and its Business atomically in a
-     * single request and returns a JWT — this used to be a client-side chain
-     * of 3 calls (create user → create business → PUT user to link them),
-     * which is exactly the shape of bug that left businessId permanently null
-     * if any step failed partway. The backend also no longer provisions a
-     * default warehouse here (that's Product & Inventory's job once that
-     * bounded context exists — see the backend's TODO in
-     * UserCommandService.Handle(SignUpCommand)), so a freshly-registered
-     * business has zero warehouses until Phase 3.
+     * The backend creates the User and its Business atomically in a single
+     * request, provisions the business's default "Almacén Principal"
+     * warehouse in the same transaction, and returns a JWT — no separate
+     * client-side steps or follow-up calls needed.
      *
      * @param {Object} payload - Registration form data.
      * @param {string} payload.businessName - Name of the business.
      * @param {string} [payload.businessType] - BODEGA or FARMACIA.
-     * @param {string} payload.fullName - Full name of the user.
+     * @param {string} payload.firstName - User's first name.
+     * @param {string} payload.lastName - User's last name.
      * @param {string} payload.email - Email address.
-     * @param {string} payload.password - Password (min 6 characters).
+     * @param {string} payload.password - Password (min 8 characters).
      * @returns {Promise<import('../domain/model/user-account.entity.js').UserAccount>}
      */
     function signUp(payload) {
         errors.value = [];
 
         const resource = {
-            name:         payload.fullName.split(' ')[0] ?? payload.fullName,
-            lastName:     payload.fullName.split(' ').slice(1).join(' ') ?? '',
+            name:         payload.firstName,
+            lastName:     payload.lastName,
             email:        payload.email,
             password:     payload.password,
             businessName: payload.businessName,

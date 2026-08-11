@@ -8,9 +8,9 @@ const { t }    = useI18n();
 const router   = useRouter();
 const iamStore = useIamStore();
 
-const form = ref({ fullName: '', businessName: '', businessType: '', email: '', password: '' });
+const form = ref({ firstName: '', lastName: '', businessName: '', businessType: '', email: '', password: '' });
 
-const fieldErrors = ref({ fullName: '', businessName: '', businessType: '', email: '', password: '' });
+const fieldErrors = ref({ firstName: '', lastName: '', businessName: '', businessType: '', email: '', password: '' });
 
 const showPassword = ref(false);
 const isLoading    = ref(false);
@@ -30,28 +30,42 @@ function computePasswordStrength(password) {
 }
 
 const strengthLabelKeys = ['', 'sign-up.strength-weak', 'sign-up.strength-fair', 'sign-up.strength-good', 'sign-up.strength-strong'];
-const strengthColors = ['', '#EF4444', '#FACC15', '#0E7490', '#16A34A'];
+const strengthColors = ['', 'var(--status-critical-fg)', 'var(--status-warning-fg)', 'var(--brand)', 'var(--status-ok-fg)'];
 
-function resolveStrengthBarColor(level) { return strengthColors[level] || '#E2E8F0'; }
+function resolveStrengthBarColor(level) { return strengthColors[level] || 'var(--border-strong)'; }
 function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabelKeys[level]) : ''; }
 
 function validateForm() {
-  fieldErrors.value = { fullName: '', businessName: '', businessType: '', email: '', password: '' };
+  fieldErrors.value = { firstName: '', lastName: '', businessName: '', businessType: '', email: '', password: '' };
   let isValid = true;
-  if (!form.value.fullName.trim())    { fieldErrors.value.fullName     = t('sign-up.error-full-name');    isValid = false; }
-  if (!form.value.businessName.trim()) { fieldErrors.value.businessName = t('sign-up.error-business-name'); isValid = false; }
-  if (!form.value.businessType)        { fieldErrors.value.businessType = t('sign-up.error-business-type'); isValid = false; }
+  if (!form.value.firstName.trim())    { fieldErrors.value.firstName    = t('sign-up.error-first-name');     isValid = false; }
+  if (!form.value.lastName.trim())     { fieldErrors.value.lastName     = t('sign-up.error-last-name');      isValid = false; }
+  if (!form.value.businessName.trim()) { fieldErrors.value.businessName = t('sign-up.error-business-name');  isValid = false; }
+  if (!form.value.businessType)        { fieldErrors.value.businessType = t('sign-up.error-business-type');  isValid = false; }
   if (!form.value.email || !form.value.email.includes('@')) { fieldErrors.value.email = t('sign-up.error-email');    isValid = false; }
   if (!form.value.password || form.value.password.length < 8) { fieldErrors.value.password = t('sign-up.error-password'); isValid = false; }
   return isValid;
 }
 
+/**
+ * Sends firstName/lastName as two separate fields, matching the backend's
+ * SignUpResource (Name, LastName) exactly — the original port asked for a
+ * single "fullName" field and split it on the first space, which silently
+ * produced an empty LastName for anyone who typed a single-word name.
+ */
 async function submitSignUp() {
   if (!validateForm()) return;
   isLoading.value = true;
   localError.value = '';
   try {
-    await iamStore.signUp({ fullName: form.value.fullName, businessName: form.value.businessName, businessType: form.value.businessType, email: form.value.email, password: form.value.password });
+    await iamStore.signUp({
+      firstName: form.value.firstName,
+      lastName: form.value.lastName,
+      businessName: form.value.businessName,
+      businessType: form.value.businessType,
+      email: form.value.email,
+      password: form.value.password
+    });
     router.push({ name: 'dashboard' });
   } catch {
     localError.value = t('sign-up.error-submit-failed');
@@ -69,110 +83,98 @@ function selectBusinessType(typeValue) {
 </script>
 
 <template>
-  <div class="auth-screen flex min-h-screen" style="background-color: #FAFAF7;">
+  <div class="auth-screen flex min-h-screen">
 
     <!-- ── Left panel (desktop only) ──────────────────────────────── -->
-    <div
-        class="hidden lg:flex flex-column justify-content-between p-8 relative overflow-hidden"
-        style="width: 58%; background: linear-gradient(160deg, #0B3558 0%, #0E4A6B 60%, #0B3558 100%); flex-shrink: 0;"
-    >
-      <div class="absolute" style="top: -144px; right: -144px; width: 440px; height: 440px; border-radius: 50%; background-color: #0E7490; opacity: 0.10;"/>
-      <div class="absolute" style="bottom: -176px; left: -112px; width: 400px; height: 400px; border-radius: 50%; background-color: #0E7490; opacity: 0.07;"/>
-      <div class="absolute" style="top: 35%; left: -60px; width: 200px; height: 200px; border-radius: 50%; background-color: #BAE6FD; opacity: 0.06;"/>
+    <div class="auth-hero hidden lg:flex flex-column justify-content-between p-8 relative overflow-hidden">
+      <div class="auth-hero-circle auth-hero-circle--1" />
+      <div class="auth-hero-circle auth-hero-circle--2" />
 
-      <!-- Logo -->
+      <!-- Brand -->
       <div class="relative flex align-items-center gap-3">
-        <img src="../../../assets/qullqa_logo.jpeg" alt="Bodega Platform" style="width: 48px; height: 48px; object-fit: contain; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"/>
-        <span style="color: #FAFAF7; font-size: 1.35rem; font-weight: 700; letter-spacing: 0.02em;">Bodega Platform</span>
+        <span class="auth-brand-mark" aria-hidden="true">B</span>
+        <span class="auth-brand-name">Bodega Platform</span>
       </div>
 
       <!-- Center content -->
       <div class="relative flex flex-column gap-6">
         <div class="flex flex-column gap-3">
-          <div class="flex align-items-center gap-2" style="width: fit-content; background-color: rgba(14,116,144,0.2); border: 1px solid rgba(14,116,144,0.4); border-radius: 20px; padding: 4px 12px;">
-            <span style="width: 6px; height: 6px; border-radius: 50%; background-color: #0E7490; display: inline-block;"/>
-            <p class="m-0" style="color: #7DD3E8; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">Únete gratis</p>
+          <div class="auth-eyebrow">
+            <span class="auth-eyebrow-dot" />
+            <p class="m-0">{{ t('auth-hero.eyebrow') }}</p>
           </div>
-          <h1 style="color: #FAFAF7; font-size: 2.2rem; font-weight: 700; line-height: 1.2; margin: 0;">
-            Tu negocio, más<br/><span style="color: #7DD3E8;">inteligente</span> que nunca.
-          </h1>
-          <p style="color: #93B5C9; font-size: 0.97rem; line-height: 1.75; margin: 0; max-width: 400px;">
-            Crea tu cuenta en segundos y empieza a controlar tu inventario con alertas, reportes y ventas en un solo lugar.
-          </p>
+          <h1 class="auth-hero-title">{{ t('auth-hero.title') }}</h1>
+          <p class="auth-hero-body">{{ t('auth-hero.body') }}</p>
         </div>
 
         <div class="flex flex-column gap-3">
           <div
               v-for="feature in [
-                { icon: 'pi pi-check-circle', text: 'Registro en menos de 2 minutos',   color: '#6EE7B7', bg: 'rgba(110,231,183,0.15)' },
-                { icon: 'pi pi-credit-card',  text: 'Sin tarjeta de crédito requerida', color: '#7DD3E8', bg: 'rgba(125,211,232,0.15)' },
-                { icon: 'pi pi-lock',          text: 'Datos seguros y encriptados',       color: '#C4B5FD', bg: 'rgba(196,181,253,0.15)' }
+                { icon: 'pi pi-bell', textKey: 'auth-hero.feature-inventory' },
+                { icon: 'pi pi-credit-card', textKey: 'auth-hero.feature-sales' },
+                { icon: 'pi pi-chart-bar', textKey: 'auth-hero.feature-reports' }
               ]"
-              :key="feature.text"
+              :key="feature.textKey"
               class="flex align-items-center gap-3"
           >
-            <div
-                class="flex align-items-center justify-content-center border-round-lg flex-shrink-0"
-                style="width: 36px; height: 36px;"
-                :style="{ backgroundColor: feature.bg }"
-            >
-              <i :class="feature.icon" style="font-size: 0.9rem;" :style="{ color: feature.color }"/>
+            <div class="auth-feature-icon flex align-items-center justify-content-center border-round-lg flex-shrink-0">
+              <i :class="feature.icon" style="font-size: 0.9rem;"/>
             </div>
-            <span style="color: #BDD4E1; font-size: 0.9rem;">{{ feature.text }}</span>
+            <span class="auth-feature-text">{{ t(feature.textKey) }}</span>
           </div>
         </div>
       </div>
 
-      <p class="relative m-0" style="color: rgba(255,255,255,0.25); font-size: 0.74rem;">© 2026 Bodega Platform</p>
+      <p class="relative m-0 auth-hero-footer">© 2026 Bodega Platform</p>
     </div>
 
     <!-- ── Right panel ─────────────────────────────────────────────── -->
-    <div class="flex-1 flex flex-column align-items-center justify-content-center px-4 sm:px-8 py-8 sm:py-10 overflow-y-auto">
+    <div class="flex-1 flex flex-column align-items-center justify-content-center px-4 sm:px-8 py-8 sm:py-10 overflow-y-auto auth-form-panel">
 
-      <!-- Mobile logo -->
+      <!-- Mobile brand -->
       <div class="flex lg:hidden align-items-center gap-3 mb-6">
-        <img src="../../../assets/qullqa_logo.jpeg" alt="Bodega Platform" style="width: 40px; height: 40px; border-radius: 8px;"/>
-        <span style="font-size: 1.2rem; font-weight: 700; color: #0B3558;">Bodega Platform</span>
+        <span class="auth-brand-mark auth-brand-mark--dark" aria-hidden="true">B</span>
+        <span class="auth-brand-name auth-brand-name--dark">Bodega Platform</span>
       </div>
 
       <div style="width: 100%; max-width: 420px;">
 
         <!-- Back link -->
-        <button
-            type="button"
-            class="flex align-items-center gap-2 mb-5"
-            style="background: none; border: none; color: #64748B; font-size: 0.85rem; font-weight: 500; cursor: pointer; padding: 0; transition: color 0.15s;"
-            @click="navigateToSignIn"
-            @mouseenter="(e) => e.currentTarget.style.color = '#0E7490'"
-            @mouseleave="(e) => e.currentTarget.style.color = '#64748B'"
-        >
+        <button type="button" class="auth-back-link flex align-items-center gap-2 mb-5" @click="navigateToSignIn">
           <i class="pi pi-arrow-left" style="font-size: 0.85rem;"/>
           {{ t('sign-up.back-link') }}
         </button>
 
         <!-- Title -->
         <div class="mb-5">
-          <h2 class="m-0" style="font-size: 1.6rem; font-weight: 700; color: #0B3558; letter-spacing: -0.01em;">{{ t('sign-up.title') }}</h2>
-          <p class="m-0 mt-1" style="color: #64748B; font-size: 0.92rem;">{{ t('sign-up.subtitle') }}</p>
+          <h2 class="m-0 auth-title">{{ t('sign-up.title') }}</h2>
+          <p class="m-0 mt-1 auth-subtitle">{{ t('sign-up.subtitle') }}</p>
         </div>
 
         <form @submit.prevent="submitSignUp" style="display: flex; flex-direction: column; gap: 1rem;">
 
-          <!-- Full name -->
-          <div class="auth-field">
-            <label class="auth-label">{{ t('sign-up.full-name') }}</label>
-            <div class="relative">
-              <i class="pi pi-user absolute" style="left: 14px; top: 50%; transform: translateY(-50%); color: #94A3B8; font-size: 0.88rem; pointer-events: none;"/>
-              <input v-model="form.fullName" type="text" :placeholder="t('sign-up.full-name-placeholder')" required class="auth-input" style="padding-left: 40px;"/>
+          <!-- First / last name -->
+          <div class="name-grid">
+            <div class="auth-field">
+              <label class="auth-label">{{ t('sign-up.first-name') }}</label>
+              <div class="relative">
+                <i class="pi pi-user auth-input-icon absolute"/>
+                <input v-model="form.firstName" type="text" :placeholder="t('sign-up.first-name-placeholder')" required class="auth-input" style="padding-left: 40px;"/>
+              </div>
+              <p v-if="fieldErrors.firstName" class="auth-error"><i class="pi pi-exclamation-circle" style="font-size: 0.72rem;"/> {{ fieldErrors.firstName }}</p>
             </div>
-            <p v-if="fieldErrors.fullName" class="auth-error"><i class="pi pi-exclamation-circle" style="font-size: 0.72rem;"/> {{ fieldErrors.fullName }}</p>
+            <div class="auth-field">
+              <label class="auth-label">{{ t('sign-up.last-name') }}</label>
+              <input v-model="form.lastName" type="text" :placeholder="t('sign-up.last-name-placeholder')" required class="auth-input"/>
+              <p v-if="fieldErrors.lastName" class="auth-error"><i class="pi pi-exclamation-circle" style="font-size: 0.72rem;"/> {{ fieldErrors.lastName }}</p>
+            </div>
           </div>
 
           <!-- Business name -->
           <div class="auth-field">
             <label class="auth-label">{{ t('sign-up.business-name') }}</label>
             <div class="relative">
-              <i class="pi pi-building absolute" style="left: 14px; top: 50%; transform: translateY(-50%); color: #94A3B8; font-size: 0.88rem; pointer-events: none;"/>
+              <i class="pi pi-building auth-input-icon absolute"/>
               <input v-model="form.businessName" type="text" :placeholder="t('sign-up.business-placeholder')" required class="auth-input" style="padding-left: 40px;"/>
             </div>
             <p v-if="fieldErrors.businessName" class="auth-error"><i class="pi pi-exclamation-circle" style="font-size: 0.72rem;"/> {{ fieldErrors.businessName }}</p>
@@ -186,26 +188,15 @@ function selectBusinessType(typeValue) {
                   v-for="typeOption in businessTypeOptions"
                   :key="typeOption.value"
                   type="button"
-                  class="border-round-xl p-3 text-left cursor-pointer"
-                  style="transition: all 0.18s; display: flex; flex-direction: column; gap: 6px;"
-                  :style="{
-                    backgroundColor: form.businessType === typeOption.value ? '#E0F2FE' : '#F1F5F9',
-                    border:          form.businessType === typeOption.value ? '1.5px solid #0E7490' : '1.5px solid #E2E8F0',
-                    boxShadow:       form.businessType === typeOption.value ? '0 0 0 3px rgba(14,116,144,0.12)' : 'none'
-                  }"
+                  class="business-type-card border-round-xl p-3 text-left cursor-pointer"
+                  :class="{ 'business-type-card--selected': form.businessType === typeOption.value }"
                   @click="selectBusinessType(typeOption.value)"
               >
-                <div
-                    class="flex align-items-center justify-content-center border-round-lg flex-shrink-0"
-                    style="width: 32px; height: 32px; margin-bottom: 2px;"
-                    :style="{ backgroundColor: form.businessType === typeOption.value ? 'rgba(14,116,144,0.15)' : '#E2E8F0' }"
-                >
-                  <i :class="typeOption.icon" style="font-size: 0.88rem;" :style="{ color: form.businessType === typeOption.value ? '#0E7490' : '#94A3B8' }"/>
+                <div class="business-type-icon flex align-items-center justify-content-center border-round-lg flex-shrink-0">
+                  <i :class="typeOption.icon" style="font-size: 0.88rem;"/>
                 </div>
-                <p class="m-0" style="font-size: 0.82rem; font-weight: 700;" :style="{ color: form.businessType === typeOption.value ? '#0E7490' : '#1E293B' }">
-                  {{ t(typeOption.labelKey) }}
-                </p>
-                <p class="m-0" style="font-size: 0.74rem; color: #64748B; line-height: 1.4;">{{ t(typeOption.descKey) }}</p>
+                <p class="m-0 business-type-label">{{ t(typeOption.labelKey) }}</p>
+                <p class="m-0 business-type-desc">{{ t(typeOption.descKey) }}</p>
               </button>
             </div>
             <p v-if="fieldErrors.businessType" class="auth-error"><i class="pi pi-exclamation-circle" style="font-size: 0.72rem;"/> {{ fieldErrors.businessType }}</p>
@@ -215,7 +206,7 @@ function selectBusinessType(typeValue) {
           <div class="auth-field">
             <label class="auth-label">{{ t('sign-up.email') }}</label>
             <div class="relative">
-              <i class="pi pi-envelope absolute" style="left: 14px; top: 50%; transform: translateY(-50%); color: #94A3B8; font-size: 0.88rem; pointer-events: none;"/>
+              <i class="pi pi-envelope auth-input-icon absolute"/>
               <input v-model="form.email" type="email" :placeholder="t('sign-up.email-placeholder')" required class="auth-input" style="padding-left: 40px;"/>
             </div>
             <p v-if="fieldErrors.email" class="auth-error"><i class="pi pi-exclamation-circle" style="font-size: 0.72rem;"/> {{ fieldErrors.email }}</p>
@@ -225,7 +216,7 @@ function selectBusinessType(typeValue) {
           <div class="auth-field">
             <label class="auth-label">{{ t('sign-up.password') }}</label>
             <div class="relative">
-              <i class="pi pi-lock absolute" style="left: 14px; top: 50%; transform: translateY(-50%); color: #94A3B8; font-size: 0.88rem; pointer-events: none;"/>
+              <i class="pi pi-lock auth-input-icon absolute"/>
               <input
                   v-model="form.password"
                   :type="showPassword ? 'text' : 'password'"
@@ -234,14 +225,7 @@ function selectBusinessType(typeValue) {
                   class="auth-input"
                   style="padding-left: 40px; padding-right: 44px;"
               />
-              <button
-                  type="button"
-                  class="absolute"
-                  style="right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94A3B8; cursor: pointer; padding: 4px; border-radius: 6px; display: flex; transition: color 0.15s;"
-                  @click="showPassword = !showPassword"
-                  @mouseenter="(e) => e.currentTarget.style.color = '#0E7490'"
-                  @mouseleave="(e) => e.currentTarget.style.color = '#94A3B8'"
-              >
+              <button type="button" class="auth-visibility-btn absolute" @click="showPassword = !showPassword">
                 <i :class="showPassword ? 'pi pi-eye-slash' : 'pi pi-eye'" style="font-size: 0.95rem;"/>
               </button>
             </div>
@@ -251,12 +235,11 @@ function selectBusinessType(typeValue) {
                 <div
                     v-for="i in [1, 2, 3, 4]"
                     :key="i"
-                    class="flex-1 border-round-lg"
-                    style="height: 4px; transition: background-color 0.3s;"
-                    :style="{ backgroundColor: computePasswordStrength(form.password) >= i ? resolveStrengthBarColor(computePasswordStrength(form.password)) : '#E2E8F0' }"
+                    class="strength-bar flex-1 border-round-lg"
+                    :style="{ backgroundColor: computePasswordStrength(form.password) >= i ? resolveStrengthBarColor(computePasswordStrength(form.password)) : 'var(--border)' }"
                 />
               </div>
-              <span style="font-size: 0.72rem; font-weight: 600; min-width: 42px; text-align: right;" :style="{ color: resolveStrengthBarColor(computePasswordStrength(form.password)) }">
+              <span class="strength-label" :style="{ color: resolveStrengthBarColor(computePasswordStrength(form.password)) }">
                 {{ strengthLabel(computePasswordStrength(form.password)) }}
               </span>
             </div>
@@ -264,43 +247,23 @@ function selectBusinessType(typeValue) {
           </div>
 
           <!-- Error -->
-          <div
-              v-if="localError"
-              class="flex align-items-center gap-2 p-3 border-round-lg"
-              style="background-color: #FEE2E2; border: 1px solid #FECACA;"
-          >
-            <i class="pi pi-exclamation-circle flex-shrink-0" style="color: #DC2626; font-size: 0.9rem;"/>
-            <p class="m-0" style="color: #DC2626; font-size: 0.875rem;">{{ localError }}</p>
+          <div v-if="localError" class="auth-error-box flex align-items-center gap-2 p-3 border-round-lg">
+            <i class="pi pi-exclamation-circle flex-shrink-0" style="color: var(--status-critical-fg); font-size: 0.9rem;"/>
+            <p class="m-0" style="color: var(--status-critical-fg); font-size: 0.875rem;">{{ localError }}</p>
           </div>
 
           <!-- Submit -->
-          <button
-              type="submit"
-              :disabled="isLoading"
-              class="w-full flex align-items-center justify-content-center gap-2 border-round-xl border-none mt-1"
-              style="padding: 14px; font-size: 0.95rem; font-weight: 700; color: #fff; transition: all 0.2s; box-shadow: 0 4px 16px rgba(14,116,144,0.35); background: linear-gradient(135deg, #0E7490, #0B3558);"
-              :style="{ opacity: isLoading ? 0.75 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }"
-              @mouseenter="(e) => { if (!isLoading) { e.currentTarget.style.boxShadow = '0 6px 24px rgba(14,116,144,0.50)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }"
-              @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(14,116,144,0.35)'; e.currentTarget.style.transform = 'translateY(0)'; }"
-          >
+          <button type="submit" :disabled="isLoading" class="auth-submit-btn w-full flex align-items-center justify-content-center gap-2 border-round-xl border-none mt-1">
             <span v-if="isLoading" class="flex align-items-center gap-2">
               <span class="spin-ring"/>
               {{ t('sign-up.loading') }}
             </span>
             <span v-else>{{ t('sign-up.submit') }}</span>
           </button>
-
-          <!-- Terms -->
-          <p class="text-center m-0" style="color: #94A3B8; font-size: 0.78rem; line-height: 1.5;">
-            {{ t('sign-up.terms-pre') }}
-            <span style="color: #0E7490; font-weight: 600; cursor: pointer;">{{ t('sign-up.terms-link') }}</span>
-            {{ t('sign-up.terms-and') }}
-            <span style="color: #0E7490; font-weight: 600; cursor: pointer;">{{ t('sign-up.privacy-link') }}</span>.
-          </p>
         </form>
 
         <!-- Sign in link -->
-        <p class="text-center mt-4" style="color: #64748B; font-size: 0.875rem;">
+        <p class="text-center mt-4 auth-footer-text">
           {{ t('sign-up.has-account') }}
           <button type="button" class="auth-link" style="font-weight: 700;" @click="navigateToSignIn">
             {{ t('sign-up.back-to-login') }}
@@ -312,69 +275,136 @@ function selectBusinessType(typeValue) {
 </template>
 
 <style scoped>
-/* Use dynamic viewport height so mobile browser chrome doesn't clip the layout. */
-.auth-screen { min-height: 100vh; min-height: 100dvh; }
+.auth-screen { min-height: 100vh; min-height: 100dvh; background-color: var(--bg); }
 
-/* Desktop: lock the screen to the viewport so the left brand panel stays static
-   and only the right form panel scrolls (the right panel has overflow-y-auto). */
 @media (min-width: 1024px) {
   .auth-screen { height: 100vh; height: 100dvh; overflow: hidden; }
 }
 
+.auth-hero { width: 56%; flex-shrink: 0; background: var(--brand); }
+
+.auth-hero-circle { position: absolute; border-radius: 50%; background-color: var(--accent); }
+.auth-hero-circle--1 { top: -144px; right: -144px; width: 440px; height: 440px; opacity: 0.14; }
+.auth-hero-circle--2 { bottom: -176px; left: -112px; width: 400px; height: 400px; opacity: 0.09; }
+
+.auth-brand-mark {
+  width: 44px; height: 44px; border-radius: var(--radius-sm);
+  background: var(--brand-ink); color: var(--brand);
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 700; font-size: 1.2rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  flex-shrink: 0;
+}
+.auth-brand-mark--dark { background: var(--brand); color: var(--brand-ink); width: 40px; height: 40px; }
+.auth-brand-name { color: var(--brand-ink); font-size: 1.2rem; font-weight: 700; letter-spacing: 0.01em; font-family: var(--font-body); }
+.auth-brand-name--dark { color: var(--text); font-size: 1.1rem; }
+
+.auth-eyebrow {
+  display: flex; align-items: center; gap: 8px; width: fit-content;
+  background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: var(--radius-pill); padding: 4px 12px;
+}
+.auth-eyebrow-dot { width: 6px; height: 6px; border-radius: 50%; background-color: var(--accent); display: inline-block; }
+.auth-eyebrow p { color: color-mix(in srgb, var(--accent) 70%, white); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+
+.auth-hero-title { font-family: var(--font-display); color: var(--brand-ink); font-size: 2rem; font-weight: 700; line-height: 1.2; margin: 0; text-wrap: balance; }
+.auth-hero-body { color: color-mix(in srgb, var(--brand-ink) 78%, transparent); font-size: 0.97rem; line-height: 1.75; margin: 0; max-width: 400px; }
+
+.auth-feature-icon { width: 36px; height: 36px; background-color: color-mix(in srgb, var(--brand-ink) 12%, transparent); }
+.auth-feature-icon i { color: var(--brand-ink); }
+.auth-feature-text { color: color-mix(in srgb, var(--brand-ink) 85%, transparent); font-size: 0.9rem; }
+
+.auth-hero-footer { color: color-mix(in srgb, var(--brand-ink) 30%, transparent); font-size: 0.74rem; }
+
+.auth-form-panel { background: var(--bg); }
+
+.auth-back-link { background: none; border: none; color: var(--text-muted); font-size: 0.85rem; font-weight: 500; cursor: pointer; padding: 0; transition: color 0.15s; }
+.auth-back-link:hover { color: var(--brand); }
+
+.auth-title { font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+.auth-subtitle { color: var(--text-muted); font-size: 0.92rem; }
+
+.name-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+.auth-field { display: flex; flex-direction: column; gap: 6px; }
+.auth-label { display: block; margin-bottom: 6px; font-size: 0.875rem; font-weight: 600; color: var(--text); }
+
+.auth-input-icon { left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 0.88rem; pointer-events: none; }
+
+.auth-input {
+  width: 100%; border-radius: 12px; padding: 12px 16px;
+  background-color: var(--surface-alt); border: 1.5px solid var(--border);
+  color: var(--text); font-size: 0.92rem; font-family: var(--font-body);
+  outline: none; transition: all 0.2s; box-sizing: border-box;
+}
+.auth-input:focus {
+  border-color: var(--accent); background-color: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.auth-visibility-btn {
+  right: 12px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: var(--text-faint); cursor: pointer;
+  padding: 4px; border-radius: 6px; display: flex; transition: color 0.15s;
+}
+.auth-visibility-btn:hover { color: var(--brand); }
+
+.auth-error { margin: 2px 0 0; font-size: 0.78rem; color: var(--status-critical-fg); display: flex; align-items: center; gap: 4px; }
+
 .business-type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.business-type-card {
+  background-color: var(--surface-alt);
+  border: 1.5px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px;
+  transition: all 0.18s;
+}
+.business-type-card--selected {
+  background-color: var(--brand-soft);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 14%, transparent);
+}
+.business-type-icon { width: 32px; height: 32px; margin-bottom: 2px; background-color: var(--surface); color: var(--text-faint); }
+.business-type-card--selected .business-type-icon { background-color: color-mix(in srgb, var(--brand) 16%, transparent); color: var(--brand); }
+.business-type-label { font-size: 0.82rem; font-weight: 700; color: var(--text); }
+.business-type-card--selected .business-type-label { color: var(--brand); }
+.business-type-desc { font-size: 0.74rem; color: var(--text-muted); line-height: 1.4; }
+
+.strength-bar { height: 4px; transition: background-color 0.3s; }
+.strength-label { font-size: 0.72rem; font-weight: 600; min-width: 42px; text-align: right; }
+
+.auth-error-box { background-color: var(--status-critical-bg); border: 1px solid color-mix(in srgb, var(--status-critical-fg) 30%, transparent); }
+
+.auth-submit-btn {
+  padding: 14px; font-size: 0.95rem; font-weight: 700; color: var(--brand-ink);
+  font-family: var(--font-body); transition: all 0.2s; background: var(--brand); cursor: pointer;
+}
+.auth-submit-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.auth-submit-btn:disabled { opacity: 0.75; cursor: not-allowed; }
+
+.auth-link { background: none; border: none; color: var(--brand); font-size: 0.82rem; font-weight: 600; cursor: pointer; padding: 0; transition: color 0.15s; }
+.auth-link:hover { color: var(--accent); }
+
+.auth-footer-text { color: var(--text-muted); font-size: 0.875rem; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
-
 .spin-ring {
   width: 16px; height: 16px; border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.4);
-  border-top-color: #fff;
+  border: 2px solid color-mix(in srgb, var(--brand-ink) 40%, transparent);
+  border-top-color: var(--brand-ink);
   animation: spin 0.8s linear infinite;
   display: inline-block; flex-shrink: 0;
 }
-
-.auth-field { display: flex; flex-direction: column; gap: 6px; }
-
-.auth-label {
-  display: block; margin-bottom: 6px;
-  font-size: 0.875rem; font-weight: 600; color: #1E293B;
+@media (prefers-reduced-motion: reduce) {
+  .spin-ring { animation: none; }
 }
-
-.auth-input {
-  width: 100%; border-radius: 12px;
-  padding: 12px 16px;
-  background-color: #F1F5F9;
-  border: 1.5px solid #E2E8F0;
-  color: #0B3558; font-size: 0.92rem;
-  outline: none; transition: all 0.2s;
-  box-sizing: border-box;
-}
-.auth-input:focus {
-  border-color: #0E7490;
-  background-color: #fff;
-  box-shadow: 0 0 0 3px rgba(14,116,144,0.12);
-}
-
-.auth-error {
-  margin: 2px 0 0;
-  font-size: 0.78rem;
-  color: #DC2626;
-  display: flex; align-items: center; gap: 4px;
-}
-
-.auth-link {
-  background: none; border: none;
-  color: #0E7490; font-size: 0.82rem; font-weight: 600;
-  cursor: pointer; padding: 0; transition: color 0.15s;
-}
-.auth-link:hover { color: #0B3558; }
 
 /* Mobile tweaks: 16px inputs prevent iOS focus-zoom; stack type cards on narrow screens. */
 @media (max-width: 640px) {
   .auth-input { font-size: 16px; }
-  .auth-screen h2 { font-size: 1.4rem; }
+  .auth-title { font-size: 1.4rem; }
 }
 @media (max-width: 380px) {
-  .business-type-grid { grid-template-columns: 1fr; }
+  .business-type-grid, .name-grid { grid-template-columns: 1fr; }
 }
 </style>
