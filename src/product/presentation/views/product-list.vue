@@ -15,7 +15,7 @@ const confirm      = useConfirm();
 const productStore = useProductStore();
 const iamStore     = useIamStore();
 
-const { products, productsLoaded, inventory, stockMovements, stockMovementsLoaded, errors } = toRefs(productStore);
+const { products, productsLoaded, inventory, stockMovements, stockMovementsLoaded, stockMovementsError, errors } = toRefs(productStore);
 const { fetchProducts, fetchInventory, fetchBatches, fetchAllStockMovements,
   addProduct, updateProduct, deleteProduct, registerStockIntake, updateMinimumStock,
   createBatchForProduct, isProductExpiringSoon, isProductExpired } = productStore;
@@ -118,6 +118,17 @@ function statusLabel(statusKey) {
  */
 const warehouses = ref([]);
 
+/**
+ * True until the warehouse list finishes its first load. Both the product
+ * and intake modals gate their submit button on this — opening either modal
+ * before warehouses arrive used to let the user submit with an empty
+ * selector, which silently sent `warehouseId: null` to a backend field
+ * that's a non-nullable int, failing with an opaque 400 instead of a
+ * readable validation message.
+ * @type {import('vue').Ref<boolean>}
+ */
+const warehousesLoading = ref(true);
+
 onMounted(() => {
   // Guards on "is someone actually signed in yet", not on which business —
   // every fetch below is scoped server-side by the JWT.
@@ -126,6 +137,7 @@ onMounted(() => {
     fetchInventory();
     productStore.fetchWarehousesForBusiness().then(list => {
       warehouses.value = list.filter(warehouse => warehouse.status === 'ACTIVE');
+      warehousesLoading.value = false;
     });
   }
   if (!productStore.batchesLoaded) fetchBatches();
@@ -245,6 +257,18 @@ function formatMovementDate(isoString) {
   });
 }
 
+/**
+ * Human-readable message for the Movimientos tab's error state — a CASHIER
+ * gets the real "no permission" reason (the backend 403s that role on
+ * GET /stock-movements) instead of the misleading "no movements yet" empty
+ * state a silently-swallowed error used to show.
+ * @type {import('vue').ComputedRef<string>}
+ */
+const movementsErrorMessage = computed(() => {
+  const status = stockMovementsError.value?.response?.status;
+  return status === 403 ? t('inventory.toast-movements-forbidden') : t('errors.occurred');
+});
+
 const summaryCounts = computed(() => {
   const counts = { total: products.value.length, low: 0, expiring: 0, out: 0 };
   products.value.forEach(product => {
@@ -326,6 +350,17 @@ function openEditProductModal(product) {
 function saveProductFromModal() {
   if (!productModalForm.value.name.trim()) return;
 
+  // A new product with initial stock needs a real warehouse to place it in
+  // — warehouseId is a non-nullable int on the backend's stock-intake
+  // command, so submitting without one (e.g. the modal was opened before
+  // the warehouse list finished loading) would otherwise send `null` and
+  // fail with an opaque 400 instead of a readable message.
+  const initialStock = parseInt(productModalForm.value.currentStock) || 0;
+  if (!editingProduct.value && initialStock > 0 && !productModalForm.value.warehouseId) {
+    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-warehouse-required'), life: 4500 });
+    return;
+  }
+
   const businessId = iamStore.currentUser?.businessId ?? null;
 
   // When "Otros" is picked and the admin actually typed a custom label
@@ -361,7 +396,6 @@ function saveProductFromModal() {
             }
           })
       : addProduct(productEntity).then(createdProduct => {
-        const initialStock = parseInt(productModalForm.value.currentStock) || 0;
         // Always create the inventory record, even with 0 initial stock, so
         // minimumStock has somewhere to persist (see registerStockIntake).
         const warehouseId = productModalForm.value.warehouseId ? parseInt(productModalForm.value.warehouseId) : null;
@@ -431,7 +465,7 @@ function handleDeleteProduct(product) {
 
 // ── Intake modal ───────────────────────────────────────────────────────────────
 
-const intakeForm = ref({ productId: '', quantity: '', supplier: '', note: '', warehouseId: '' });
+const intakeForm = ref({ productId: '', quantity: '', cost: '', expirationDate: '', supplier: '', note: '', warehouseId: '' });
 
 /**
  * Defaults the intake warehouse to where a product's stock already lives,
@@ -451,11 +485,13 @@ function openIntakeModal(product) {
   intakeTargetProduct.value = product;
   const initialProductId = product ? String(product.id) : (products.value[0] ? String(products.value[0].id) : '');
   intakeForm.value = {
-    productId:   initialProductId,
-    quantity:    '',
-    supplier:    '',
-    note:        '',
-    warehouseId: resolveWarehouseIdForProduct(initialProductId)
+    productId:      initialProductId,
+    quantity:       '',
+    cost:           '',
+    expirationDate: '',
+    supplier:       '',
+    note:           '',
+    warehouseId:    resolveWarehouseIdForProduct(initialProductId)
   };
   showIntakeModal.value = true;
 }
@@ -475,13 +511,23 @@ function saveIntake() {
   const quantity = parseInt(intakeForm.value.quantity);
   if (!intakeForm.value.productId || !quantity || quantity <= 0) return;
 
+  // warehouseId is a non-nullable int on the backend's stock-intake command
+  // — submitting without one would otherwise send `null` and fail with an
+  // opaque 400 instead of a readable message.
+  if (!intakeForm.value.warehouseId) {
+    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-warehouse-required'), life: 4500 });
+    return;
+  }
+
   savingIntake.value = true;
   registerStockIntake({
-    productId:   parseInt(intakeForm.value.productId),
-    quantity:    quantity,
-    warehouseId: intakeForm.value.warehouseId ? parseInt(intakeForm.value.warehouseId) : null,
-    supplier:    intakeForm.value.supplier,
-    note:        intakeForm.value.note
+    productId:     parseInt(intakeForm.value.productId),
+    quantity:      quantity,
+    warehouseId:   parseInt(intakeForm.value.warehouseId),
+    purchasePrice: parseFloat(intakeForm.value.cost) || null,
+    expiration:    intakeForm.value.expirationDate || null,
+    supplier:      intakeForm.value.supplier,
+    note:          intakeForm.value.note
   })
       .then(() => {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-intake-success'), life: 3500 });
@@ -489,6 +535,10 @@ function saveIntake() {
         // The intake just recorded a StockMovement server-side — refresh so
         // "Movimientos" reflects it without requiring a full page reload.
         fetchAllStockMovements();
+        // A cost/expiration on this intake may have created or updated the
+        // product's active batch server-side (see registerStockIntake) —
+        // refresh so the expiration column reflects it immediately.
+        if (intakeForm.value.cost || intakeForm.value.expirationDate) fetchBatches();
       })
       .catch(() => {
         toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-intake-error'), life: 4500 });
@@ -1032,7 +1082,13 @@ function saveWarehouse() {
           </tr>
           </tbody>
         </table>
-        <div v-if="!stockMovements.length" class="flex flex-column align-items-center py-12 gap-3">
+        <div v-if="stockMovementsError" class="flex flex-column align-items-center py-12 gap-3">
+          <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap">
+            <i class="pi pi-lock" style="font-size: 1.8rem; color: #DC2626;"/>
+          </div>
+          <p class="m-0 empty-text">{{ movementsErrorMessage }}</p>
+        </div>
+        <div v-else-if="!stockMovements.length" class="flex flex-column align-items-center py-12 gap-3">
           <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap">
             <i class="pi pi-clock" style="font-size: 1.8rem; color: #CBD5E1;"/>
           </div>
@@ -1042,7 +1098,13 @@ function saveWarehouse() {
 
       <!-- Mobile movement list -->
       <div class="md:hidden">
-        <div v-if="!stockMovements.length" class="flex flex-column align-items-center py-10 gap-3">
+        <div v-if="stockMovementsError" class="flex flex-column align-items-center py-10 gap-3">
+          <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap-sm">
+            <i class="pi pi-lock" style="font-size: 1.6rem; color: #DC2626;"/>
+          </div>
+          <p class="m-0 empty-text">{{ movementsErrorMessage }}</p>
+        </div>
+        <div v-else-if="!stockMovements.length" class="flex flex-column align-items-center py-10 gap-3">
           <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap-sm">
             <i class="pi pi-clock" style="font-size: 1.6rem; color: #CBD5E1;"/>
           </div>
@@ -1310,7 +1372,11 @@ function saveWarehouse() {
             <button class="flex-1 py-2 border-round-xl cursor-pointer btn-modal-cancel" :disabled="savingProduct" @click="showProductModal = false">
               {{ t('inventory.modal-cancel') }}
             </button>
-            <button class="flex-1 py-2 border-round-xl border-none cursor-pointer btn-modal-primary" :disabled="savingProduct" @click="saveProductFromModal">
+            <button
+                class="flex-1 py-2 border-round-xl border-none cursor-pointer btn-modal-primary"
+                :disabled="savingProduct || (!editingProduct && warehousesLoading)"
+                @click="saveProductFromModal"
+            >
               <i v-if="savingProduct" class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>
               {{ savingProduct ? t('inventory.modal-saving') : (editingProduct ? t('inventory.modal-save') : t('inventory.modal-register')) }}
             </button>
@@ -1361,6 +1427,17 @@ function saveWarehouse() {
             <label class="modal-label">{{ t('inventory.intake-field-qty') }}</label>
             <input v-model="intakeForm.quantity" type="number" min="1" placeholder="0" class="modal-input"/>
           </div>
+          <!-- Cost + Expiration (2-col on sm+) — updates the product's active batch atomically -->
+          <div class="flex flex-column sm:flex-row gap-4">
+            <div style="flex: 1;">
+              <label class="modal-label">{{ t('inventory.intake-field-cost') }}</label>
+              <input v-model="intakeForm.cost" type="number" min="0" step="0.01" placeholder="0.00" class="modal-input"/>
+            </div>
+            <div style="flex: 1;">
+              <label class="modal-label">{{ t('inventory.intake-field-expiration') }}</label>
+              <input v-model="intakeForm.expirationDate" type="date" class="modal-input"/>
+            </div>
+          </div>
           <!-- Warehouse -->
           <div>
             <label class="modal-label">{{ t('inventory.intake-field-warehouse') }}</label>
@@ -1387,7 +1464,11 @@ function saveWarehouse() {
             <button class="flex-1 py-2 border-round-xl cursor-pointer btn-modal-cancel" :disabled="savingIntake" @click="showIntakeModal = false">
               {{ t('inventory.modal-cancel') }}
             </button>
-            <button class="flex-1 py-2 border-round-xl border-none cursor-pointer btn-intake-confirm" :disabled="savingIntake" @click="saveIntake">
+            <button
+                class="flex-1 py-2 border-round-xl border-none cursor-pointer btn-intake-confirm"
+                :disabled="savingIntake || warehousesLoading"
+                @click="saveIntake"
+            >
               <i v-if="savingIntake" class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>
               {{ savingIntake ? t('inventory.modal-saving') : t('inventory.intake-btn') }}
             </button>

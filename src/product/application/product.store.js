@@ -65,6 +65,16 @@ const useProductStore = defineStore('product', () => {
     /** @type {import('vue').Ref<boolean>} */
     const stockMovementsLoaded = ref(false);
 
+    /**
+     * Set when the last fetchAllStockMovements call failed (e.g. a CASHIER
+     * hitting the backend's 403 on GET /stock-movements) — kept separate
+     * from the generic `errors` array so the Movimientos tab can show the
+     * real reason instead of an empty state indistinguishable from "no
+     * movements yet".
+     * @type {import('vue').Ref<Error|null>}
+     */
+    const stockMovementsError = ref(null);
+
     /** @type {import('vue').Ref<boolean>} */
     const productsLoaded = ref(false);
 
@@ -225,6 +235,7 @@ const useProductStore = defineStore('product', () => {
      * Scoped server-side by the JWT, no businessId parameter needed or accepted.
      */
     function fetchAllStockMovements() {
+        stockMovementsError.value = null;
         productApi.getStockMovements()
             .then(response => {
                 const entities = StockMovementAssembler.toEntitiesFromResponse(response);
@@ -235,6 +246,7 @@ const useProductStore = defineStore('product', () => {
             })
             .catch(error => {
                 errors.value.push(error);
+                stockMovementsError.value = error;
                 stockMovementsLoaded.value = true;
             });
     }
@@ -257,45 +269,47 @@ const useProductStore = defineStore('product', () => {
 
     /**
      * Returns the number of days until the nearest active batch of a product expires.
-     * Business rule: only ACTIVE batches are considered; when a product has several,
-     * the soonest expiration date wins. Negative values mean the batch already expired.
+     *
+     * Reads the server-computed `daysToExpiry` already present on every
+     * BatchResource (BatchResourceFromEntityAssembler, backed by the same
+     * ExpirationRules Alerts uses) instead of re-deriving it from
+     * `expiration` client-side — two independent date-math implementations
+     * risk timezone/off-by-one drift from what actually triggers alerts.
+     * Business rule: only ACTIVE batches are considered; when a product has
+     * several, the soonest expiration wins. Negative values mean the batch
+     * already expired.
      *
      * @param {number|string} productId
      * @returns {number|null} Days to the nearest expiration, or null if the product
-     *   has no active batch with an expiration date.
+     *   has no active batch with a computed expiry.
      */
     function getDaysToNearestExpiry(productId) {
         const numericId = parseInt(productId);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
         const activeExpirations = batches.value
-            .filter(batch => batch.productId === numericId && batch.status === 'ACTIVE' && batch.expiration)
-            .map(batch => {
-                const expirationDate = parseLocalDate(batch.expiration);
-                return Math.round((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-            });
+            .filter(batch => batch.productId === numericId && batch.status === 'ACTIVE' && batch.daysToExpiry != null)
+            .map(batch => batch.daysToExpiry);
 
         return activeExpirations.length > 0 ? Math.min(...activeExpirations) : null;
     }
 
     /**
-     * Returns true when a product has an active batch expiring within the given
-     * threshold (default 7 days, matching the Alerts bounded context's EXPIRATION
-     * rule) but NOT already expired — see isProductExpired for that case.
+     * Returns true when a product has an active batch the server flags as
+     * expiring soon (BatchResource.isExpiringSoon, the same rule Alerts
+     * uses) but not already expired — see isProductExpired for that case.
      *
      * @param {number|string} productId
-     * @param {number} [thresholdDays=7]
      * @returns {boolean}
      */
-    function isProductExpiringSoon(productId, thresholdDays = 7) {
-        const daysToExpiry = getDaysToNearestExpiry(productId);
-        return daysToExpiry !== null && daysToExpiry >= 0 && daysToExpiry <= thresholdDays;
+    function isProductExpiringSoon(productId) {
+        const numericId = parseInt(productId);
+        return batches.value.some(batch =>
+            batch.productId === numericId && batch.status === 'ACTIVE' && batch.isExpiringSoon
+        );
     }
 
     /**
-     * Returns true when a product's nearest active batch has already passed
-     * its expiration date (negative days to expiry). Kept distinct from
+     * Returns true when a product has an active batch the server flags as
+     * already expired (BatchResource.isExpired). Kept distinct from
      * isProductExpiringSoon so the UI can tell "will expire soon" apart from
      * "already expired" instead of collapsing both into one bucket.
      *
@@ -303,8 +317,10 @@ const useProductStore = defineStore('product', () => {
      * @returns {boolean}
      */
     function isProductExpired(productId) {
-        const daysToExpiry = getDaysToNearestExpiry(productId);
-        return daysToExpiry !== null && daysToExpiry < 0;
+        const numericId = parseInt(productId);
+        return batches.value.some(batch =>
+            batch.productId === numericId && batch.status === 'ACTIVE' && batch.isExpired
+        );
     }
 
     /**
@@ -571,6 +587,7 @@ const useProductStore = defineStore('product', () => {
         inventoryLoaded,
         batchesLoaded,
         stockMovementsLoaded,
+        stockMovementsError,
         errors,
         productsCount,
         stockStatusCounts,

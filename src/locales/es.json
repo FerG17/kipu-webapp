@@ -379,6 +379,8 @@
     "intake-field-product": "Producto *",
     "intake-field-warehouse": "Almacén",
     "intake-field-qty": "Cantidad recibida *",
+    "intake-field-cost": "Precio de costo (S/)",
+    "intake-field-expiration": "Fecha de vencimiento",
     "intake-field-supplier": "Proveedor *",
     "intake-field-supplier-placeholder": "Ej: Alicorp SAC",
     "intake-field-note": "Observaciones",
@@ -388,8 +390,10 @@
     "expiry-label": "Vence:",
     "toast-save-success": "Producto guardado correctamente",
     "toast-save-error": "No se pudo guardar el producto. Verifica tu conexión e intenta de nuevo.",
+    "toast-warehouse-required": "Selecciona un almacén para registrar el stock inicial.",
     "toast-intake-success": "Ingreso de stock registrado correctamente",
     "toast-intake-error": "No se pudo registrar el ingreso. Verifica tu conexión e intenta de nuevo.",
+    "toast-movements-forbidden": "No tienes permiso para ver los movimientos de stock.",
     "modal-saving": "Guardando..."
   },
   "alerts": {

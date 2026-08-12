@@ -7,7 +7,7 @@
  *     1. The cart has at least one SaleDetail.
  *     2. A valid PaymentMethod is provided.
  *     3. No item quantity exceeds the available stock (validated in the POS view).
- * - A sale can only be cancelled when its status is OPEN or PAID.
+ * - A sale can only be cancelled while its status is PAID.
  * - On confirmSale: the sale and all of its lines are persisted atomically in
  *   a single POST /sales (see confirmSale) — the backend validates stock,
  *   decrements it, and returns the sale already PAID with lines embedded.
@@ -75,14 +75,6 @@ const useSalesStore = defineStore('sales', () => {
      */
     const paidSalesCount = computed(() => {
         return sales.value.filter(sale => sale.status === SaleStatus.PAID).length;
-    });
-
-    /**
-     * Count of OPEN sales.
-     * @type {import('vue').ComputedRef<number>}
-     */
-    const openSalesCount = computed(() => {
-        return sales.value.filter(sale => sale.status === SaleStatus.OPEN).length;
     });
 
     // ─── Queries ──────────────────────────────────────────────────────────────
@@ -158,7 +150,6 @@ const useSalesStore = defineStore('sales', () => {
     function startNewSale(businessId) {
         currentSale.value = new Sale({
             businessId: businessId,
-            status:     SaleStatus.OPEN,
             date:       new Date().toISOString(),
             details:    []
         });
@@ -168,7 +159,7 @@ const useSalesStore = defineStore('sales', () => {
      * Adds a SaleDetail line item to the current in-memory sale.
      *
      * Business rules:
-     * - The sale must be in OPEN status.
+     * - A POS session must be active (currentSale non-null).
      * - A product can only appear once; calling this for an existing productId
      *   increments quantity instead of adding a duplicate line.
      * - quantity must be a positive integer > 0.
@@ -184,7 +175,7 @@ const useSalesStore = defineStore('sales', () => {
      *   Object indicating success or the i18n key of the validation error.
      */
     function addDetailToCurrentSale({ productId, quantity, unitPrice, availableStock, discount = 0 }) {
-        if (!currentSale.value || !currentSale.value.isOpen) {
+        if (!currentSale.value) {
             return { success: false, errorKey: 'pos.error-no-active-sale' };
         }
         if (!quantity || quantity < 1) {
@@ -229,7 +220,7 @@ const useSalesStore = defineStore('sales', () => {
      * @returns {{ success: boolean, errorKey: string|null }}
      */
     function updateDetailQuantity({ productId, newQuantity, availableStock }) {
-        if (!currentSale.value || !currentSale.value.isOpen) {
+        if (!currentSale.value) {
             return { success: false, errorKey: 'pos.error-no-active-sale' };
         }
         if (newQuantity < 1) {
@@ -276,7 +267,7 @@ const useSalesStore = defineStore('sales', () => {
      * @returns {Promise<{ success: boolean, errorKey: string|null, sale: Sale|null }>}
      */
     async function confirmSale({ paymentMethod, customerId = null, description = '' }) {
-        if (!currentSale.value || !currentSale.value.isOpen) {
+        if (!currentSale.value) {
             return { success: false, errorKey: 'pos.error-no-active-sale', sale: null };
         }
         if (currentSale.value.details.length === 0) {
@@ -443,7 +434,6 @@ const useSalesStore = defineStore('sales', () => {
         salesCount,
         totalRevenue,
         paidSalesCount,
-        openSalesCount,
         // Queries
         getSaleById,
         getCustomerById,
