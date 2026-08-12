@@ -64,10 +64,10 @@ const newOrderErrors = ref({
  * @type {Record<string, { labelKey: string, color: string, background: string, icon: string }>}
  */
 const statusConfig = {
-  PENDING:   { labelKey: 'suppliers.order-status-pending',   color: '#D97706', background: '#FEF3C7', icon: 'pi-clock'           },
-  RECEIVED:  { labelKey: 'suppliers.order-status-received',  color: '#16A34A', background: '#DCFCE7', icon: 'pi-check-circle'    },
-  DELAYED:   { labelKey: 'suppliers.order-status-delayed',   color: '#EA580C', background: '#FFEDD5', icon: 'pi-exclamation-triangle' },
-  CANCELLED: { labelKey: 'suppliers.order-status-cancelled', color: '#EF4444', background: '#FEE2E2', icon: 'pi-times-circle'    }
+  PENDING:   { labelKey: 'suppliers.order-status-pending',   color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', icon: 'pi-clock'           },
+  RECEIVED:  { labelKey: 'suppliers.order-status-received',  color: 'var(--status-ok-fg)', background: 'var(--status-ok-bg)', icon: 'pi-check-circle'    },
+  DELAYED:   { labelKey: 'suppliers.order-status-delayed',   color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', icon: 'pi-exclamation-triangle' },
+  CANCELLED: { labelKey: 'suppliers.order-status-cancelled', color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)', icon: 'pi-times-circle'    }
 };
 
 /**
@@ -437,7 +437,7 @@ function resolveProductName(detail) {
           <!-- Supplier -->
           <td class="orders-td">
             <div class="orders-supplier-cell">
-              <i class="pi pi-truck" style="color: #94A3B8; font-size: 0.8rem;" />
+              <i class="pi pi-truck" style="color: var(--text-faint); font-size: 0.8rem;" />
               <span class="orders-supplier-name">{{ order.supplierName }}</span>
             </div>
           </td>
@@ -758,7 +758,7 @@ function resolveProductName(detail) {
 
           <!-- Supplier info row -->
           <div class="orders-detail-supplier-row">
-            <i class="pi pi-truck" style="color: #0E7490; font-size: 1rem; flex-shrink: 0;" />
+            <i class="pi pi-truck" style="color: var(--brand); font-size: 1rem; flex-shrink: 0;" />
             <div>
               <p class="orders-detail-supplier-name">{{ selectedOrder.supplierName }}</p>
               <p class="orders-detail-supplier-dates">
@@ -875,20 +875,20 @@ function resolveProductName(detail) {
   gap:              0.5rem;
   margin:           0.75rem 1.25rem 0;
   padding:          0.6rem 0.75rem;
-  background-color: #FFFBEB;
-  border:           1px solid #FDE68A;
+  background-color: var(--status-warning-bg);
+  border:           1px solid var(--status-warning-bg);
   border-radius:    0.75rem;
 }
 
 .orders-pending-icon {
-  color:     #D97706;
+  color:     var(--status-warning-fg);
   font-size: 0.88rem;
   flex-shrink: 0;
 }
 
 .orders-pending-text {
   font-size: 0.78rem;
-  color:     #92400E;
+  color:     var(--status-warning-fg);
   margin:    0;
 }
 
@@ -898,7 +898,7 @@ function resolveProductName(detail) {
   align-items:   center;
   gap:           0.75rem;
   padding:       0.75rem 1.25rem;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid var(--border);
   flex-wrap:     wrap;
 }
 
@@ -913,24 +913,24 @@ function resolveProductName(detail) {
   left:      0.75rem;
   top:       50%;
   transform: translateY(-50%);
-  color:     #94A3B8;
+  color:     var(--text-faint);
   font-size: 0.85rem;
 }
 
 .orders-search-input {
   width:            100%;
   padding:          0.5rem 0.75rem 0.5rem 2.25rem;
-  border:           1px solid #E2E8F0;
+  border:           1px solid var(--border);
   border-radius:    0.5rem;
   font-size:        0.85rem;
-  background-color: #F8FAFC;
-  color:            #1E293B;
+  background-color: var(--surface-alt);
+  color:            var(--text);
   outline:          none;
   transition:       border-color 0.15s;
 }
 
 .orders-search-input:focus {
-  border-color: #0E7490;
+  border-color: var(--brand);
 }
 
 .orders-status-filters {
@@ -945,17 +945,17 @@ function resolveProductName(detail) {
   border:           1.5px solid transparent;
   font-size:        0.72rem;
   font-weight:      600;
-  background-color: #F1F5F9;
-  color:            #64748B;
+  background-color: var(--surface-alt);
+  color:            var(--text-muted);
   cursor:           pointer;
   white-space:      nowrap;
   transition:       all 0.15s;
 }
 
 .orders-status-pill-active {
-  background-color: #0B3558;
-  color:            #fff;
-  border-color:     #0B3558;
+  background-color: var(--brand);
+  color:            var(--brand-ink);
+  border-color:     var(--brand);
 }
 
 .orders-btn-new {
@@ -963,8 +963,8 @@ function resolveProductName(detail) {
   align-items:      center;
   gap:              0.4rem;
   padding:          0.5rem 1rem;
-  background-color: #0B3558;
-  color:            #fff;
+  background-color: var(--brand);
+  color:            var(--brand-ink);
   border:           none;
   border-radius:    0.5rem;
   font-size:        0.85rem;
@@ -975,7 +975,7 @@ function resolveProductName(detail) {
 }
 
 .orders-btn-new:hover {
-  background-color: #0d3f6b;
+  background-color: var(--brand);
 }
 
 /* ─── Loading ───────────────────────────────────────────────────────────────── */
@@ -985,13 +985,13 @@ function resolveProductName(detail) {
   justify-content: center;
   gap:             0.5rem;
   padding:         3rem;
-  color:           #94A3B8;
+  color:           var(--text-faint);
   font-size:       0.88rem;
 }
 
 .orders-spinner {
   font-size: 1.2rem;
-  color:     #0E7490;
+  color:     var(--brand);
 }
 
 /* ─── Desktop table ─────────────────────────────────────────────────────────── */
@@ -1006,8 +1006,8 @@ function resolveProductName(detail) {
 }
 
 .orders-thead-row {
-  background-color: #F8FAFC;
-  border-bottom:    1px solid #E2E8F0;
+  background-color: var(--surface-alt);
+  border-bottom:    1px solid var(--border);
 }
 
 .orders-th {
@@ -1015,7 +1015,7 @@ function resolveProductName(detail) {
   text-align:  left;
   font-size:   0.72rem;
   font-weight: 600;
-  color:       #94A3B8;
+  color:       var(--text-faint);
 }
 
 .orders-th-actions {
@@ -1023,34 +1023,34 @@ function resolveProductName(detail) {
 }
 
 .orders-tr {
-  border-bottom: 1px solid #F1F5F9;
+  border-bottom: 1px solid var(--surface-alt);
   transition:    background-color 0.1s;
 }
 
 .orders-tr:hover {
-  background-color: #F8FAFC;
+  background-color: var(--surface-alt);
 }
 
 .orders-td {
   padding:        0.75rem 1rem;
   font-size:      0.82rem;
-  color:          #1E293B;
+  color:          var(--text);
   vertical-align: middle;
 }
 
 .orders-td-id {
   font-weight: 700;
-  color:       #0B3558;
+  color:       var(--brand);
 }
 
 .orders-td-muted {
-  color: #64748B;
+  color: var(--text-muted);
 }
 
 .orders-td-total {
   font-size:   0.88rem;
   font-weight: 700;
-  color:       #0B3558;
+  color:       var(--brand);
 }
 
 .orders-supplier-cell {
@@ -1061,7 +1061,7 @@ function resolveProductName(detail) {
 
 .orders-supplier-name {
   font-size: 0.78rem;
-  color:     #1E293B;
+  color:     var(--text);
 }
 
 /* ─── Status badge ──────────────────────────────────────────────────────────── */
@@ -1081,8 +1081,8 @@ function resolveProductName(detail) {
   align-items:      center;
   gap:              0.3rem;
   padding:          0.35rem 0.65rem;
-  background-color: #E0F2FE;
-  color:            #0E7490;
+  background-color: var(--brand-soft);
+  color:            var(--brand);
   border:           none;
   border-radius:    0.4rem;
   font-size:        0.72rem;
@@ -1092,7 +1092,7 @@ function resolveProductName(detail) {
 }
 
 .orders-btn-view:hover {
-  background-color: #BAE6FD;
+  background-color: var(--brand-soft);
 }
 
 /* ─── Empty state ───────────────────────────────────────────────────────────── */
@@ -1107,12 +1107,12 @@ function resolveProductName(detail) {
 
 .orders-empty-icon {
   font-size: 2.5rem;
-  color:     #CBD5E1;
+  color:     var(--text-faint);
 }
 
 .orders-empty-text {
   font-size: 0.88rem;
-  color:     #94A3B8;
+  color:     var(--text-faint);
   margin:    0;
 }
 
@@ -1125,8 +1125,8 @@ function resolveProductName(detail) {
 }
 
 .orders-mobile-card {
-  background-color: #fff;
-  border:           1px solid #E2E8F0;
+  background-color: var(--surface);
+  border:           1px solid var(--border);
   border-radius:    0.75rem;
   padding:          1rem;
 }
@@ -1141,13 +1141,13 @@ function resolveProductName(detail) {
 .orders-mobile-card-id {
   font-size:   0.88rem;
   font-weight: 700;
-  color:       #0B3558;
+  color:       var(--brand);
   margin:      0;
 }
 
 .orders-mobile-card-supplier {
   font-size: 0.72rem;
-  color:     #94A3B8;
+  color:     var(--text-faint);
   margin:    0;
 }
 
@@ -1159,21 +1159,21 @@ function resolveProductName(detail) {
 }
 
 .orders-mobile-stat {
-  background-color: #F8FAFC;
+  background-color: var(--surface-alt);
   border-radius:    0.5rem;
   padding:          0.4rem 0.5rem;
 }
 
 .orders-mobile-stat-label {
   font-size: 0.6rem;
-  color:     #94A3B8;
+  color:     var(--text-faint);
   margin:    0;
 }
 
 .orders-mobile-stat-value {
   font-size:   0.75rem;
   font-weight: 600;
-  color:       #1E293B;
+  color:       var(--text);
   margin:      0;
 }
 
@@ -1186,16 +1186,16 @@ function resolveProductName(detail) {
 .orders-mobile-total {
   font-size:   1rem;
   font-weight: 800;
-  color:       #0B3558;
+  color:       var(--brand);
 }
 
 /* ─── Errors ────────────────────────────────────────────────────────────────── */
 .orders-errors {
   padding:    0.75rem 1.25rem;
-  color:      #EF4444;
+  color:      var(--status-critical-fg);
   font-size:  0.8rem;
-  background: #FEF2F2;
-  border-top: 1px solid #FECACA;
+  background: var(--status-critical-bg);
+  border-top: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent);
 }
 
 /* ─── Modal overlay ─────────────────────────────────────────────────────────── */
@@ -1213,9 +1213,9 @@ function resolveProductName(detail) {
 .orders-modal,
 .orders-detail-modal {
   width:            100%;
-  background-color: #fff;
+  background-color: var(--surface);
   border-radius:    1.25rem 1.25rem 0 0;
-  border:           1px solid #E2E8F0;
+  border:           1px solid var(--border);
   box-shadow:       0 25px 50px rgba(0, 0, 0, 0.15);
   max-height:       92dvh;
   overflow-y:       auto;
@@ -1226,17 +1226,17 @@ function resolveProductName(detail) {
   align-items:      flex-start;
   justify-content:  space-between;
   padding:          1.25rem 1.25rem 0.75rem;
-  border-bottom:    1px solid #F1F5F9;
+  border-bottom:    1px solid var(--surface-alt);
   position:         sticky;
   top:              0;
-  background-color: #fff;
+  background-color: var(--surface);
   gap:              0.5rem;
 }
 
 .orders-modal-title {
   font-size:   1rem;
   font-weight: 700;
-  color:       #0B3558;
+  color:       var(--brand);
   margin:      0 0 0.25rem;
 }
 
@@ -1244,7 +1244,7 @@ function resolveProductName(detail) {
   background: none;
   border:     none;
   cursor:     pointer;
-  color:      #94A3B8;
+  color:      var(--text-faint);
   font-size:  1rem;
   padding:    0.25rem;
   flex-shrink: 0;
@@ -1276,17 +1276,17 @@ function resolveProductName(detail) {
 .orders-modal-label {
   font-size:   0.75rem;
   font-weight: 600;
-  color:       #64748B;
+  color:       var(--text-muted);
 }
 
 .orders-modal-input,
 .orders-modal-select {
   padding:       0.5rem 0.75rem;
-  border:        1px solid #E2E8F0;
+  border:        1px solid var(--border);
   border-radius: 0.5rem;
   font-size:     0.88rem;
-  color:         #1E293B;
-  background:    #fff;
+  color:         var(--text);
+  background:    var(--surface);
   outline:       none;
   transition:    border-color 0.15s;
   width:         100%;
@@ -1294,16 +1294,16 @@ function resolveProductName(detail) {
 
 .orders-modal-input:focus,
 .orders-modal-select:focus {
-  border-color: #0E7490;
+  border-color: var(--brand);
 }
 
 .orders-modal-input-error {
-  border-color: #EF4444;
+  border-color: var(--status-critical-fg);
 }
 
 .orders-modal-error-msg {
   font-size:    0.72rem;
-  color:        #EF4444;
+  color:        var(--status-critical-fg);
   margin:       0 0 0.5rem;
 }
 
@@ -1320,8 +1320,8 @@ function resolveProductName(detail) {
   align-items:      center;
   gap:              0.3rem;
   padding:          0.3rem 0.6rem;
-  background-color: #E0F2FE;
-  color:            #0E7490;
+  background-color: var(--brand-soft);
+  color:            var(--brand);
   border:           none;
   border-radius:    0.4rem;
   font-size:        0.72rem;
@@ -1331,7 +1331,7 @@ function resolveProductName(detail) {
 }
 
 .orders-btn-add-line:hover {
-  background-color: #BAE6FD;
+  background-color: var(--brand-soft);
 }
 
 .orders-lines-list {
@@ -1361,27 +1361,27 @@ function resolveProductName(detail) {
 .orders-line-field-label {
   font-size:   0.68rem;
   font-weight: 600;
-  color:       #64748B;
+  color:       var(--text-muted);
 }
 
 .orders-line-product-select {
   width:         100%;
   padding:       0.45rem 0.6rem;
-  border:        1px solid #E2E8F0;
+  border:        1px solid var(--border);
   border-radius: 0.5rem;
   font-size:     0.82rem;
-  color:         #1E293B;
-  background:    #fff;
+  color:         var(--text);
+  background:    var(--surface);
   outline:       none;
 }
 
 .orders-line-qty-input {
   width:         4rem;
   padding:       0.45rem 0.5rem;
-  border:        1px solid #E2E8F0;
+  border:        1px solid var(--border);
   border-radius: 0.5rem;
   font-size:     0.82rem;
-  color:         #1E293B;
+  color:         var(--text);
   text-align:    center;
   outline:       none;
 }
@@ -1389,10 +1389,10 @@ function resolveProductName(detail) {
 .orders-line-price-input {
   width:         6rem;
   padding:       0.45rem 0.5rem;
-  border:        1px solid #E2E8F0;
+  border:        1px solid var(--border);
   border-radius: 0.5rem;
   font-size:     0.82rem;
-  color:         #1E293B;
+  color:         var(--text);
   outline:       none;
 }
 
@@ -1402,8 +1402,8 @@ function resolveProductName(detail) {
   display:          flex;
   align-items:      center;
   justify-content:  center;
-  background-color: #FEE2E2;
-  color:            #EF4444;
+  background-color: var(--status-critical-bg);
+  color:            var(--status-critical-fg);
   border:           none;
   border-radius:    0.4rem;
   cursor:           pointer;
@@ -1412,12 +1412,12 @@ function resolveProductName(detail) {
 }
 
 .orders-line-remove-btn:hover {
-  background-color: #FECACA;
+  background-color: var(--status-critical-bg);
 }
 
 .orders-line-remove-btn-disabled {
-  background-color: #F8FAFC;
-  color:            #CBD5E1;
+  background-color: var(--surface-alt);
+  color:            var(--text-faint);
   cursor:           not-allowed;
 }
 
@@ -1427,21 +1427,21 @@ function resolveProductName(detail) {
   align-items:      center;
   justify-content:  space-between;
   padding:          0.6rem 0.75rem;
-  background-color: #E0F2FE;
+  background-color: var(--brand-soft);
   border-radius:    0.75rem;
   margin-bottom:    0.75rem;
 }
 
 .orders-total-label {
   font-size:   0.85rem;
-  color:       #0E7490;
+  color:       var(--brand);
   font-weight: 600;
 }
 
 .orders-total-value {
   font-size:   1.1rem;
   font-weight: 800;
-  color:       #0B3558;
+  color:       var(--brand);
 }
 
 /* ─── Modal footer ──────────────────────────────────────────────────────────── */
@@ -1454,19 +1454,19 @@ function resolveProductName(detail) {
 
 .orders-modal-btn-cancel {
   padding:       0.6rem 1.25rem;
-  border:        1px solid #E2E8F0;
+  border:        1px solid var(--border);
   border-radius: 0.75rem;
-  color:         #64748B;
+  color:         var(--text-muted);
   font-size:     0.88rem;
   font-weight:   600;
-  background:    #fff;
+  background:    var(--surface);
   cursor:        pointer;
 }
 
 .orders-modal-btn-save {
   padding:          0.6rem 1.5rem;
-  background-color: #0B3558;
-  color:            #fff;
+  background-color: var(--brand);
+  color:            var(--brand-ink);
   border:           none;
   border-radius:    0.75rem;
   font-size:        0.88rem;
@@ -1476,7 +1476,7 @@ function resolveProductName(detail) {
 }
 
 .orders-modal-btn-save:hover {
-  background-color: #0d3f6b;
+  background-color: var(--brand);
 }
 
 /* ─── Order detail modal specifics ──────────────────────────────────────────── */
@@ -1485,8 +1485,8 @@ function resolveProductName(detail) {
   align-items:      flex-start;
   gap:              0.75rem;
   padding:          0.75rem;
-  background-color: #F8FAFC;
-  border:           1px solid #E2E8F0;
+  background-color: var(--surface-alt);
+  border:           1px solid var(--border);
   border-radius:    0.75rem;
   margin-bottom:    1rem;
 }
@@ -1494,13 +1494,13 @@ function resolveProductName(detail) {
 .orders-detail-supplier-name {
   font-size:   0.85rem;
   font-weight: 600;
-  color:       #1E293B;
+  color:       var(--text);
   margin:      0;
 }
 
 .orders-detail-supplier-dates {
   font-size: 0.72rem;
-  color:     #94A3B8;
+  color:     var(--text-faint);
   margin:    0;
 }
 
@@ -1511,22 +1511,22 @@ function resolveProductName(detail) {
 .orders-detail-section-label {
   font-size:     0.75rem;
   font-weight:   600;
-  color:         #64748B;
+  color:         var(--text-muted);
   margin-bottom: 0.5rem;
 }
 
 .orders-detail-receive-hint {
   font-size:        0.74rem;
-  color:            #64748B;
-  background-color: #F8FAFC;
-  border:           1px solid #E2E8F0;
+  color:            var(--text-muted);
+  background-color: var(--surface-alt);
+  border:           1px solid var(--border);
   border-radius:    0.6rem;
   padding:          0.55rem 0.7rem;
   margin:           0 0 0.75rem 0;
 }
 
 .orders-detail-table-wrapper {
-  border:        1px solid #E2E8F0;
+  border:        1px solid var(--border);
   border-radius: 0.75rem;
   overflow:      hidden;
 }
@@ -1537,14 +1537,14 @@ function resolveProductName(detail) {
 }
 
 .orders-detail-thead-row {
-  background-color: #F8FAFC;
+  background-color: var(--surface-alt);
 }
 
 .orders-detail-th {
   padding:     0.5rem 0.75rem;
   font-size:   0.68rem;
   font-weight: 600;
-  color:       #94A3B8;
+  color:       var(--text-faint);
   text-align:  left;
 }
 
@@ -1557,18 +1557,18 @@ function resolveProductName(detail) {
 }
 
 .orders-detail-tr {
-  border-top: 1px solid #F1F5F9;
+  border-top: 1px solid var(--surface-alt);
 }
 
 .orders-detail-td {
   padding:   0.5rem 0.75rem;
   font-size: 0.8rem;
-  color:     #1E293B;
+  color:     var(--text);
 }
 
 .orders-detail-td-center {
   text-align: center;
-  color:      #64748B;
+  color:      var(--text-muted);
 }
 
 .orders-detail-td-right {
@@ -1576,36 +1576,36 @@ function resolveProductName(detail) {
 }
 
 .orders-detail-td-muted {
-  color: #64748B;
+  color: var(--text-muted);
 }
 
 .orders-detail-td-bold {
   font-weight: 600;
-  color:       #0B3558;
+  color:       var(--brand);
 }
 
 .orders-detail-tfoot-row {
-  border-top:       2px solid #E2E8F0;
-  background-color: #F8FAFC;
+  border-top:       2px solid var(--border);
+  background-color: var(--surface-alt);
 }
 
 .orders-detail-tfoot-label {
   font-size:   0.85rem;
   font-weight: 700;
-  color:       #0B3558;
+  color:       var(--brand);
 }
 
 .orders-detail-tfoot-total {
   font-size:   0.95rem;
   font-weight: 800;
-  color:       #0B3558;
+  color:       var(--brand);
 }
 
 /* ─── Notes ─────────────────────────────────────────────────────────────────── */
 .orders-detail-notes {
   padding:          0.75rem;
-  background-color: #FFFBEB;
-  border:           1px solid #FDE68A;
+  background-color: var(--status-warning-bg);
+  border:           1px solid var(--status-warning-bg);
   border-radius:    0.75rem;
   margin-bottom:    0.75rem;
 }
@@ -1613,13 +1613,13 @@ function resolveProductName(detail) {
 .orders-detail-notes-label {
   font-size:   0.72rem;
   font-weight: 600;
-  color:       #D97706;
+  color:       var(--status-warning-fg);
   margin:      0 0 0.2rem;
 }
 
 .orders-detail-notes-text {
   font-size: 0.82rem;
-  color:     #92400E;
+  color:     var(--status-warning-fg);
   margin:    0;
 }
 
@@ -1649,37 +1649,37 @@ function resolveProductName(detail) {
 }
 
 .orders-action-btn-receive {
-  background-color: #DCFCE7;
-  color:            #16A34A;
+  background-color: var(--status-ok-bg);
+  color:            var(--status-ok-fg);
 }
 
 .orders-action-btn-receive:hover {
-  background-color: #BBF7D0;
+  background-color: var(--status-ok-bg);
 }
 
 .orders-action-btn-delay {
-  background-color: #FFEDD5;
-  color:            #EA580C;
+  background-color: var(--status-warning-bg);
+  color:            var(--status-warning-fg);
 }
 
 .orders-action-btn-delay:hover {
-  background-color: #FED7AA;
+  background-color: var(--status-warning-bg);
 }
 
 .orders-action-btn-cancel {
-  background-color: #FEE2E2;
-  color:            #EF4444;
+  background-color: var(--status-critical-bg);
+  color:            var(--status-critical-fg);
 }
 
 .orders-action-btn-cancel:hover {
-  background-color: #FECACA;
+  background-color: var(--status-critical-bg);
 }
 
 .orders-detail-close-btn {
   width:            100%;
   padding:          0.65rem;
-  background-color: #0B3558;
-  color:            #fff;
+  background-color: var(--brand);
+  color:            var(--brand-ink);
   border:           none;
   border-radius:    0.75rem;
   font-size:        0.88rem;
@@ -1689,7 +1689,7 @@ function resolveProductName(detail) {
 }
 
 .orders-detail-close-btn:hover {
-  background-color: #0d3f6b;
+  background-color: var(--brand);
 }
 
 /* ─── Responsive ────────────────────────────────────────────────────────────── */

@@ -108,12 +108,12 @@ function getProductName(productId) {
  */
 function getStatusConfig(status) {
   if (status === SaleStatus.PAID) {
-    return { labelKey: 'sales.status-paid',      color: '#16A34A', background: '#DCFCE7' };
+    return { labelKey: 'sales.status-paid',      color: 'var(--status-ok-fg)', background: 'var(--status-ok-bg)' };
   }
   if (status === SaleStatus.CANCELLED) {
-    return { labelKey: 'sales.status-cancelled', color: '#EF4444', background: '#FEE2E2' };
+    return { labelKey: 'sales.status-cancelled', color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)' };
   }
-  return { labelKey: 'sales.status-open',          color: '#D97706', background: '#FEF3C7' };
+  return { labelKey: 'sales.status-open',          color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)' };
 }
 
 /**
@@ -123,12 +123,12 @@ function getStatusConfig(status) {
  */
 function getMethodConfig(method) {
   const configs = {
-    CASH: { color: '#16A34A', background: '#DCFCE7' },
+    CASH: { color: 'var(--status-ok-fg)', background: 'var(--status-ok-bg)' },
     YAPE: { color: '#7C3AED', background: '#EDE9FE' },
-    PLIN: { color: '#0891B2', background: '#CFFAFE' },
-    CARD: { color: '#D97706', background: '#FEF3C7' }
+    PLIN: { color: 'var(--brand)', background: '#CFFAFE' },
+    CARD: { color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)' }
   };
-  return configs[method] || { color: '#64748B', background: '#F1F5F9' };
+  return configs[method] || { color: 'var(--text-muted)', background: 'var(--surface-alt)' };
 }
 
 /**
@@ -228,22 +228,22 @@ onMounted(() => {
     <!-- Filters bar -->
     <div
         class="px-4 py-3"
-        style="border-bottom: 1px solid #E2E8F0; display: flex; flex-direction: column; gap: 8px;"
+        style="border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;"
     >
       <!-- Search -->
       <div style="position: relative;">
         <i
             class="pi pi-search"
-            style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94A3B8; font-size: 0.85rem;"
+            style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 0.85rem;"
         />
         <input
             v-model="searchQuery"
             type="text"
             :placeholder="t('sales.search-placeholder')"
             class="w-full border-round-lg"
-            style="padding: 8px 12px 8px 36px; border: 1px solid #E2E8F0; font-size: 0.85rem; background-color: #F8FAFC; outline: none;"
-            @focus="(e) => e.target.style.borderColor = '#0E7490'"
-            @blur="(e) => e.target.style.borderColor = '#E2E8F0'"
+            style="padding: 8px 12px 8px 36px; border: 1px solid var(--border); font-size: 0.85rem; background-color: var(--surface-alt); outline: none;"
+            @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+            @blur="(e) => e.target.style.borderColor = 'var(--border)'"
         />
       </div>
 
@@ -255,8 +255,8 @@ onMounted(() => {
             class="border-round-3xl px-3 py-1"
             style="font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
             :style="{
-                        backgroundColor: activeStatusFilter === filter.value ? '#0B3558' : '#F1F5F9',
-                        color:           activeStatusFilter === filter.value ? '#fff'    : '#64748B'
+                        backgroundColor: activeStatusFilter === filter.value ? 'var(--brand)' : 'var(--surface-alt)',
+                        color:           activeStatusFilter === filter.value ? 'var(--brand-ink)'    : 'var(--text-muted)'
                     }"
             @click="activeStatusFilter = filter.value"
         >
@@ -272,7 +272,7 @@ onMounted(() => {
       <div class="hidden md:block">
         <table class="w-full" style="border-collapse: collapse;">
           <thead>
-          <tr style="background-color: #F8FAFC; border-bottom: 1px solid #E2E8F0;">
+          <tr style="background-color: var(--surface-alt); border-bottom: 1px solid var(--border);">
             <th
                 v-for="header in [
                                     t('sales.col-id'),
@@ -285,7 +285,7 @@ onMounted(() => {
                                 ]"
                 :key="header"
                 class="px-4 py-3 text-left"
-                style="font-size: 0.72rem; font-weight: 600; color: #94A3B8;"
+                style="font-size: 0.72rem; font-weight: 600; color: var(--text-faint);"
             >
               {{ header }}
             </th>
@@ -298,18 +298,18 @@ onMounted(() => {
           >
             <!-- Main row -->
             <tr
-                style="border-bottom: 1px solid #F1F5F9; cursor: pointer;"
+                style="border-bottom: 1px solid var(--surface-alt); cursor: pointer;"
                 @click="toggleExpand(sale)"
-                @mouseenter="(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'"
+                @mouseenter="(e) => e.currentTarget.style.backgroundColor = 'var(--surface-alt)'"
                 @mouseleave="(e) => e.currentTarget.style.backgroundColor = 'transparent'"
             >
-              <td class="px-4 py-3" style="font-size: 0.82rem; font-weight: 600; color: #0B3558;">
+              <td class="px-4 py-3" style="font-size: 0.82rem; font-weight: 600; color: var(--brand);">
                 #{{ sale.id }}
               </td>
-              <td class="px-4 py-3" style="font-size: 0.78rem; color: #64748B;">
+              <td class="px-4 py-3" style="font-size: 0.78rem; color: var(--text-muted);">
                 {{ formatDate(sale.date) }}
               </td>
-              <td class="px-4 py-3" style="font-size: 0.78rem; color: #1E293B;">
+              <td class="px-4 py-3" style="font-size: 0.78rem; color: var(--text);">
                 {{ getCustomerName(sale.customerId) }}
               </td>
               <td class="px-4 py-3">
@@ -324,9 +324,9 @@ onMounted(() => {
                                     >
                                         {{ t(`pos.payment-${sale.paymentMethod.toLowerCase()}`) }}
                                     </span>
-                <span v-else style="color: #94A3B8;">—</span>
+                <span v-else style="color: var(--text-faint);">—</span>
               </td>
-              <td class="px-4 py-3" style="font-size: 0.88rem; font-weight: 700; color: #0B3558;">
+              <td class="px-4 py-3" style="font-size: 0.88rem; font-weight: 700; color: var(--brand);">
                 {{ formatCurrency(sale.subtotal) }}
               </td>
               <td class="px-4 py-3">
@@ -346,14 +346,14 @@ onMounted(() => {
                   <button
                       v-if="sale.status !== SaleStatus.CANCELLED"
                       class="border-round-lg px-2 py-1"
-                      style="background-color: #FEE2E2; color: #EF4444; font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
+                      style="background-color: var(--status-critical-bg); color: var(--status-critical-fg); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
                       @click.stop="handleCancelSale(sale)"
                   >
                     {{ t('sales.cancel-action') }}
                   </button>
                   <i
                       class="pi pi-chevron-down"
-                      style="color: #94A3B8; font-size: 0.75rem; transition: transform 0.2s;"
+                      style="color: var(--text-faint); font-size: 0.75rem; transition: transform 0.2s;"
                       :style="{ transform: expandedSaleId === sale.id ? 'rotate(180deg)' : 'rotate(0deg)' }"
                   />
                 </div>
@@ -364,10 +364,10 @@ onMounted(() => {
             <tr
                 v-if="expandedSaleId === sale.id && loadingDetailsSaleId === sale.id"
                 :key="`${sale.id}-loading`"
-                style="background-color: #F8FAFC;"
+                style="background-color: var(--surface-alt);"
             >
               <td colspan="7" class="px-6 py-3">
-                <i class="pi pi-spin pi-spinner" style="color: #94A3B8; font-size: 0.85rem;"/>
+                <i class="pi pi-spin pi-spinner" style="color: var(--text-faint); font-size: 0.85rem;"/>
               </td>
             </tr>
 
@@ -375,7 +375,7 @@ onMounted(() => {
             <tr
                 v-if="expandedSaleId === sale.id && sale.details && sale.details.length > 0"
                 :key="`${sale.id}-detail`"
-                style="background-color: #F8FAFC;"
+                style="background-color: var(--surface-alt);"
             >
               <td colspan="7" class="px-6 py-3">
                 <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -384,10 +384,10 @@ onMounted(() => {
                       :key="index"
                       class="flex justify-content-between"
                   >
-                                            <span style="font-size: 0.78rem; color: #1E293B;">
+                                            <span style="font-size: 0.78rem; color: var(--text);">
                                                 {{ getProductName(detail.productId) }} ×{{ detail.quantity }}
                                             </span>
-                    <span style="font-size: 0.78rem; color: #64748B;">
+                    <span style="font-size: 0.78rem; color: var(--text-muted);">
                                                 {{ formatCurrency(detail.lineTotal) }}
                                             </span>
                   </div>
@@ -405,15 +405,15 @@ onMounted(() => {
             v-for="sale in filteredSales"
             :key="sale.id"
             class="bg-white border-round-xl p-4"
-            style="border: 1px solid #E2E8F0;"
+            style="border: 1px solid var(--border);"
         >
           <!-- Top row -->
           <div class="flex align-items-start justify-content-between mb-2">
             <div>
-              <p class="m-0" style="font-size: 0.85rem; font-weight: 700; color: #0B3558;">
+              <p class="m-0" style="font-size: 0.85rem; font-weight: 700; color: var(--brand);">
                 #{{ sale.id }}
               </p>
-              <p class="m-0" style="font-size: 0.72rem; color: #94A3B8;">
+              <p class="m-0" style="font-size: 0.72rem; color: var(--text-faint);">
                 {{ formatDate(sale.date) }}
               </p>
             </div>
@@ -443,7 +443,7 @@ onMounted(() => {
                             {{ t(`pos.payment-${sale.paymentMethod.toLowerCase()}`) }}
                         </span>
             <span v-else />
-            <span style="font-size: 1rem; font-weight: 800; color: #0B3558;">
+            <span style="font-size: 1rem; font-weight: 800; color: var(--brand);">
                             {{ formatCurrency(sale.subtotal) }}
                         </span>
           </div>
@@ -453,8 +453,8 @@ onMounted(() => {
               v-if="sale.customerId"
               class="flex align-items-center gap-2 mt-2"
           >
-            <i class="pi pi-user" style="color: #94A3B8; font-size: 0.75rem;" />
-            <span style="font-size: 0.75rem; color: #64748B;">
+            <i class="pi pi-user" style="color: var(--text-faint); font-size: 0.75rem;" />
+            <span style="font-size: 0.75rem; color: var(--text-muted);">
                             {{ getCustomerName(sale.customerId) }}
                         </span>
           </div>
@@ -462,7 +462,7 @@ onMounted(() => {
           <!-- Expand / collapse items -->
           <button
               class="w-full flex align-items-center justify-content-center gap-1 mt-3 border-round-lg py-2"
-              style="background-color: #F1F5F9; color: #64748B; border: none; cursor: pointer;"
+              style="background-color: var(--surface-alt); color: var(--text-muted); border: none; cursor: pointer;"
               @click="toggleExpand(sale)"
           >
                         <span style="font-size: 0.72rem; font-weight: 600;">
@@ -479,26 +479,26 @@ onMounted(() => {
           <div
               v-if="expandedSaleId === sale.id && loadingDetailsSaleId === sale.id"
               class="mt-2 pt-2"
-              style="border-top: 1px solid #F1F5F9;"
+              style="border-top: 1px solid var(--surface-alt);"
           >
-            <i class="pi pi-spin pi-spinner" style="color: #94A3B8; font-size: 0.85rem;"/>
+            <i class="pi pi-spin pi-spinner" style="color: var(--text-faint); font-size: 0.85rem;"/>
           </div>
 
           <!-- Expanded items -->
           <div
               v-if="expandedSaleId === sale.id && sale.details && sale.details.length > 0"
               class="mt-2 pt-2"
-              style="border-top: 1px solid #F1F5F9; display: flex; flex-direction: column; gap: 4px;"
+              style="border-top: 1px solid var(--surface-alt); display: flex; flex-direction: column; gap: 4px;"
           >
             <div
                 v-for="(detail, index) in sale.details"
                 :key="index"
                 class="flex justify-content-between"
             >
-                            <span style="font-size: 0.78rem; color: #1E293B;">
+                            <span style="font-size: 0.78rem; color: var(--text);">
                                 {{ getProductName(detail.productId) }} ×{{ detail.quantity }}
                             </span>
-              <span style="font-size: 0.78rem; color: #64748B;">
+              <span style="font-size: 0.78rem; color: var(--text-muted);">
                                 {{ formatCurrency(detail.lineTotal) }}
                             </span>
             </div>
@@ -508,7 +508,7 @@ onMounted(() => {
           <button
               v-if="sale.status !== SaleStatus.CANCELLED"
               class="w-full mt-3 border-round-lg py-2"
-              style="background-color: #FEE2E2; color: #EF4444; font-size: 0.78rem; font-weight: 600; border: none; cursor: pointer;"
+              style="background-color: var(--status-critical-bg); color: var(--status-critical-fg); font-size: 0.78rem; font-weight: 600; border: none; cursor: pointer;"
               @click="handleCancelSale(sale)"
           >
             {{ t('sales.cancel-action') }}
@@ -521,8 +521,8 @@ onMounted(() => {
           v-if="filteredSales.length === 0"
           class="flex flex-column align-items-center justify-content-center py-12 text-center"
       >
-        <i class="pi pi-receipt mb-2" style="font-size: 2.25rem; color: #CBD5E1;" />
-        <p class="m-0" style="color: #94A3B8; font-size: 0.88rem;">
+        <i class="pi pi-receipt mb-2" style="font-size: 2.25rem; color: var(--text-faint);" />
+        <p class="m-0" style="color: var(--text-faint); font-size: 0.88rem;">
           {{ t('sales.no-results') }}
         </p>
       </div>

@@ -74,12 +74,12 @@ function categoryLabel(category) {
 
 const categoryColors = {
   DAIRY:     { bg: '#DBEAFE', color: '#1D4ED8' },
-  GRAINS:    { bg: '#FEF9C3', color: '#A16207' },
-  OILS:      { bg: '#D1FAE5', color: '#065F46' },
-  BEVERAGES: { bg: '#CFFAFE', color: '#0E7490' },
+  GRAINS:    { bg: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
+  OILS:      { bg: 'var(--status-ok-bg)', color: 'var(--status-ok-fg)' },
+  BEVERAGES: { bg: '#CFFAFE', color: 'var(--brand)' },
   CLEANING:  { bg: '#EDE9FE', color: '#6D28D9' },
-  MEDICINE:  { bg: '#FFE4E6', color: '#BE123C' },
-  OTHER:     { bg: '#F1F5F9', color: '#475569' }
+  MEDICINE:  { bg: 'var(--status-critical-bg)', color: 'var(--status-critical-fg)' },
+  OTHER:     { bg: 'var(--surface-alt)', color: 'var(--text)' }
 };
 
 function getCategoryColor(category) {
@@ -91,12 +91,12 @@ function getProductInitial(name) {
 }
 
 const statusConfig = {
-  normal:   { color: '#16A34A', background: '#DCFCE7', icon: 'pi pi-box'                 },
-  low:      { color: '#D97706', background: '#FEF3C7', icon: 'pi pi-exclamation-triangle' },
-  expiring: { color: '#EA580C', background: '#FFEDD5', icon: 'pi pi-clock'                },
-  critical: { color: '#DC2626', background: '#FEE2E2', icon: 'pi pi-exclamation-circle'   },
-  expired:  { color: '#7C2D12', background: '#FFE4E1', icon: 'pi pi-ban'                  },
-  out:      { color: '#64748B', background: '#F1F5F9', icon: 'pi pi-times-circle'         }
+  normal:   { color: 'var(--status-ok-fg)', background: 'var(--status-ok-bg)', icon: 'pi pi-box'                 },
+  low:      { color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', icon: 'pi pi-exclamation-triangle' },
+  expiring: { color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', icon: 'pi pi-clock'                },
+  critical: { color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)', icon: 'pi pi-exclamation-circle'   },
+  expired:  { color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)', icon: 'pi pi-ban'                  },
+  out:      { color: 'var(--text-muted)', background: 'var(--surface-alt)', icon: 'pi pi-times-circle'         }
 };
 
 /**
@@ -682,14 +682,14 @@ function saveWarehouse() {
       <div class="stat-grid mt-4">
         <div
             v-for="stat in [
-              { label: t('inventory.stat-total'),    value: summaryCounts.total,    color: '#0B3558', bg: '#EFF6FF', iconBg: '#DBEAFE', icon: 'pi pi-box'                  },
-              { label: t('inventory.stat-low'),      value: summaryCounts.low,      color: '#D97706', bg: '#FFFBEB', iconBg: '#FEF3C7', icon: 'pi pi-exclamation-triangle'  },
-              { label: t('inventory.stat-expiring'), value: summaryCounts.expiring, color: '#EA580C', bg: '#FFF7ED', iconBg: '#FFEDD5', icon: 'pi pi-clock'                 },
-              { label: t('inventory.stat-out'),      value: summaryCounts.out,      color: '#64748B', bg: '#F8FAFC', iconBg: '#E2E8F0', icon: 'pi pi-times-circle'           }
+              { label: t('inventory.stat-total'),    value: summaryCounts.total,    color: 'var(--brand)', bg: '#EFF6FF', iconBg: '#DBEAFE', icon: 'pi pi-box'                  },
+              { label: t('inventory.stat-low'),      value: summaryCounts.low,      color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', iconBg: 'var(--status-warning-bg)', icon: 'pi pi-exclamation-triangle'  },
+              { label: t('inventory.stat-expiring'), value: summaryCounts.expiring, color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', iconBg: 'var(--status-warning-bg)', icon: 'pi pi-clock'                 },
+              { label: t('inventory.stat-out'),      value: summaryCounts.out,      color: 'var(--text-muted)', bg: 'var(--surface-alt)', iconBg: 'var(--border)', icon: 'pi pi-times-circle'           }
             ]"
             :key="stat.label"
             class="flex align-items-center gap-3 border-round-xl px-4 py-3"
-            :style="{ backgroundColor: stat.bg, border: '1px solid #E2E8F0' }"
+            :style="{ backgroundColor: stat.bg, border: '1px solid var(--border)' }"
         >
           <div
               class="flex align-items-center justify-content-center border-round-xl flex-shrink-0 stat-icon"
@@ -718,8 +718,8 @@ function saveWarehouse() {
             class="flex align-items-center gap-2 px-3 py-2 border-round-lg border-none cursor-pointer tab-btn"
             :style="{
               fontWeight:      activeTab === tab.id ? 700 : 400,
-              backgroundColor: activeTab === tab.id ? '#fff' : 'transparent',
-              color:           activeTab === tab.id ? '#0B3558' : '#64748B',
+              backgroundColor: activeTab === tab.id ? 'var(--surface)' : 'transparent',
+              color:           activeTab === tab.id ? 'var(--brand)' : 'var(--text-muted)',
               boxShadow:       activeTab === tab.id ? '0 1px 6px rgba(0,0,0,0.10)' : 'none'
             }"
             @click="activeTab = tab.id"
@@ -727,7 +727,7 @@ function saveWarehouse() {
           <i
               :class="tab.icon"
               style="font-size: 0.82rem;"
-              :style="{ color: activeTab === tab.id ? '#0E7490' : '#94A3B8' }"
+              :style="{ color: activeTab === tab.id ? 'var(--brand)' : 'var(--text-faint)' }"
           />
           <span class="hidden sm:inline">{{ tab.label }}</span>
         </button>
@@ -773,9 +773,9 @@ function saveWarehouse() {
               class="inline-flex align-items-center gap-1 border-round-3xl border-none cursor-pointer pill-btn"
               :style="{
                 fontWeight:      selectedStatusFilter === pill.key ? 700 : 400,
-                backgroundColor: selectedStatusFilter === pill.key ? '#0B3558' : '#F1F5F9',
-                color:           selectedStatusFilter === pill.key ? '#fff'    : '#64748B',
-                border:          selectedStatusFilter === pill.key ? 'none'    : '1px solid #E2E8F0',
+                backgroundColor: selectedStatusFilter === pill.key ? 'var(--brand)' : 'var(--surface-alt)',
+                color:           selectedStatusFilter === pill.key ? 'var(--brand-ink)'    : 'var(--text-muted)',
+                border:          selectedStatusFilter === pill.key ? 'none'    : '1px solid var(--border)',
                 transform:       selectedStatusFilter === pill.key ? 'scale(1.05)' : 'scale(1)'
               }"
               @click="selectedStatusFilter = pill.key"
@@ -785,8 +785,8 @@ function saveWarehouse() {
                 v-if="pill.key !== 'all'"
                 class="border-round-3xl pill-count"
                 :style="{
-                  backgroundColor: selectedStatusFilter === pill.key ? 'rgba(255,255,255,0.25)' : '#E2E8F0',
-                  color:           selectedStatusFilter === pill.key ? '#fff' : '#64748B'
+                  backgroundColor: selectedStatusFilter === pill.key ? 'rgba(255,255,255,0.25)' : 'var(--border)',
+                  color:           selectedStatusFilter === pill.key ? 'var(--brand-ink)' : 'var(--text-muted)'
                 }"
             >
               {{ countByStatus(pill.key) }}
@@ -797,7 +797,7 @@ function saveWarehouse() {
 
       <!-- Loading -->
       <div v-if="!productsLoaded" class="flex justify-content-center align-items-center gap-3 py-8">
-        <i class="pi pi-spin pi-spinner" style="font-size: 1.5rem; color: #0E7490;"/>
+        <i class="pi pi-spin pi-spinner" style="font-size: 1.5rem; color: var(--brand);"/>
         <span class="loading-text">{{ t('inventory.loading') }}</span>
       </div>
 
@@ -827,7 +827,7 @@ function saveWarehouse() {
                 v-for="(product, index) in filteredProducts"
                 :key="product.id"
                 class="table-row"
-                :style="{ borderBottom: index < filteredProducts.length - 1 ? '1px solid #F1F5F9' : 'none' }"
+                :style="{ borderBottom: index < filteredProducts.length - 1 ? '1px solid var(--surface-alt)' : 'none' }"
             >
               <!-- Product name + avatar -->
               <td class="px-4 py-3">
@@ -855,7 +855,7 @@ function saveWarehouse() {
               </td>
               <!-- Stock -->
               <td class="px-4 py-3">
-                <span class="stock-value" :style="{ color: resolveCurrentStock(product.id) === 0 ? '#CBD5E1' : '#0B3558' }">
+                <span class="stock-value" :style="{ color: resolveCurrentStock(product.id) === 0 ? 'var(--text-faint)' : 'var(--brand)' }">
                   {{ resolveCurrentStock(product.id) }}
                 </span>
                 <span class="stock-unit"> {{ t('inventory.und') }}</span>
@@ -916,7 +916,7 @@ function saveWarehouse() {
           <!-- Empty state -->
           <div v-if="filteredProducts.length === 0" class="flex flex-column align-items-center py-12 gap-3">
             <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap">
-              <i class="pi pi-box" style="font-size: 1.8rem; color: #CBD5E1;"/>
+              <i class="pi pi-box" style="font-size: 1.8rem; color: var(--text-faint);"/>
             </div>
             <p class="m-0 empty-text">{{ t('inventory.no-results') }}</p>
           </div>
@@ -931,7 +931,7 @@ function saveWarehouse() {
             class="flex flex-column align-items-center py-10 border-round-xl gap-3 table-card"
         >
           <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap-sm">
-            <i class="pi pi-box" style="font-size: 1.6rem; color: #CBD5E1;"/>
+            <i class="pi pi-box" style="font-size: 1.6rem; color: var(--text-faint);"/>
           </div>
           <p class="m-0 empty-text">{{ t('inventory.no-results') }}</p>
         </div>
@@ -974,13 +974,13 @@ function saveWarehouse() {
           <div class="mb-3 mini-stats-grid">
             <div class="border-round-lg p-2 text-center mini-stat">
               <p class="m-0 mb-1 mini-stat-label">{{ t('inventory.col-stock') }}</p>
-              <p class="m-0 mini-stat-value" :style="{ color: resolveCurrentStock(product.id) === 0 ? '#CBD5E1' : '#0B3558' }">
+              <p class="m-0 mini-stat-value" :style="{ color: resolveCurrentStock(product.id) === 0 ? 'var(--text-faint)' : 'var(--brand)' }">
                 {{ resolveCurrentStock(product.id) }}
               </p>
             </div>
             <div class="border-round-lg p-2 text-center mini-stat">
               <p class="m-0 mb-1 mini-stat-label">{{ t('inventory.col-min') }}</p>
-              <p class="m-0 mini-stat-value" style="color: #64748B;">{{ resolveMinimumStock(product.id) }}</p>
+              <p class="m-0 mini-stat-value" style="color: var(--text-muted);">{{ resolveMinimumStock(product.id) }}</p>
             </div>
             <div class="border-round-lg p-2 text-center mini-stat">
               <p class="m-0 mb-1 mini-stat-label">{{ t('inventory.col-price') }}</p>
@@ -1049,7 +1049,7 @@ function saveWarehouse() {
               v-for="(movement, index) in stockMovements"
               :key="movement.id"
               class="table-row"
-              :style="{ borderBottom: index < stockMovements.length - 1 ? '1px solid #F1F5F9' : 'none' }"
+              :style="{ borderBottom: index < stockMovements.length - 1 ? '1px solid var(--surface-alt)' : 'none' }"
           >
             <td class="px-4 py-3 movement-date">{{ formatMovementDate(movement.registeredAt) }}</td>
             <td class="px-4 py-3 movement-product">{{ movementProductName(movement.productId) }}</td>
@@ -1057,8 +1057,8 @@ function saveWarehouse() {
               <span
                   class="inline-flex align-items-center gap-1 border-round-3xl status-badge"
                   :style="{
-                    backgroundColor: movement.type === 'INTAKE' ? '#DCFCE7' : movement.type === 'SALE' ? '#FEE2E2' : '#FEF3C7',
-                    color:           movement.type === 'INTAKE' ? '#16A34A' : movement.type === 'SALE' ? '#DC2626' : '#D97706'
+                    backgroundColor: movement.type === 'INTAKE' ? 'var(--status-ok-bg)' : movement.type === 'SALE' ? 'var(--status-critical-bg)' : 'var(--status-warning-bg)',
+                    color:           movement.type === 'INTAKE' ? 'var(--status-ok-fg)' : movement.type === 'SALE' ? 'var(--status-critical-fg)' : 'var(--status-warning-fg)'
                   }"
               >
                 <i
@@ -1071,7 +1071,7 @@ function saveWarehouse() {
             <td class="px-4 py-3">
               <span
                   class="stock-value"
-                  :style="{ color: movement.signedQuantity !== undefined ? (movement.signedQuantity < 0 ? '#DC2626' : '#16A34A') : '#16A34A' }"
+                  :style="{ color: movement.signedQuantity !== undefined ? (movement.signedQuantity < 0 ? 'var(--status-critical-fg)' : 'var(--status-ok-fg)') : 'var(--status-ok-fg)' }"
               >
                 {{ movement.signedQuantity !== undefined ? (movement.signedQuantity > 0 ? '+' : '') + movement.signedQuantity : '+' + movement.quantity }}
               </span>
@@ -1084,13 +1084,13 @@ function saveWarehouse() {
         </table>
         <div v-if="stockMovementsError" class="flex flex-column align-items-center py-12 gap-3">
           <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap">
-            <i class="pi pi-lock" style="font-size: 1.8rem; color: #DC2626;"/>
+            <i class="pi pi-lock" style="font-size: 1.8rem; color: var(--status-critical-fg);"/>
           </div>
           <p class="m-0 empty-text">{{ movementsErrorMessage }}</p>
         </div>
         <div v-else-if="!stockMovements.length" class="flex flex-column align-items-center py-12 gap-3">
           <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap">
-            <i class="pi pi-clock" style="font-size: 1.8rem; color: #CBD5E1;"/>
+            <i class="pi pi-clock" style="font-size: 1.8rem; color: var(--text-faint);"/>
           </div>
           <p class="m-0 empty-text">{{ t('inventory.no-movements') }}</p>
         </div>
@@ -1100,13 +1100,13 @@ function saveWarehouse() {
       <div class="md:hidden">
         <div v-if="stockMovementsError" class="flex flex-column align-items-center py-10 gap-3">
           <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap-sm">
-            <i class="pi pi-lock" style="font-size: 1.6rem; color: #DC2626;"/>
+            <i class="pi pi-lock" style="font-size: 1.6rem; color: var(--status-critical-fg);"/>
           </div>
           <p class="m-0 empty-text">{{ movementsErrorMessage }}</p>
         </div>
         <div v-else-if="!stockMovements.length" class="flex flex-column align-items-center py-10 gap-3">
           <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap-sm">
-            <i class="pi pi-clock" style="font-size: 1.6rem; color: #CBD5E1;"/>
+            <i class="pi pi-clock" style="font-size: 1.6rem; color: var(--text-faint);"/>
           </div>
           <p class="m-0 empty-text">{{ t('inventory.no-movements') }}</p>
         </div>
@@ -1114,17 +1114,17 @@ function saveWarehouse() {
             v-for="(movement, index) in stockMovements"
             :key="movement.id"
             class="flex align-items-start gap-3 p-4"
-            :style="{ borderBottom: index < stockMovements.length - 1 ? '1px solid #F1F5F9' : 'none' }"
+            :style="{ borderBottom: index < stockMovements.length - 1 ? '1px solid var(--surface-alt)' : 'none' }"
         >
           <!-- Type icon circle -->
           <div
               class="flex align-items-center justify-content-center border-round-lg flex-shrink-0 movement-type-icon"
-              :style="{ backgroundColor: movement.type === 'INTAKE' ? '#DCFCE7' : movement.type === 'SALE' ? '#FEE2E2' : '#FEF3C7' }"
+              :style="{ backgroundColor: movement.type === 'INTAKE' ? 'var(--status-ok-bg)' : movement.type === 'SALE' ? 'var(--status-critical-bg)' : 'var(--status-warning-bg)' }"
           >
             <i
                 :class="movement.type === 'INTAKE' ? 'pi pi-arrow-circle-up' : movement.type === 'SALE' ? 'pi pi-arrow-circle-down' : 'pi pi-refresh'"
                 style="font-size: 1.05rem;"
-                :style="{ color: movement.type === 'INTAKE' ? '#16A34A' : movement.type === 'SALE' ? '#DC2626' : '#D97706' }"
+                :style="{ color: movement.type === 'INTAKE' ? 'var(--status-ok-fg)' : movement.type === 'SALE' ? 'var(--status-critical-fg)' : 'var(--status-warning-fg)' }"
             />
           </div>
           <div style="flex: 1; min-width: 0;">
@@ -1132,7 +1132,7 @@ function saveWarehouse() {
               <p class="m-0 mobile-product-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ movementProductName(movement.productId) }}</p>
               <p
                   class="m-0 flex-shrink-0 stock-value"
-                  :style="{ color: movement.type === 'SALE' ? '#DC2626' : '#16A34A' }"
+                  :style="{ color: movement.type === 'SALE' ? 'var(--status-critical-fg)' : 'var(--status-ok-fg)' }"
               >
                 {{ movement.type === 'SALE' ? '-' : '+' }}{{ movement.quantity }}
               </p>
@@ -1141,8 +1141,8 @@ function saveWarehouse() {
               <span
                   class="border-round-3xl inline-block category-badge-sm"
                   :style="{
-                    backgroundColor: movement.type === 'INTAKE' ? '#DCFCE7' : movement.type === 'SALE' ? '#FEE2E2' : '#FEF3C7',
-                    color:           movement.type === 'INTAKE' ? '#16A34A' : movement.type === 'SALE' ? '#DC2626' : '#D97706'
+                    backgroundColor: movement.type === 'INTAKE' ? 'var(--status-ok-bg)' : movement.type === 'SALE' ? 'var(--status-critical-bg)' : 'var(--status-warning-bg)',
+                    color:           movement.type === 'INTAKE' ? 'var(--status-ok-fg)' : movement.type === 'SALE' ? 'var(--status-critical-fg)' : 'var(--status-warning-fg)'
                   }"
               >
                 {{ movement.type === 'INTAKE' ? t('inventory.movement-intake') : movement.type === 'SALE' ? t('inventory.movement-sale') : t('inventory.movement-adjustment') }}
@@ -1178,11 +1178,11 @@ function saveWarehouse() {
             :class="{ 'warehouse-card-btn-active': activeWarehouseKey === warehouse.key }"
             @click="selectedWarehouseKey = warehouse.key"
         >
-          <div style="height: 4px; background: linear-gradient(to right, #0E7490, #0B3558);"/>
+          <div style="height: 4px; background: linear-gradient(to right, var(--brand), var(--brand));"/>
           <div class="p-5">
             <div class="flex align-items-start gap-3 mb-4">
               <div class="flex align-items-center justify-content-center border-round-xl flex-shrink-0 warehouse-icon">
-                <i class="pi pi-building" style="color: #0E7490; font-size: 1.1rem;"/>
+                <i class="pi pi-building" style="color: var(--brand); font-size: 1.1rem;"/>
               </div>
               <div>
                 <p class="m-0 warehouse-name">{{ warehouse.name }}</p>
@@ -1208,7 +1208,7 @@ function saveWarehouse() {
       <!-- Distribution table for the selected warehouse -->
       <div class="border-round-xl overflow-hidden table-card">
         <div class="px-5 py-3 flex align-items-center gap-2 section-header">
-          <i class="pi pi-table" style="color: #0E7490; font-size: 0.88rem;"/>
+          <i class="pi pi-table" style="color: var(--brand); font-size: 0.88rem;"/>
           <p class="m-0 section-header-text">{{ t('inventory.warehouse-title') }}</p>
         </div>
         <div style="overflow-x: auto;">
@@ -1227,7 +1227,7 @@ function saveWarehouse() {
                 v-for="(row, index) in warehouseTableRows"
                 :key="row.item.id"
                 class="table-row"
-                :style="{ borderBottom: index < warehouseTableRows.length - 1 ? '1px solid #F1F5F9' : 'none' }"
+                :style="{ borderBottom: index < warehouseTableRows.length - 1 ? '1px solid var(--surface-alt)' : 'none' }"
             >
               <td class="px-4 py-3">
                 <div class="flex align-items-center gap-2">
@@ -1251,7 +1251,7 @@ function saveWarehouse() {
         </div>
         <div v-if="!warehouseTableRows.length" class="flex flex-column align-items-center py-12 gap-3">
           <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap">
-            <i class="pi pi-building" style="font-size: 1.8rem; color: #CBD5E1;"/>
+            <i class="pi pi-building" style="font-size: 1.8rem; color: var(--text-faint);"/>
           </div>
           <p class="m-0 empty-text">{{ t('inventory.warehouse-empty') }}</p>
         </div>
@@ -1270,8 +1270,8 @@ function saveWarehouse() {
         <!-- Modal header -->
         <div class="flex align-items-center justify-content-between px-5 py-4 modal-header">
           <div class="flex align-items-center gap-3">
-            <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: linear-gradient(135deg, #E0F2FE, #DBEAFE);">
-              <i class="pi pi-box" style="color: #0E7490; font-size: 0.95rem;"/>
+            <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: linear-gradient(135deg, var(--brand-soft), #DBEAFE);">
+              <i class="pi pi-box" style="color: var(--brand); font-size: 0.95rem;"/>
             </div>
             <p class="m-0 modal-title">
               {{ editingProduct ? t('inventory.modal-edit-product') : t('inventory.modal-new-product') }}
@@ -1397,8 +1397,8 @@ function saveWarehouse() {
         <!-- Modal header -->
         <div class="flex align-items-center justify-content-between px-5 py-4 modal-header">
           <div class="flex align-items-center gap-3">
-            <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: linear-gradient(135deg, #DCFCE7, #BBF7D0);">
-              <i class="pi pi-inbox" style="color: #16A34A; font-size: 0.95rem;"/>
+            <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: linear-gradient(135deg, var(--status-ok-bg), var(--status-ok-bg));">
+              <i class="pi pi-inbox" style="color: var(--status-ok-fg); font-size: 0.95rem;"/>
             </div>
             <p class="m-0 modal-title">{{ t('inventory.intake-modal-title') }}</p>
           </div>
@@ -1488,8 +1488,8 @@ function saveWarehouse() {
       <div class="w-full border-round-t-2xl sm:border-round-2xl modal-container-sm">
         <div class="flex align-items-center justify-content-between px-5 py-4 modal-header">
           <div class="flex align-items-center gap-3">
-            <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: linear-gradient(135deg, #E0F2FE, #BAE6FD);">
-              <i class="pi pi-building" style="color: #0E7490; font-size: 0.95rem;"/>
+            <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: linear-gradient(135deg, var(--brand-soft), var(--brand-soft));">
+              <i class="pi pi-building" style="color: var(--brand); font-size: 0.95rem;"/>
             </div>
             <p class="m-0 modal-title">{{ t('inventory.warehouse-modal-title') }}</p>
           </div>
@@ -1553,32 +1553,32 @@ function saveWarehouse() {
 .page-title {
   font-size: 1.35rem;
   font-weight: 700;
-  color: #0B3558;
+  color: var(--brand);
   line-height: 1.2;
 }
 
 .page-subtitle {
-  color: #64748B;
+  color: var(--text-muted);
   font-size: 0.8rem;
 }
 
 /* ── Header buttons ──────────────────────────────────────────── */
 .btn-intake-outline {
-  border: 1.5px solid #0E7490;
-  color: #0E7490;
+  border: 1.5px solid var(--brand);
+  color: var(--brand);
   font-size: 0.82rem;
   font-weight: 600;
-  background-color: #fff;
+  background-color: var(--surface);
   transition: all 0.15s;
 }
 .btn-intake-outline:hover {
-  background-color: #E0F2FE;
-  border-color: #0B3558;
+  background-color: var(--brand-soft);
+  border-color: var(--brand);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #0E7490 0%, #0B3558 100%);
-  color: #fff;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand) 100%);
+  color: var(--brand-ink);
   font-size: 0.82rem;
   font-weight: 600;
   box-shadow: 0 2px 10px rgba(14, 116, 144, 0.35);
@@ -1606,7 +1606,7 @@ function saveWarehouse() {
 
 .stat-label {
   font-size: 0.72rem;
-  color: #64748B;
+  color: var(--text-muted);
   line-height: 1.2;
 }
 
@@ -1618,7 +1618,7 @@ function saveWarehouse() {
 
 /* ── Tab bar ─────────────────────────────────────────────────── */
 .tab-bar {
-  background-color: #F1F5F9;
+  background-color: var(--surface-alt);
   width: fit-content;
   max-width: 100%;
 }
@@ -1634,7 +1634,7 @@ function saveWarehouse() {
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: #94A3B8;
+  color: var(--text-faint);
   font-size: 0.85rem;
   z-index: 1;
   pointer-events: none;
@@ -1644,25 +1644,25 @@ function saveWarehouse() {
   width: 100%;
   padding: 10px 16px 10px 36px;
   border-radius: 12px;
-  background-color: #F8FAFC;
-  border: 1.5px solid #E2E8F0;
-  color: #0B3558;
+  background-color: var(--surface-alt);
+  border: 1.5px solid var(--border);
+  color: var(--brand);
   font-size: 0.88rem;
   outline: none;
   box-sizing: border-box;
   transition: all 0.18s;
 }
 .search-input:focus {
-  border-color: #0E7490;
+  border-color: var(--brand);
   box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.12);
-  background-color: #fff;
+  background-color: var(--surface);
 }
 
 .filter-icon {
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: #94A3B8;
+  color: var(--text-faint);
   font-size: 0.8rem;
   z-index: 1;
   pointer-events: none;
@@ -1672,9 +1672,9 @@ function saveWarehouse() {
   width: 100%;
   padding: 10px 32px 10px 32px;
   border-radius: 12px;
-  background-color: #F8FAFC;
-  border: 1.5px solid #E2E8F0;
-  color: #0B3558;
+  background-color: var(--surface-alt);
+  border: 1.5px solid var(--border);
+  color: var(--brand);
   font-size: 0.88rem;
   outline: none;
   appearance: none;
@@ -1682,14 +1682,14 @@ function saveWarehouse() {
   cursor: pointer;
 }
 .category-select:focus {
-  border-color: #0E7490;
+  border-color: var(--brand);
 }
 
 .select-arrow {
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: #94A3B8;
+  color: var(--text-faint);
   font-size: 0.72rem;
   pointer-events: none;
 }
@@ -1719,24 +1719,24 @@ function saveWarehouse() {
 
 /* ── Loading ─────────────────────────────────────────────────── */
 .loading-text {
-  color: #64748B;
+  color: var(--text-muted);
   font-size: 0.88rem;
 }
 
 .product-list-errors {
   margin-top: 0.75rem;
   padding: 0.75rem;
-  color: #EF4444;
+  color: var(--status-critical-fg);
   font-size: 0.8rem;
-  background: #FEF2F2;
-  border: 1px solid #FECACA;
+  background: var(--status-critical-bg);
+  border: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent);
   border-radius: 0.75rem;
 }
 
 /* ── Table card ──────────────────────────────────────────────── */
 .table-card {
-  background-color: #ffffff;
-  border: 1px solid #E2E8F0;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
 }
 
@@ -1750,26 +1750,26 @@ function saveWarehouse() {
 }
 
 .warehouse-card-btn-active {
-  border-color: #0E7490;
+  border-color: var(--brand);
   box-shadow:   0 0 0 2px rgba(14, 116, 144, 0.25);
 }
 
 .table-head {
-  background: linear-gradient(to right, #F8FAFC, #F1F5F9);
-  border-bottom: 2px solid #E2E8F0;
+  background: linear-gradient(to right, var(--surface-alt), var(--surface-alt));
+  border-bottom: 2px solid var(--border);
 }
 
 .col-header {
   font-size: 0.7rem;
   font-weight: 700;
-  color: #64748B;
+  color: var(--text-muted);
   white-space: nowrap;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .table-row { transition: background-color 0.1s; }
-.table-row:hover { background-color: #F8FBFF; }
+.table-row:hover { background-color: var(--surface-alt); }
 
 /* ── Table cell text ─────────────────────────────────────────── */
 .product-avatar-sm {
@@ -1782,12 +1782,12 @@ function saveWarehouse() {
 .product-name {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #1E293B;
+  color: var(--text);
 }
 
 .product-desc {
   font-size: 0.72rem;
-  color: #94A3B8;
+  color: var(--text-faint);
 }
 
 .category-badge {
@@ -1805,23 +1805,23 @@ function saveWarehouse() {
 
 .stock-unit {
   font-size: 0.72rem;
-  color: #94A3B8;
+  color: var(--text-faint);
 }
 
 .min-stock-value {
   font-size: 0.82rem;
-  color: #94A3B8;
+  color: var(--text-faint);
 }
 
 .price-value {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #0B3558;
+  color: var(--brand);
 }
 
 .expiration-placeholder {
   font-size: 0.82rem;
-  color: #CBD5E1;
+  color: var(--text-faint);
 }
 
 .status-badge {
@@ -1833,31 +1833,31 @@ function saveWarehouse() {
 /* ── Table icon buttons ──────────────────────────────────────── */
 .btn-icon-intake {
   background: none;
-  color: #0E7490;
+  color: var(--brand);
   transition: all 0.15s;
 }
 .btn-icon-intake:hover {
-  background-color: #E0F2FE;
+  background-color: var(--brand-soft);
   transform: scale(1.12);
 }
 
 .btn-icon-edit {
   background: none;
-  color: #64748B;
+  color: var(--text-muted);
   transition: all 0.15s;
 }
 .btn-icon-edit:hover {
-  background-color: #F1F5F9;
+  background-color: var(--surface-alt);
   transform: scale(1.12);
 }
 
 .btn-icon-delete {
   background: none;
-  color: #EF4444;
+  color: var(--status-critical-fg);
   transition: all 0.15s;
 }
 .btn-icon-delete:hover {
-  background-color: #FEE2E2;
+  background-color: var(--status-critical-bg);
   transform: scale(1.12);
 }
 .btn-icon-delete:disabled {
@@ -1869,25 +1869,25 @@ function saveWarehouse() {
 .empty-icon-wrap {
   width: 64px;
   height: 64px;
-  background-color: #F1F5F9;
+  background-color: var(--surface-alt);
 }
 
 .empty-icon-wrap-sm {
   width: 56px;
   height: 56px;
-  background-color: #F1F5F9;
+  background-color: var(--surface-alt);
 }
 
 .empty-text {
-  color: #94A3B8;
+  color: var(--text-faint);
   font-size: 0.9rem;
   font-weight: 500;
 }
 
 /* ── Mobile product cards ────────────────────────────────────── */
 .mobile-card {
-  background-color: #ffffff;
-  border: 1px solid #E2E8F0;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
@@ -1901,7 +1901,7 @@ function saveWarehouse() {
 .mobile-product-name {
   font-size: 0.92rem;
   font-weight: 700;
-  color: #1E293B;
+  color: var(--text);
 }
 
 .category-badge-sm {
@@ -1917,12 +1917,12 @@ function saveWarehouse() {
 }
 
 .mini-stat {
-  background-color: #F8FAFC;
+  background-color: var(--surface-alt);
 }
 
 .mini-stat-label {
   font-size: 0.62rem;
-  color: #94A3B8;
+  color: var(--text-faint);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1936,12 +1936,12 @@ function saveWarehouse() {
 .mini-price-value {
   font-size: 0.88rem;
   font-weight: 700;
-  color: #0B3558;
+  color: var(--brand);
 }
 
 .btn-mobile-intake {
-  background: linear-gradient(135deg, #0E7490, #0B3558);
-  color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--brand));
+  color: var(--brand-ink);
   font-size: 0.8rem;
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(14, 116, 144, 0.3);
@@ -1949,25 +1949,25 @@ function saveWarehouse() {
 
 .btn-mobile-edit {
   background: none;
-  border: 1.5px solid #E2E8F0;
-  color: #64748B;
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
   font-size: 0.8rem;
   font-weight: 600;
   transition: all 0.15s;
 }
 .btn-mobile-edit:hover {
-  background-color: #F8FAFC;
-  border-color: #CBD5E1;
+  background-color: var(--surface-alt);
+  border-color: var(--text-faint);
 }
 
 .btn-mobile-delete {
   background: none;
-  border: 1.5px solid #FECACA;
-  color: #EF4444;
+  border: 1.5px solid var(--status-critical-fg);
+  color: var(--status-critical-fg);
   transition: all 0.15s;
 }
 .btn-mobile-delete:hover {
-  background-color: #FEE2E2;
+  background-color: var(--status-critical-bg);
 }
 .btn-mobile-delete:disabled {
   opacity: 0.6;
@@ -1980,8 +1980,8 @@ function saveWarehouse() {
   right: 20px;
   width: 54px;
   height: 54px;
-  background: linear-gradient(135deg, #0E7490, #0B3558);
-  color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--brand));
+  color: var(--brand-ink);
   box-shadow: 0 4px 18px rgba(14, 116, 144, 0.5);
   z-index: 20;
   transition: transform 0.18s;
@@ -1991,13 +1991,13 @@ function saveWarehouse() {
 /* ── Movement table specifics ────────────────────────────────── */
 .movement-date {
   font-size: 0.82rem;
-  color: #64748B;
+  color: var(--text-muted);
 }
 
 .movement-product {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #1E293B;
+  color: var(--text);
 }
 
 .movement-type-icon {
@@ -2009,13 +2009,13 @@ function saveWarehouse() {
 .warehouse-icon {
   width: 46px;
   height: 46px;
-  background: linear-gradient(135deg, #E0F2FE, #DBEAFE);
+  background: linear-gradient(135deg, var(--brand-soft), #DBEAFE);
 }
 
 .warehouse-name {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #0B3558;
+  color: var(--brand);
 }
 
 .warehouse-stats-grid {
@@ -2027,17 +2027,17 @@ function saveWarehouse() {
 .warehouse-count {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #0B3558;
+  color: var(--brand);
 }
 
 .warehouse-value-card {
-  background-color: #F0FDF4;
-  border: 1px solid #BBF7D0;
+  background-color: var(--status-ok-bg);
+  border: 1px solid var(--status-ok-bg);
 }
 
 .warehouse-value-label {
   font-size: 0.62rem;
-  color: #16A34A;
+  color: var(--status-ok-fg);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -2046,31 +2046,31 @@ function saveWarehouse() {
 .warehouse-value {
   font-size: 1.1rem;
   font-weight: 700;
-  color: #16A34A;
+  color: var(--status-ok-fg);
 }
 
 .warehouse-stock {
   font-size: 0.85rem;
-  color: #0B3558;
+  color: var(--brand);
   font-weight: 500;
 }
 
 .warehouse-total {
   font-size: 0.88rem;
   font-weight: 700;
-  color: #0E7490;
+  color: var(--brand);
 }
 
 /* ── Section header (warehouse table) ───────────────────────── */
 .section-header {
-  border-bottom: 1px solid #E2E8F0;
-  background-color: #F8FAFC;
+  border-bottom: 1px solid var(--border);
+  background-color: var(--surface-alt);
 }
 
 .section-header-text {
   font-size: 0.88rem;
   font-weight: 700;
-  color: #0B3558;
+  color: var(--brand);
 }
 
 /* ── Product avatar (warehouse table) ───────────────────────── */
@@ -2090,20 +2090,20 @@ function saveWarehouse() {
 .modal-container {
   max-width: 560px;
   max-height: 92vh;
-  background-color: #fff;
-  border: 1px solid #E2E8F0;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
 }
 
 .modal-container-sm {
   max-width: 480px;
-  background-color: #fff;
-  border: 1px solid #E2E8F0;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
 }
 
 .modal-header {
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid var(--border);
 }
 
 .modal-icon-wrap {
@@ -2114,7 +2114,7 @@ function saveWarehouse() {
 .modal-title {
   font-size: 1rem;
   font-weight: 700;
-  color: #0B3558;
+  color: var(--brand);
 }
 
 .modal-label {
@@ -2122,31 +2122,31 @@ function saveWarehouse() {
   margin-bottom: 8px;
   font-size: 0.8rem;
   font-weight: 700;
-  color: #374151;
+  color: var(--text);
   letter-spacing: 0.02em;
 }
 
 /* ── Modal buttons ───────────────────────────────────────────── */
 .btn-modal-close {
   background: none;
-  color: #64748B;
+  color: var(--text-muted);
   transition: all 0.15s;
 }
-.btn-modal-close:hover { background-color: #F1F5F9; }
+.btn-modal-close:hover { background-color: var(--surface-alt); }
 
 .btn-modal-cancel {
-  border: 1.5px solid #E2E8F0;
-  color: #64748B;
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
   font-size: 0.88rem;
-  background: #fff;
+  background: var(--surface);
   font-weight: 500;
   transition: all 0.15s;
 }
-.btn-modal-cancel:hover { background-color: #F8FAFC; }
+.btn-modal-cancel:hover { background-color: var(--surface-alt); }
 
 .btn-modal-primary {
-  background: linear-gradient(135deg, #0E7490, #0B3558);
-  color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--brand));
+  color: var(--brand-ink);
   font-size: 0.88rem;
   font-weight: 700;
   box-shadow: 0 2px 10px rgba(14, 116, 144, 0.3);
@@ -2158,8 +2158,8 @@ function saveWarehouse() {
 }
 
 .btn-intake-confirm {
-  background: linear-gradient(135deg, #16A34A, #15803D);
-  color: #fff;
+  background: linear-gradient(135deg, var(--status-ok-fg), var(--status-ok-fg));
+  color: var(--brand-ink);
   font-size: 0.88rem;
   font-weight: 700;
   box-shadow: 0 2px 10px rgba(22, 163, 74, 0.3);
@@ -2175,9 +2175,9 @@ function saveWarehouse() {
   width: 100%;
   padding: 10px 14px;
   border-radius: 10px;
-  background-color: #F8FAFC;
-  border: 1.5px solid #E2E8F0;
-  color: #0B3558;
+  background-color: var(--surface-alt);
+  border: 1.5px solid var(--border);
+  color: var(--brand);
   font-size: 0.88rem;
   outline: none;
   box-sizing: border-box;
@@ -2185,24 +2185,24 @@ function saveWarehouse() {
   font-family: inherit;
 }
 .modal-input:focus {
-  border-color: #0E7490;
+  border-color: var(--brand);
   box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.12);
-  background-color: #fff;
+  background-color: var(--surface);
 }
 .modal-input:disabled {
-  background-color: #F1F5F9;
-  color: #94A3B8;
+  background-color: var(--surface-alt);
+  color: var(--text-faint);
   cursor: not-allowed;
 }
 .modal-field-hint {
   font-size: 0.7rem;
-  color: #94A3B8;
+  color: var(--text-faint);
 }
 .intake-modal-hint {
   font-size: 0.76rem;
-  color: #64748B;
-  background-color: #F8FAFC;
-  border: 1px solid #E2E8F0;
+  color: var(--text-muted);
+  background-color: var(--surface-alt);
+  border: 1px solid var(--border);
   border-radius: 0.6rem;
   padding: 0.6rem 0.75rem;
 }

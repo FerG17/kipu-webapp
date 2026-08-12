@@ -365,22 +365,22 @@ onMounted(() => {
       <!-- Search + category filters -->
       <div
           class="px-4 pt-3 pb-3"
-          style="border-bottom: 1px solid #E2E8F0; display: flex; flex-direction: column; gap: 8px;"
+          style="border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;"
       >
         <!-- Search bar -->
         <div style="position: relative;">
           <i
               class="pi pi-search"
-              style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94A3B8; font-size: 0.85rem;"
+              style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 0.85rem;"
           />
           <input
               v-model="searchQuery"
               type="text"
               :placeholder="t('pos.search-placeholder')"
               class="w-full border-round-lg"
-              style="padding: 8px 12px 8px 36px; border: 1px solid #E2E8F0; font-size: 0.85rem; color: #1E293B; background-color: #F8FAFC; outline: none;"
-              @focus="(e) => e.target.style.borderColor = '#0E7490'"
-              @blur="(e) => e.target.style.borderColor = '#E2E8F0'"
+              style="padding: 8px 12px 8px 36px; border: 1px solid var(--border); font-size: 0.85rem; color: var(--text); background-color: var(--surface-alt); outline: none;"
+              @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+              @blur="(e) => e.target.style.borderColor = 'var(--border)'"
           />
         </div>
 
@@ -395,8 +395,8 @@ onMounted(() => {
               class="border-round-3xl px-3 py-1 shrink-0"
               style="white-space: nowrap; font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
               :style="{
-                            backgroundColor: activeCategory === filter.value ? '#0B3558' : '#F1F5F9',
-                            color:           activeCategory === filter.value ? '#fff'    : '#64748B'
+                            backgroundColor: activeCategory === filter.value ? 'var(--brand)' : 'var(--surface-alt)',
+                            color:           activeCategory === filter.value ? 'var(--brand-ink)'    : 'var(--text-muted)'
                         }"
               @click="activeCategory = filter.value"
           >
@@ -409,10 +409,10 @@ onMounted(() => {
       <div
           v-if="stockErrorMessage"
           class="mx-4 mt-2 flex align-items-center gap-2 border-round-xl px-3 py-2"
-          style="background-color: #FEE2E2; border: 1px solid #FCA5A5;"
+          style="background-color: var(--status-critical-bg); border: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent);"
       >
-        <i class="pi pi-exclamation-triangle" style="color: #EF4444; font-size: 0.85rem; flex-shrink: 0;" />
-        <p class="m-0" style="font-size: 0.78rem; color: #DC2626;">{{ stockErrorMessage }}</p>
+        <i class="pi pi-exclamation-triangle" style="color: var(--status-critical-fg); font-size: 0.85rem; flex-shrink: 0;" />
+        <p class="m-0" style="font-size: 0.78rem; color: var(--status-critical-fg);">{{ stockErrorMessage }}</p>
       </div>
 
       <!-- Products grid -->
@@ -430,8 +430,8 @@ onMounted(() => {
                 class="w-full border-round-xl p-3 text-left flex flex-column justify-content-between"
                 :disabled="product.isOutOfStock"
                 :style="{
-                                border:          `2px solid ${isProductInCart(product.id) ? '#0E7490' : '#E2E8F0'}`,
-                                backgroundColor: product.isOutOfStock ? '#F8FAFC' : isProductInCart(product.id) ? '#F0FDFA' : '#fff',
+                                border:          `2px solid ${isProductInCart(product.id) ? 'var(--brand)' : 'var(--border)'}`,
+                                backgroundColor: product.isOutOfStock ? 'var(--surface-alt)' : isProductInCart(product.id) ? '#F0FDFA' : 'var(--surface)',
                                 cursor:          product.isOutOfStock ? 'not-allowed' : 'pointer',
                                 opacity:         product.isOutOfStock ? 0.6 : 1,
                                 minHeight:       '90px'
@@ -443,7 +443,7 @@ onMounted(() => {
                 <p
                     class="m-0 mb-1"
                     style="font-size: 0.78rem; font-weight: 600; line-height: 1.3;"
-                    :style="{ color: product.isOutOfStock ? '#94A3B8' : '#1E293B' }"
+                    :style="{ color: product.isOutOfStock ? 'var(--text-faint)' : 'var(--text)' }"
                 >
                   {{ product.name }}
                 </p>
@@ -454,7 +454,7 @@ onMounted(() => {
                 <p
                     class="m-0"
                     style="font-size: 0.95rem; font-weight: 800;"
-                    :style="{ color: isProductInCart(product.id) ? '#0E7490' : '#0B3558' }"
+                    :style="{ color: isProductInCart(product.id) ? 'var(--brand)' : 'var(--brand)' }"
                 >
                   {{ formatCurrency(product.basePrice) }}
                 </p>
@@ -462,12 +462,12 @@ onMounted(() => {
                   <i
                       v-if="product.isLowStock"
                       class="pi pi-exclamation-triangle"
-                      style="color: #D97706; font-size: 0.6rem;"
+                      style="color: var(--status-warning-fg); font-size: 0.6rem;"
                   />
                   <span
                       style="font-size: 0.65rem;"
                       :style="{
-                                            color:      product.isOutOfStock ? '#94A3B8' : product.isLowStock ? '#D97706' : '#94A3B8',
+                                            color:      product.isOutOfStock ? 'var(--text-faint)' : product.isLowStock ? 'var(--status-warning-fg)' : 'var(--text-faint)',
                                             fontWeight: product.isLowStock ? 600 : 400
                                         }"
                   >
@@ -480,7 +480,7 @@ onMounted(() => {
               <div v-if="isProductInCart(product.id)" class="mt-2">
                                 <span
                                     class="border-round-md px-2 py-1"
-                                    style="background-color: #0E7490; color: #fff; font-size: 0.65rem; font-weight: 700;"
+                                    style="background-color: var(--brand); color: var(--surface); font-size: 0.65rem; font-weight: 700;"
                                 >
                                     {{ t('pos.in-cart') }}: {{ cartQuantityFor(product.id) }}
                                 </span>
@@ -493,8 +493,8 @@ onMounted(() => {
               v-if="filteredProducts.length === 0"
               class="col-12 flex flex-column align-items-center justify-content-center py-6 text-center"
           >
-            <i class="pi pi-box mb-2" style="font-size: 2.25rem; color: #CBD5E1;" />
-            <p class="m-0" style="color: #94A3B8; font-size: 0.88rem;">
+            <i class="pi pi-box mb-2" style="font-size: 2.25rem; color: var(--text-faint);" />
+            <p class="m-0" style="color: var(--text-faint); font-size: 0.88rem;">
               {{ t('pos.no-products-found') }}
             </p>
           </div>
@@ -505,11 +505,11 @@ onMounted(() => {
       <div
           v-if="cartItems.length > 0"
           class="lg:hidden px-4 pb-4 pt-2"
-          style="border-top: 1px solid #E2E8F0;"
+          style="border-top: 1px solid var(--border);"
       >
         <button
             class="w-full flex align-items-center justify-content-between border-round-xl px-4 py-3"
-            style="background-color: #0B3558; color: #fff; border: none; cursor: pointer;"
+            style="background-color: var(--brand); color: var(--surface); border: none; cursor: pointer;"
             @click="showMobileCart = true"
         >
           <div class="flex align-items-center gap-2">
@@ -528,7 +528,7 @@ onMounted(() => {
     <!-- ── Desktop: cart sidebar ── -->
     <div
         class="hidden lg:flex flex-column"
-        style="width: 300px; flex-shrink: 0; background-color: #fff; border-left: 1px solid #E2E8F0;"
+        style="width: 300px; flex-shrink: 0; background-color: var(--surface); border-left: 1px solid var(--border);"
     >
       <cart-panel
           :cart-items="cartItems"
@@ -552,16 +552,16 @@ onMounted(() => {
       >
         <div
             class="flex align-items-center justify-content-between px-4 pt-4 pb-3"
-            style="border-bottom: 1px solid #E2E8F0;"
+            style="border-bottom: 1px solid var(--border);"
         >
-          <p class="m-0" style="font-size: 1rem; font-weight: 700; color: #0B3558;">
+          <p class="m-0" style="font-size: 1rem; font-weight: 700; color: var(--brand);">
             {{ t('pos.cart-title') }}
           </p>
           <button
               style="background: none; border: none; cursor: pointer; padding: 4px;"
               @click="showMobileCart = false"
           >
-            <i class="pi pi-times" style="color: #94A3B8; font-size: 1.1rem;" />
+            <i class="pi pi-times" style="color: var(--text-faint); font-size: 1.1rem;" />
           </button>
         </div>
         <cart-panel

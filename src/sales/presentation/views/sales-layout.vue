@@ -66,15 +66,15 @@ function navigateToTab(routeName) {
 </script>
 
 <template>
-  <div class="flex flex-column h-full overflow-hidden" style="background-color: #F8FAFC;">
+  <div class="flex flex-column h-full overflow-hidden" style="background-color: var(--surface-alt);">
 
     <!-- Header -->
     <div class="flex align-items-center justify-content-between px-4 sm:px-6 pt-5 pb-3">
       <div>
-        <h1 class="m-0" style="font-size: 1.3rem; font-weight: 700; color: #0B3558; line-height: 1.2;">
+        <h1 class="m-0" style="font-size: 1.3rem; font-weight: 700; color: var(--brand); line-height: 1.2;">
           {{ t('sales.title') }}
         </h1>
-        <p class="m-0 mt-1" style="color: #64748B; font-size: 0.78rem;">
+        <p class="m-0 mt-1" style="color: var(--text-muted); font-size: 0.78rem;">
           {{ t('sales.subtitle') }}
         </p>
       </div>
@@ -86,7 +86,7 @@ function navigateToTab(routeName) {
     <!-- Tab navigation -->
     <div
         class="flex gap-1 px-4 py-2"
-        style="border-bottom: 1px solid #E2E8F0;"
+        style="border-bottom: 1px solid var(--border);"
     >
       <button
           v-for="tab in tabs"
@@ -94,8 +94,8 @@ function navigateToTab(routeName) {
           class="border-round-lg px-4 py-2"
           style="font-size: 0.85rem; border: none; cursor: pointer; transition: all 0.15s;"
           :style="{
-                    backgroundColor: isActiveTab(tab.routeName) ? '#0B3558' : 'transparent',
-                    color:           isActiveTab(tab.routeName) ? '#fff'    : '#64748B',
+                    backgroundColor: isActiveTab(tab.routeName) ? 'var(--brand)' : 'transparent',
+                    color:           isActiveTab(tab.routeName) ? 'var(--brand-ink)'    : 'var(--text-muted)',
                     fontWeight:      isActiveTab(tab.routeName) ? 700       : 500
                 }"
           @click="navigateToTab(tab.routeName)"

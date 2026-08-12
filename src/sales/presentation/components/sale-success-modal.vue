@@ -67,21 +67,21 @@ function formatPaymentMethod(method) {
     <!-- Modal panel -->
     <div
         class="w-full border-round-top-2xl sm:border-round-2xl p-6 shadow-8 text-center"
-        style="max-width: 360px; background-color: #fff;"
+        style="max-width: 360px; background-color: var(--surface);"
     >
       <!-- Success icon -->
       <div
           class="flex align-items-center justify-content-center border-round-3xl mx-auto mb-3"
-          style="width: 56px; height: 56px; background-color: #DCFCE7;"
+          style="width: 56px; height: 56px; background-color: var(--status-ok-bg);"
       >
-        <i class="pi pi-check-circle" style="font-size: 1.75rem; color: #16A34A;" />
+        <i class="pi pi-check-circle" style="font-size: 1.75rem; color: var(--status-ok-fg);" />
       </div>
 
       <!-- Title -->
-      <h2 class="m-0 mb-1" style="font-size: 1.15rem; font-weight: 700; color: #0B3558;">
+      <h2 class="m-0 mb-1" style="font-size: 1.15rem; font-weight: 700; color: var(--brand);">
         {{ t('pos.success-title') }}
       </h2>
-      <p class="m-0" style="color: #64748B; font-size: 0.82rem;">
+      <p class="m-0" style="color: var(--text-muted); font-size: 0.82rem;">
         {{ sale.id ? `#${sale.id}` : '' }}
         · {{ formatCurrency(sale.totalAmount || 0) }}
         · {{ formatPaymentMethod(sale.paymentMethod) }}
@@ -90,7 +90,7 @@ function formatPaymentMethod(method) {
       <!-- Items breakdown -->
       <div
           class="my-4 border-round-xl p-3 text-left"
-          style="background-color: #F8FAFC; border: 1px solid #E2E8F0;"
+          style="background-color: var(--surface-alt); border: 1px solid var(--border);"
       >
         <div
             v-for="(item, index) in saleItems"
@@ -98,21 +98,21 @@ function formatPaymentMethod(method) {
             class="flex justify-content-between"
             :style="index > 0 ? 'margin-top: 4px;' : ''"
         >
-                    <span style="font-size: 0.8rem; color: #1E293B;">
+                    <span style="font-size: 0.8rem; color: var(--text);">
                         {{ item.productName }} ×{{ item.quantity }}
                     </span>
-          <span style="font-size: 0.8rem; color: #64748B;">
+          <span style="font-size: 0.8rem; color: var(--text-muted);">
                         {{ formatCurrency(item.lineTotal) }}
                     </span>
         </div>
         <div
             class="flex justify-content-between mt-2 pt-2"
-            style="border-top: 1px solid #E2E8F0;"
+            style="border-top: 1px solid var(--border);"
         >
-                    <span style="font-size: 0.85rem; font-weight: 700; color: #0B3558;">
+                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--brand);">
                         {{ t('pos.grand-total') }}
                     </span>
-          <span style="font-size: 0.85rem; font-weight: 700; color: #0B3558;">
+          <span style="font-size: 0.85rem; font-weight: 700; color: var(--brand);">
                         {{ formatCurrency(sale.totalAmount || 0) }}
                     </span>
         </div>
@@ -121,7 +121,7 @@ function formatPaymentMethod(method) {
       <!-- New sale button -->
       <button
           class="w-full border-round-xl"
-          style="background-color: #0B3558; color: #fff; font-size: 0.9rem; font-weight: 600; padding: 10px; border: none; cursor: pointer;"
+          style="background-color: var(--brand); color: var(--surface); font-size: 0.9rem; font-weight: 600; padding: 10px; border: none; cursor: pointer;"
           @click="emit('new-sale')"
       >
         {{ t('pos.success-new-sale') }}

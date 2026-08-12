@@ -116,20 +116,20 @@ onMounted(() => {
   <div class="flex flex-column h-full overflow-hidden">
 
     <!-- Header bar: search -->
-    <div class="px-4 py-3" style="border-bottom: 1px solid #E2E8F0;">
+    <div class="px-4 py-3" style="border-bottom: 1px solid var(--border);">
       <div style="position: relative;">
         <i
             class="pi pi-search"
-            style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94A3B8; font-size: 0.85rem;"
+            style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 0.85rem;"
         />
         <input
             v-model="searchQuery"
             type="text"
             :placeholder="t('payment-plans.search-placeholder')"
             class="w-full border-round-lg"
-            style="padding: 8px 12px 8px 36px; border: 1px solid #E2E8F0; font-size: 0.85rem; background-color: #F8FAFC; outline: none;"
-            @focus="(e) => e.target.style.borderColor = '#0E7490'"
-            @blur="(e) => e.target.style.borderColor = '#E2E8F0'"
+            style="padding: 8px 12px 8px 36px; border: 1px solid var(--border); font-size: 0.85rem; background-color: var(--surface-alt); outline: none;"
+            @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+            @blur="(e) => e.target.style.borderColor = 'var(--border)'"
         />
       </div>
     </div>
@@ -139,8 +139,8 @@ onMounted(() => {
 
       <!-- Loading -->
       <div v-if="!salesStore.paymentPlansLoaded" class="flex justify-content-center align-items-center gap-3 py-8">
-        <i class="pi pi-spin pi-spinner" style="font-size: 1.5rem; color: #0E7490;"/>
-        <span style="font-size: 0.85rem; color: #64748B;">{{ t('payment-plans.loading') }}</span>
+        <i class="pi pi-spin pi-spinner" style="font-size: 1.5rem; color: var(--brand);"/>
+        <span style="font-size: 0.85rem; color: var(--text-muted);">{{ t('payment-plans.loading') }}</span>
       </div>
 
       <template v-else>
@@ -148,7 +148,7 @@ onMounted(() => {
       <div class="hidden md:block">
         <table class="w-full" style="border-collapse: collapse;">
           <thead>
-          <tr style="background-color: #F8FAFC; border-bottom: 1px solid #E2E8F0;">
+          <tr style="background-color: var(--surface-alt); border-bottom: 1px solid var(--border);">
             <th
                 v-for="header in [
                                     t('payment-plans.col-customer'),
@@ -159,7 +159,7 @@ onMounted(() => {
                                 ]"
                 :key="header"
                 class="px-4 py-3 text-left"
-                style="font-size: 0.72rem; font-weight: 600; color: #94A3B8;"
+                style="font-size: 0.72rem; font-weight: 600; color: var(--text-faint);"
             >
               {{ header }}
             </th>
@@ -169,33 +169,33 @@ onMounted(() => {
           <tr
               v-for="plan in filteredPlans"
               :key="plan.id"
-              style="border-bottom: 1px solid #F1F5F9;"
+              style="border-bottom: 1px solid var(--surface-alt);"
           >
-            <td class="px-4 py-3" style="font-size: 0.82rem; font-weight: 600; color: #1E293B;">
+            <td class="px-4 py-3" style="font-size: 0.82rem; font-weight: 600; color: var(--text);">
               {{ customerNameForPlan(plan) }}
             </td>
-            <td class="px-4 py-3" style="font-size: 0.78rem; color: #64748B;">
+            <td class="px-4 py-3" style="font-size: 0.78rem; color: var(--text-muted);">
               #{{ plan.saleId }}
             </td>
             <td class="px-4 py-3">
               <div class="flex align-items-center gap-2">
-                <div class="border-round-3xl" style="width: 80px; height: 6px; background-color: #E2E8F0; overflow: hidden;">
+                <div class="border-round-3xl" style="width: 80px; height: 6px; background-color: var(--border); overflow: hidden;">
                   <div
                       class="h-full border-round-3xl"
-                      style="background-color: #0E7490;"
+                      style="background-color: var(--brand);"
                       :style="{ width: `${(plan.paidInstallments / plan.totalInstallments) * 100}%` }"
                   />
                 </div>
-                <span style="font-size: 0.78rem; color: #64748B;">{{ plan.paidInstallments }}/{{ plan.totalInstallments }}</span>
+                <span style="font-size: 0.78rem; color: var(--text-muted);">{{ plan.paidInstallments }}/{{ plan.totalInstallments }}</span>
               </div>
             </td>
-            <td class="px-4 py-3" style="font-size: 0.78rem; color: #64748B;">
+            <td class="px-4 py-3" style="font-size: 0.78rem; color: var(--text-muted);">
               {{ installmentAmountLabel(plan) }}
             </td>
             <td class="px-4 py-3">
               <button
                   class="flex align-items-center gap-2 border-round-lg px-3 py-2"
-                  style="background-color: #0B3558; color: #fff; font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
+                  style="background-color: var(--brand); color: var(--surface); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
                   :disabled="registeringPlanId === plan.id"
                   @click="confirmRegisterPayment(plan)"
               >
@@ -214,29 +214,29 @@ onMounted(() => {
             v-for="plan in filteredPlans"
             :key="plan.id"
             class="bg-white border-round-xl p-4"
-            style="border: 1px solid #E2E8F0;"
+            style="border: 1px solid var(--border);"
         >
           <div class="flex align-items-center justify-content-between mb-2">
-            <p class="m-0" style="font-size: 0.88rem; font-weight: 700; color: #1E293B;">
+            <p class="m-0" style="font-size: 0.88rem; font-weight: 700; color: var(--text);">
               {{ customerNameForPlan(plan) }}
             </p>
-            <span style="font-size: 0.72rem; color: #94A3B8;">#{{ plan.saleId }}</span>
+            <span style="font-size: 0.72rem; color: var(--text-faint);">#{{ plan.saleId }}</span>
           </div>
           <div class="flex align-items-center gap-2 mb-3">
-            <div class="border-round-3xl flex-1" style="height: 6px; background-color: #E2E8F0; overflow: hidden;">
+            <div class="border-round-3xl flex-1" style="height: 6px; background-color: var(--border); overflow: hidden;">
               <div
                   class="h-full border-round-3xl"
-                  style="background-color: #0E7490;"
+                  style="background-color: var(--brand);"
                   :style="{ width: `${(plan.paidInstallments / plan.totalInstallments) * 100}%` }"
               />
             </div>
-            <span style="font-size: 0.72rem; color: #64748B;">{{ plan.paidInstallments }}/{{ plan.totalInstallments }}</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">{{ plan.paidInstallments }}/{{ plan.totalInstallments }}</span>
           </div>
           <div class="flex align-items-center justify-content-between">
-            <span style="font-size: 0.75rem; color: #64748B;">{{ installmentAmountLabel(plan) }} {{ t('payment-plans.per-installment') }}</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">{{ installmentAmountLabel(plan) }} {{ t('payment-plans.per-installment') }}</span>
             <button
                 class="flex align-items-center gap-2 border-round-lg px-3 py-2"
-                style="background-color: #0B3558; color: #fff; font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
+                style="background-color: var(--brand); color: var(--surface); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
                 :disabled="registeringPlanId === plan.id"
                 @click="confirmRegisterPayment(plan)"
             >
@@ -252,8 +252,8 @@ onMounted(() => {
           v-if="filteredPlans.length === 0"
           class="flex flex-column align-items-center justify-content-center py-12 text-center"
       >
-        <i class="pi pi-wallet mb-2" style="font-size: 2.25rem; color: #CBD5E1;" />
-        <p class="m-0" style="color: #94A3B8; font-size: 0.88rem;">
+        <i class="pi pi-wallet mb-2" style="font-size: 2.25rem; color: var(--text-faint);" />
+        <p class="m-0" style="color: var(--text-faint); font-size: 0.88rem;">
           {{ t('payment-plans.no-results') }}
         </p>
       </div>

@@ -48,14 +48,14 @@ const statsBarItems = computed(() => [
   {
     labelKey:   'suppliers.stat-active',
     value:      String(activeSupplierCount.value),
-    color:      '#0B3558',
-    background: '#E0F2FE'
+    color:      'var(--brand)',
+    background: 'var(--brand-soft)'
   },
   {
     labelKey:   'suppliers.stat-pending-orders',
     value:      String(pendingOrderCount.value),
-    color:      '#D97706',
-    background: '#FEF3C7'
+    color:      'var(--status-warning-fg)',
+    background: 'var(--status-warning-bg)'
   },
   {
     labelKey:   'suppliers.stat-pending-total',
@@ -66,8 +66,8 @@ const statsBarItems = computed(() => [
   {
     labelKey:   'suppliers.stat-delayed',
     value:      String(delayedOrderCount.value),
-    color:      '#EA580C',
-    background: '#FFEDD5'
+    color:      'var(--status-warning-fg)',
+    background: 'var(--status-warning-bg)'
   }
 ]);
 
@@ -131,9 +131,9 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.suppliers-page { background-color: #F8FAFC; min-height: 100%; }
-.suppliers-page-title { font-size: 1.3rem; font-weight: 700; color: #0B3558; margin: 0; }
-.suppliers-page-subtitle { font-size: 0.78rem; color: #64748B; margin: 0.2rem 0 0; }
+.suppliers-page { background-color: var(--surface-alt); min-height: 100%; }
+.suppliers-page-title { font-size: 1.3rem; font-weight: 700; color: var(--brand); margin: 0; }
+.suppliers-page-subtitle { font-size: 0.78rem; color: var(--text-muted); margin: 0.2rem 0 0; }
 .suppliers-page {
   width: 100%;
   max-width: none;
@@ -149,14 +149,14 @@ onMounted(() => {
   display: flex; align-items: center; gap: 0.4rem;
   padding: 0.5rem 1rem; border: none; border-radius: 0.5rem;
   font-size: 0.85rem; font-weight: 500; cursor: pointer;
-  color: #64748B; background: transparent; transition: all 0.15s;
+  color: var(--text-muted); background: transparent; transition: all 0.15s;
 }
-.suppliers-tab-btn:hover { background-color: #F1F5F9; }
-.suppliers-tab-btn-active { background-color: #0B3558; color: #fff; font-weight: 700; }
+.suppliers-tab-btn:hover { background-color: var(--surface-alt); }
+.suppliers-tab-btn-active { background-color: var(--brand); color: var(--surface); font-weight: 700; }
 
 .suppliers-tab-content {
-  background-color: #fff; border-radius: 0.75rem;
-  border: 1px solid #E2E8F0; overflow: hidden;
+  background-color: var(--surface); border-radius: 0.75rem;
+  border: 1px solid var(--border); overflow: hidden;
   width: 100%;
 }
 

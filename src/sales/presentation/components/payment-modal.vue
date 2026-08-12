@@ -127,10 +127,10 @@ const canConfirm = computed(() => {
  * @type {Array<{value: string, labelKey: string, icon: string, color: string, background: string}>}
  */
 const methodConfigs = [
-  { value: PaymentMethod.CASH, labelKey: 'pos.payment-cash', icon: 'pi pi-wallet',       color: '#16A34A', background: '#DCFCE7' },
+  { value: PaymentMethod.CASH, labelKey: 'pos.payment-cash', icon: 'pi pi-wallet',       color: 'var(--status-ok-fg)', background: 'var(--status-ok-bg)' },
   { value: PaymentMethod.YAPE, labelKey: 'pos.payment-yape', icon: 'pi pi-mobile',        color: '#7C3AED', background: '#EDE9FE' },
-  { value: PaymentMethod.PLIN, labelKey: 'pos.payment-plin', icon: 'pi pi-mobile',        color: '#0891B2', background: '#CFFAFE' },
-  { value: PaymentMethod.CARD, labelKey: 'pos.payment-card', icon: 'pi pi-credit-card',   color: '#D97706', background: '#FEF3C7' }
+  { value: PaymentMethod.PLIN, labelKey: 'pos.payment-plin', icon: 'pi pi-mobile',        color: 'var(--brand)', background: '#CFFAFE' },
+  { value: PaymentMethod.CARD, labelKey: 'pos.payment-card', icon: 'pi pi-credit-card',   color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)' }
 ];
 
 /**
@@ -167,43 +167,43 @@ function handleConfirm() {
     <!-- Modal panel -->
     <div
         class="w-full border-round-top-2xl sm:border-round-2xl p-5 shadow-8"
-        style="max-width: 400px; background-color: #fff; border: 1px solid #E2E8F0;"
+        style="max-width: 400px; background-color: var(--surface); border: 1px solid var(--border);"
     >
       <!-- Header -->
       <div class="flex align-items-center justify-content-between mb-4">
-        <h2 class="m-0" style="font-size: 1.1rem; font-weight: 700; color: #0B3558;">
+        <h2 class="m-0" style="font-size: 1.1rem; font-weight: 700; color: var(--brand);">
           {{ t('pos.payment-modal-title') }}
         </h2>
         <button
             style="background: none; border: none; cursor: pointer; padding: 4px;"
             @click="emit('cancel')"
         >
-          <i class="pi pi-times" style="color: #94A3B8; font-size: 1.1rem;" />
+          <i class="pi pi-times" style="color: var(--text-faint); font-size: 1.1rem;" />
         </button>
       </div>
 
       <!-- Total to charge -->
       <div
           class="border-round-xl p-4 mb-4 text-center"
-          style="background-color: #E0F2FE;"
+          style="background-color: var(--brand-soft);"
       >
-        <p class="m-0 mb-1" style="color: #0E7490; font-size: 0.78rem;">
+        <p class="m-0 mb-1" style="color: var(--brand); font-size: 0.78rem;">
           {{ t('pos.payment-modal-total-label') }}
         </p>
-        <p class="m-0" style="color: #0B3558; font-size: 2rem; font-weight: 800; line-height: 1.2;">
+        <p class="m-0" style="color: var(--brand); font-size: 2rem; font-weight: 800; line-height: 1.2;">
           {{ formatCurrency(total) }}
         </p>
       </div>
 
       <!-- Customer selector (optional — anonymous sale if left unselected) -->
       <div class="mb-4">
-        <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: #64748B;">
+        <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
           {{ t('pos.payment-modal-customer-label') }}
         </label>
         <select
             v-model="selectedCustomerId"
             class="w-full border-round-lg px-3"
-            style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; padding: 10px 12px; outline: none; background: #fff;"
+            style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); padding: 10px 12px; outline: none; background: var(--surface);"
         >
           <option value="">{{ t('pos.payment-modal-customer-anonymous') }}</option>
           <option v-for="customer in customers" :key="customer.id" :value="String(customer.id)">
@@ -213,23 +213,23 @@ function handleConfirm() {
       </div>
 
       <!-- Sell on credit ("vender a cuotas") — requires a real customer -->
-      <div class="mb-4 border-round-xl px-3 py-3" style="border: 1px solid #E2E8F0;">
+      <div class="mb-4 border-round-xl px-3 py-3" style="border: 1px solid var(--border);">
         <label class="flex align-items-center gap-2" style="cursor: pointer;">
           <input
               v-model="sellOnCredit"
               type="checkbox"
               :disabled="!selectedCustomerId"
-              style="width: 16px; height: 16px; accent-color: #0E7490;"
+              style="width: 16px; height: 16px; accent-color: var(--brand);"
           />
-          <span style="font-size: 0.85rem; font-weight: 600; color: #1E293B;">
+          <span style="font-size: 0.85rem; font-weight: 600; color: var(--text);">
             {{ t('pos.payment-modal-sell-on-credit') }}
           </span>
         </label>
-        <p v-if="!selectedCustomerId" class="m-0 mt-1" style="font-size: 0.72rem; color: #94A3B8;">
+        <p v-if="!selectedCustomerId" class="m-0 mt-1" style="font-size: 0.72rem; color: var(--text-faint);">
           {{ t('pos.payment-modal-credit-needs-customer') }}
         </p>
         <div v-if="sellOnCredit" class="mt-3">
-          <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: #64748B;">
+          <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
             {{ t('pos.payment-modal-installments-label') }}
           </label>
           <input
@@ -237,16 +237,16 @@ function handleConfirm() {
               type="number"
               min="2"
               class="w-full border-round-lg px-3"
-              style="border: 1px solid #E2E8F0; font-size: 0.95rem; font-weight: 700; color: #0B3558; padding: 8px 12px; outline: none;"
+              style="border: 1px solid var(--border); font-size: 0.95rem; font-weight: 700; color: var(--brand); padding: 8px 12px; outline: none;"
           />
-          <p class="m-0 mt-2" style="font-size: 0.75rem; color: #64748B;">
+          <p class="m-0 mt-2" style="font-size: 0.75rem; color: var(--text-muted);">
             {{ t('pos.payment-modal-installment-amount', { amount: formatCurrency(total / (parseInt(installmentsInput) || 1)) }) }}
           </p>
         </div>
       </div>
 
       <!-- Method selector -->
-      <p class="m-0 mb-2" style="font-size: 0.78rem; font-weight: 600; color: #64748B;">
+      <p class="m-0 mb-2" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
         {{ t('pos.payment-modal-method-label') }}
       </p>
       <div class="grid mb-4">
@@ -258,9 +258,9 @@ function handleConfirm() {
           <button
               class="w-full flex flex-column align-items-center gap-1 border-round-xl py-3"
               :style="{
-                            border: `2px solid ${selectedMethod === config.value ? config.color : '#E2E8F0'}`,
-                            backgroundColor: selectedMethod === config.value ? config.background : '#fff',
-                            color: selectedMethod === config.value ? config.color : '#64748B',
+                            border: `2px solid ${selectedMethod === config.value ? config.color : 'var(--border)'}`,
+                            backgroundColor: selectedMethod === config.value ? config.background : 'var(--surface)',
+                            color: selectedMethod === config.value ? config.color : 'var(--text-muted)',
                             cursor: 'pointer'
                         }"
               @click="selectedMethod = config.value"
@@ -273,28 +273,28 @@ function handleConfirm() {
 
       <!-- Cash input (only for CASH method) -->
       <div v-if="selectedMethod === PaymentMethod.CASH" class="mb-4">
-        <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: #64748B;">
+        <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
           {{ t('pos.payment-cash-received') }}
         </label>
         <input
             v-model="cashInput"
             type="number"
             class="w-full border-round-lg px-3"
-            style="border: 1px solid #E2E8F0; font-size: 1.1rem; font-weight: 700; color: #0B3558; padding: 10px 12px; outline: none;"
-            @focus="(e) => e.target.style.borderColor = '#0E7490'"
-            @blur="(e) => e.target.style.borderColor = '#E2E8F0'"
+            style="border: 1px solid var(--border); font-size: 1.1rem; font-weight: 700; color: var(--brand); padding: 10px 12px; outline: none;"
+            @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+            @blur="(e) => e.target.style.borderColor = 'var(--border)'"
         />
         <!-- Change display -->
         <div v-if="changeAmount >= 0" class="flex justify-content-between mt-2 px-1">
-          <span style="font-size: 0.78rem; color: #64748B;">{{ t('pos.payment-change') }}</span>
-          <span style="font-size: 0.88rem; font-weight: 700; color: #16A34A;">
+          <span style="font-size: 0.78rem; color: var(--text-muted);">{{ t('pos.payment-change') }}</span>
+          <span style="font-size: 0.88rem; font-weight: 700; color: var(--status-ok-fg);">
                         {{ formatCurrency(changeAmount) }}
                     </span>
         </div>
         <p
             v-else
             class="m-0 mt-1"
-            style="font-size: 0.75rem; color: #EF4444;"
+            style="font-size: 0.75rem; color: var(--status-critical-fg);"
         >
           {{ t('pos.payment-insufficient-cash') }}
         </p>
@@ -304,7 +304,7 @@ function handleConfirm() {
       <div class="flex gap-2">
         <button
             class="flex-1 border-round-xl py-3"
-            style="border: 1px solid #E2E8F0; color: #64748B; font-size: 0.88rem; font-weight: 600; background: #fff; cursor: pointer;"
+            style="border: 1px solid var(--border); color: var(--text-muted); font-size: 0.88rem; font-weight: 600; background: var(--surface); cursor: pointer;"
             @click="emit('cancel')"
         >
           {{ t('pos.payment-cancel-sale') }}
@@ -312,8 +312,8 @@ function handleConfirm() {
         <button
             class="flex-1 border-round-xl py-3"
             :style="{
-                        backgroundColor: canConfirm ? '#0B3558' : '#CBD5E1',
-                        color: '#fff',
+                        backgroundColor: canConfirm ? 'var(--brand)' : 'var(--text-faint)',
+                        color: 'var(--brand-ink)',
                         fontSize: '0.88rem',
                         fontWeight: 600,
                         border: 'none',
