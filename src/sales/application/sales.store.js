@@ -23,6 +23,7 @@ import { SalesApi }           from '../infrastructure/sales.api.js';
 import { SaleAssembler }      from '../infrastructure/sale.assembler.js';
 import { SaleDetailAssembler } from '../infrastructure/sale-detail.assembler.js';
 import { CustomerAssembler }  from '../infrastructure/customer.assembler.js';
+import { PaymentPlanAssembler } from '../infrastructure/payment-plan.assembler.js';
 import { Sale, SaleStatus, PaymentMethod }               from '../domain/model/sale.entity.js';
 import { SaleDetail }         from '../domain/model/sale-detail.entity.js';
 
@@ -48,6 +49,16 @@ const useSalesStore = defineStore('sales', () => {
 
     /** @type {import('vue').Ref<boolean>} */
     const customersLoaded = ref(false);
+
+    /**
+     * Pending (not fully paid) payment plans — for the whole business, or
+     * narrowed to one customer via fetchPendingPaymentPlans(customerId).
+     * @type {import('vue').Ref<import('../domain/model/payment-plan.entity.js').PaymentPlan[]>}
+     */
+    const paymentPlans = ref([]);
+
+    /** @type {import('vue').Ref<boolean>} */
+    const paymentPlansLoaded = ref(false);
 
     /** @type {import('vue').Ref<Error[]>} */
     const errors = ref([]);
@@ -333,7 +344,7 @@ const useSalesStore = defineStore('sales', () => {
     /**
      * Cancels a previously persisted sale by updating its status to CANCELLED.
      *
-     * Business rule: only OPEN or PAID sales can be cancelled.
+     * Business rule: only PAID sales can be cancelled.
      *
      * Stock is NOT reverted here: reverting inventory belongs to the Product &
      * Inventory Management bounded context, so this returns the line items
@@ -422,6 +433,90 @@ const useSalesStore = defineStore('sales', () => {
         });
     }
 
+    // ─── Payment Plans ────────────────────────────────────────────────────────
+
+    /**
+     * Loads pending (not fully paid) payment plans into local state — for
+     * the whole business, or narrowed to one customer's sales when
+     * customerId is given.
+     * @param {number|string} [customerId]
+     * @returns {Promise<void>}
+     */
+    function fetchPendingPaymentPlans(customerId) {
+        return salesApi.getPendingPaymentPlans(customerId)
+            .then(response => {
+                paymentPlans.value = PaymentPlanAssembler.toEntitiesFromResponse(response);
+                paymentPlansLoaded.value = true;
+            })
+            .catch(error => {
+                errors.value.push(error);
+                paymentPlansLoaded.value = true;
+            });
+    }
+
+    /**
+     * Fetches the payment plan attached to a specific sale, if any.
+     * @param {number|string} saleId
+     * @returns {Promise<import('../domain/model/payment-plan.entity.js').PaymentPlan|null>}
+     */
+    function fetchPaymentPlanBySale(saleId) {
+        return salesApi.getPaymentPlanBySale(saleId)
+            .then(response => PaymentPlanAssembler.toEntityFromResource(response.data))
+            .catch(error => {
+                if (error.response?.status !== 404) errors.value.push(error);
+                return null;
+            });
+    }
+
+    /**
+     * Attaches a payment plan (sells "a cuotas") to an already-confirmed
+     * sale. Deliberately a separate call from confirmSale — the backend
+     * itself never lets plan creation touch how the sale was totaled or
+     * had its stock decremented (see PaymentPlanCommandService).
+     *
+     * @param {number|string} saleId
+     * @param {number} totalInstallments - Must be >= 1.
+     * @returns {Promise<import('../domain/model/payment-plan.entity.js').PaymentPlan>}
+     */
+    function createPaymentPlan(saleId, totalInstallments) {
+        const resource = PaymentPlanAssembler.toResourceFromEntity({ saleId, totalInstallments });
+        return salesApi.createPaymentPlan(resource)
+            .then(response => {
+                const createdPlan = PaymentPlanAssembler.toEntityFromResource(response.data);
+                paymentPlans.value.push(createdPlan);
+                return createdPlan;
+            })
+            .catch(error => {
+                errors.value.push(error);
+                throw error;
+            });
+    }
+
+    /**
+     * Registers the payment of one installment on a pending plan and
+     * synchronises local state — removing it from the pending list once
+     * fully paid, since this store only tracks pending plans.
+     * @param {number|string} planId
+     * @returns {Promise<import('../domain/model/payment-plan.entity.js').PaymentPlan>}
+     */
+    function registerInstallmentPayment(planId) {
+        return salesApi.registerInstallmentPayment(planId)
+            .then(response => {
+                const updatedPlan = PaymentPlanAssembler.toEntityFromResource(response.data);
+                const index = paymentPlans.value.findIndex(plan => plan.id === updatedPlan.id);
+                if (updatedPlan.isFullyPaid) {
+                    if (index !== -1) paymentPlans.value.splice(index, 1);
+                } else if (index !== -1) {
+                    paymentPlans.value[index] = updatedPlan;
+                }
+                return updatedPlan;
+            })
+            .catch(error => {
+                errors.value.push(error);
+                throw error;
+            });
+    }
+
     return {
         // State
         sales,
@@ -429,6 +524,8 @@ const useSalesStore = defineStore('sales', () => {
         currentSale,
         salesLoaded,
         customersLoaded,
+        paymentPlans,
+        paymentPlansLoaded,
         errors,
         // Computed
         salesCount,
@@ -452,7 +549,12 @@ const useSalesStore = defineStore('sales', () => {
         // Customer CRUD
         addCustomer,
         updateCustomer,
-        deleteCustomer
+        deleteCustomer,
+        // Payment Plans
+        fetchPendingPaymentPlans,
+        fetchPaymentPlanBySale,
+        createPaymentPlan,
+        registerInstallmentPayment
     };
 });
 

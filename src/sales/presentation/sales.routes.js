@@ -1,7 +1,8 @@
-const salesLayout   = () => import('./views/sales-layout.vue');
-const posScreen     = () => import('./views/pos-screen.vue');
-const salesHistory  = () => import('./views/sales-history.vue');
-const customerList  = () => import('./views/customer-list.vue');
+const salesLayout      = () => import('./views/sales-layout.vue');
+const posScreen        = () => import('./views/pos-screen.vue');
+const salesHistory     = () => import('./views/sales-history.vue');
+const customerList     = () => import('./views/customer-list.vue');
+const paymentPlansList = () => import('./views/payment-plans-list.vue');
 
 /**
  * Route definitions for the Sales & POS Management bounded context.
@@ -12,6 +13,7 @@ const customerList  = () => import('./views/customer-list.vue');
  * /app/sales/pos          → POS screen (product grid + cart)
  * /app/sales/history      → Sales history table
  * /app/sales/customers    → Customer list
+ * /app/sales/installments → Pending credit installment plans
  *
  * The parent route renders sales-layout.vue which contains the header,
  * stats bar, and tab navigation. The child routes render inside its <router-view>.
@@ -44,6 +46,12 @@ const salesRoutes = [
                 name:      'customer-list',
                 component: customerList,
                 meta:      { title: 'Customers' }
+            },
+            {
+                path:      'installments',
+                name:      'payment-plans-list',
+                component: paymentPlansList,
+                meta:      { title: 'Payment Plans' }
             }
         ]
     }

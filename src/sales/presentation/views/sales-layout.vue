@@ -12,7 +12,7 @@ import useSalesStore   from '../../application/sales.store.js';
  * Contains:
  * - Page header with title and subtitle.
  * - SalesStatsBar with today's KPIs.
- * - Tab navigation between POS, Historial, and Clientes.
+ * - Tab navigation between POS, Historial, Clientes, and Cuotas.
  * - <router-view> to render the active child view.
  *
  * @view SalesLayout
@@ -41,9 +41,10 @@ onMounted(() => {
  * @type {Array<{routeName: string, labelKey: string}>}
  */
 const tabs = [
-  { routeName: 'pos-screen',     labelKey: 'sales.tab-pos'      },
-  { routeName: 'sales-history',  labelKey: 'sales.tab-history'  },
-  { routeName: 'customer-list',  labelKey: 'sales.tab-customers'}
+  { routeName: 'pos-screen',         labelKey: 'sales.tab-pos'         },
+  { routeName: 'sales-history',      labelKey: 'sales.tab-history'     },
+  { routeName: 'customer-list',      labelKey: 'sales.tab-customers'   },
+  { routeName: 'payment-plans-list', labelKey: 'sales.tab-installments'}
 ];
 
 /**

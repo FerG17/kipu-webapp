@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useI18n }        from 'vue-i18n';
+import { useToast }       from 'primevue/usetoast';
 import CartPanel          from '../components/cart-panel.vue';
 import PaymentModal       from '../components/payment-modal.vue';
 import SaleSuccessModal   from '../components/sale-success-modal.vue';
@@ -29,6 +30,7 @@ import { isCustomCategory, filterableCategoryOptions } from '../../../product/pr
  */
 
 const { t }        = useI18n();
+const toast        = useToast();
 const salesStore   = useSalesStore();
 const productStore = useProductStore();
 const iamStore     = useIamStore();
@@ -251,10 +253,15 @@ function openPaymentModal() {
 
 /**
  * Handles the confirm event from PaymentModal.
- * Persists the sale and shows the success modal on success.
- * @param {{ paymentMethod: string, cashGiven: number, customerId: number|null }} payload
+ * Persists the sale and shows the success modal on success. When the
+ * cashier chose to sell on credit, attaches a payment plan afterward via
+ * its own separate call — never part of confirmSale itself, mirroring how
+ * the backend keeps PaymentPlanCommandService entirely apart from
+ * SaleCommandService.
+ * @param {{ paymentMethod: string, cashGiven: number, customerId: number|null,
+ *           sellOnCredit: boolean, totalInstallments: number|null }} payload
  */
-async function handlePaymentConfirm({ paymentMethod, customerId }) {
+async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, totalInstallments }) {
   if (isSubmitting.value) return;
 
   isSubmitting.value    = true;
@@ -276,6 +283,15 @@ async function handlePaymentConfirm({ paymentMethod, customerId }) {
       await productStore.fetchInventory();
     } catch (error) {
       showStockError(t('pos.error-stock-deduction-failed'));
+    }
+
+    if (sellOnCredit && totalInstallments) {
+      try {
+        await salesStore.createPaymentPlan(result.sale.id, totalInstallments);
+        toast.add({ severity: 'success', summary: t('pos.success-title'), detail: t('pos.success-credit-plan-created', { installments: totalInstallments }), life: 4000 });
+      } catch (error) {
+        toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('pos.success-credit-plan-failed'), life: 6000 });
+      }
     }
 
     lastSoldLines.value  = soldLines;
