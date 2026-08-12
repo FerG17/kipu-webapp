@@ -202,7 +202,7 @@ const useIamStore = defineStore('iam', () => {
      *
      * @param {Object} payload - Registration form data.
      * @param {string} payload.businessName - Name of the business.
-     * @param {string} [payload.businessType] - BODEGA or FARMACIA.
+     * @param {string} [payload.businessType] - Always BusinessType.BODEGA today.
      * @param {string} payload.firstName - User's first name.
      * @param {string} payload.lastName - User's last name.
      * @param {string} payload.email - Email address.

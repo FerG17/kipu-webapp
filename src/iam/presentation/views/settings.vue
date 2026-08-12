@@ -23,6 +23,11 @@ const tabs = [
   { key: 'security',    labelKey: 'settings.tab-security',    icon: 'pi pi-shield'    }
 ];
 
+// businessType is not user-editable — this product is a single bodega's own
+// system, not a multi-vertical SaaS, so there is nothing to pick. Kept as an
+// internal field (always "BODEGA", loaded from the real business record) so
+// saveProfile still sends a valid `type` to UpdateBusinessResource, which
+// requires one.
 const profileForm = ref({
   businessName: '',
   businessType: 'BODEGA',
@@ -32,11 +37,6 @@ const profileForm = ref({
   lastName:     iamStore.currentUser ? iamStore.currentUser.lastName  : '',
   email:        iamStore.currentUser ? iamStore.currentUser.email     : ''
 });
-
-const businessTypeOptions = [
-  { value: 'BODEGA',   labelKey: 'sign-up.type-bodega'   },
-  { value: 'FARMACIA', labelKey: 'sign-up.type-farmacia' }
-];
 
 /** Populates the profile form once the business/user data has loaded. */
 function syncProfileFormFromStore() {
@@ -253,12 +253,6 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
             <div class="settings-field">
               <label class="settings-label"><i class="pi pi-building" style="font-size: 0.7rem;"/> {{ t('settings.field-business-name') }}</label>
               <input v-model="profileForm.businessName" type="text" class="settings-input"/>
-            </div>
-            <div class="settings-field">
-              <label class="settings-label"><i class="pi pi-tag" style="font-size: 0.7rem;"/> {{ t('settings.field-business-type') }}</label>
-              <select v-model="profileForm.businessType" class="settings-input">
-                <option v-for="option in businessTypeOptions" :key="option.value" :value="option.value">{{ t(option.labelKey) }}</option>
-              </select>
             </div>
             <div class="settings-field">
               <label class="settings-label"><i class="pi pi-map-marker" style="font-size: 0.7rem;"/> {{ t('settings.field-address') }}</label>
