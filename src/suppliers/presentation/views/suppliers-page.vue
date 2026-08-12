@@ -74,12 +74,11 @@ const statsBarItems = computed(() => [
 // ─── Lifecycle ─────────────────────────────────────────────────────────────────
 
 onMounted(() => {
-  const businessId = iamStore.currentUser?.businessId ?? null;
-  if (businessId) {
+  if (iamStore.currentUser?.businessId) {
     if (!suppliersLoaded.value) {
-      fetchSuppliers(businessId);
+      fetchSuppliers();
     }
-    fetchPurchaseOrders(businessId);
+    fetchPurchaseOrders();
   }
 });
 </script>

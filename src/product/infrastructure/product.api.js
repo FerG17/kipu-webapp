@@ -39,12 +39,14 @@ export class ProductApi extends BaseApi {
     }
 
     /**
-     * Fetches all products for a given business.
-     * @param {number|string} businessId
+     * Fetches all products for the authenticated business. Scoped server-side
+     * by the JWT — ProductsController.GetProducts has no businessId query
+     * parameter at all (a stray `?businessId=` used to be sent here and was
+     * simply ignored by ASP.NET's model binding).
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getProducts(businessId) {
-        return this.#productsEndpoint.getAllByParam('businessId', businessId);
+    getProducts() {
+        return this.#productsEndpoint.getAll();
     }
 
     /**
@@ -86,12 +88,13 @@ export class ProductApi extends BaseApi {
     }
 
     /**
-     * Fetches all inventory records for a given business.
-     * @param {number|string} businessId
+     * Fetches all inventory records for the authenticated business. Scoped
+     * server-side by the JWT — InventoriesController only ever reads
+     * `?productId=`, never a businessId query parameter.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getInventory(businessId) {
-        return this.#inventoriesEndpoint.getAllByParam('businessId', businessId);
+    getInventory() {
+        return this.#inventoriesEndpoint.getAll();
     }
 
     /**
@@ -161,12 +164,13 @@ export class ProductApi extends BaseApi {
     }
 
     /**
-     * Fetches all warehouses for a given business.
-     * @param {number|string} businessId
+     * Fetches all warehouses for the authenticated business. Scoped
+     * server-side by the JWT — WarehousesController has no query parameters
+     * at all.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getWarehouses(businessId) {
-        return this.#warehousesEndpoint.getAllByParam('businessId', businessId);
+    getWarehouses() {
+        return this.#warehousesEndpoint.getAll();
     }
 
     /**
@@ -179,21 +183,22 @@ export class ProductApi extends BaseApi {
     }
 
     /**
-     * Fetches all suppliers for a given business.
+     * Fetches all suppliers for the authenticated business.
      * Used to populate the supplier dropdown in the stock intake form.
-     * @param {number|string} businessId
+     * Scoped server-side by the JWT.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getSuppliers(businessId) {
-        return this.#suppliersEndpoint.getAllByParam('businessId', businessId);
+    getSuppliers() {
+        return this.#suppliersEndpoint.getAll();
     }
 
     /**
-     * Fetches all stock movement records for a given business.
-     * @param {number|string} businessId
+     * Fetches all stock movement records for the authenticated business.
+     * Scoped server-side by the JWT — StockMovementsController has no query
+     * parameters at all.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getStockMovements(businessId) {
-        return this.#stockMovementsEndpoint.getAllByParam('businessId', businessId);
+    getStockMovements() {
+        return this.#stockMovementsEndpoint.getAll();
     }
 }

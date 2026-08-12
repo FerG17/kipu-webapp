@@ -24,12 +24,13 @@ export class DashboardApi extends BaseApi {
     }
 
     /**
-     * Fetches all sales for a given business.
-     * @param {number|string} businessId
+     * Fetches all sales for the authenticated business. Scoped server-side
+     * by the JWT — SalesController.GetSales has no businessId query
+     * parameter at all (only optional dateFrom/dateTo).
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getSales(businessId) {
-        return this.#salesEndpoint.getAllByParam('businessId', businessId);
+    getSales() {
+        return this.#salesEndpoint.getAll();
     }
 
     /**

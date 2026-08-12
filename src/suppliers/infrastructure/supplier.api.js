@@ -34,12 +34,13 @@ export class SupplierApi extends BaseApi {
     // ─── Supplier operations ──────────────────────────────────────────────────
 
     /**
-     * Fetches all suppliers for a given business.
-     * @param {number|string} businessId
+     * Fetches all suppliers for the authenticated business. Scoped
+     * server-side by the JWT — SuppliersController.GetSuppliers has no
+     * query parameters at all.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getSuppliers(businessId) {
-        return this.#suppliersEndpoint.getAllByParam('businessId', businessId);
+    getSuppliers() {
+        return this.#suppliersEndpoint.getAll();
     }
 
     /**
@@ -88,12 +89,13 @@ export class SupplierApi extends BaseApi {
     // ─── Purchase order operations ────────────────────────────────────────────
 
     /**
-     * Fetches all purchase orders for a given business.
-     * @param {number|string} businessId
+     * Fetches all purchase orders for the authenticated business. Scoped
+     * server-side by the JWT — PurchasesController.GetPurchaseOrders only
+     * ever reads an optional `?supplierId=`, never a businessId parameter.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getPurchaseOrders(businessId) {
-        return this.#purchasesEndpoint.getAllByParam('businessId', businessId);
+    getPurchaseOrders() {
+        return this.#purchasesEndpoint.getAll();
     }
 
     /**

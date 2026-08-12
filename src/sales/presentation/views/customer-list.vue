@@ -129,9 +129,8 @@ function openDetail(customer) {
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
 onMounted(() => {
-  const businessId = iamStore.currentUser?.businessId;
-  if (!salesStore.customersLoaded) salesStore.fetchCustomers(businessId);
-  if (!salesStore.salesLoaded)     salesStore.fetchSales(businessId);
+  if (!salesStore.customersLoaded) salesStore.fetchCustomers();
+  if (!salesStore.salesLoaded)     salesStore.fetchSales();
 });
 </script>
 

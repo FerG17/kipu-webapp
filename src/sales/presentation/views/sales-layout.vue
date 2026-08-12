@@ -4,7 +4,6 @@ import { useI18n }     from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import SalesStatsBar   from '../components/sales-stats-bar.vue';
 import useSalesStore   from '../../application/sales.store.js';
-import useIamStore     from '../../../iam/application/iam.store.js';
 
 /**
  * SalesLayout view for the Sales & POS Management bounded context.
@@ -23,7 +22,6 @@ const { t }    = useI18n();
 const route    = useRouter();
 const currentRoute = useRoute();
 const salesStore   = useSalesStore();
-const iamStore     = useIamStore();
 
 /**
  * SalesStatsBar is mounted here (parent of all three sales tabs) and reads
@@ -34,7 +32,7 @@ const iamStore     = useIamStore();
  */
 onMounted(() => {
   if (!salesStore.salesLoaded) {
-    salesStore.fetchSales(iamStore.currentUser?.businessId);
+    salesStore.fetchSales();
   }
 });
 

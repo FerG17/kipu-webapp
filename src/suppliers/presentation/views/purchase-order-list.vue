@@ -82,16 +82,15 @@ function getStatusConfig(status) {
 // ─── Lifecycle ─────────────────────────────────────────────────────────────────
 
 onMounted(() => {
-  const businessId = iamStore.currentUser?.businessId ?? null;
-  if (businessId) {
+  if (iamStore.currentUser?.businessId) {
     if (!purchaseOrdersLoaded.value) {
-      fetchPurchaseOrders(businessId);
+      fetchPurchaseOrders();
     }
     if (!productStore.productsLoaded) {
-      productStore.fetchProducts(businessId);
+      productStore.fetchProducts();
     }
     if (!productStore.inventoryLoaded) {
-      productStore.fetchInventory(businessId);
+      productStore.fetchInventory();
     }
   }
 });
@@ -1583,29 +1582,6 @@ function resolveProductName(detail) {
 .orders-detail-td-bold {
   font-weight: 600;
   color:       #0B3558;
-}
-
-.orders-shipment-badge {
-  border:        none;
-  cursor:        pointer;
-  font-size:     0.7rem;
-  font-weight:   600;
-  padding:       0.25rem 0.6rem;
-  border-radius: 999px;
-  white-space:   nowrap;
-}
-
-.orders-shipment-link-btn {
-  border:      none;
-  background:  none;
-  cursor:      pointer;
-  font-size:   0.72rem;
-  font-weight: 600;
-  color:       #0E7490;
-  white-space: nowrap;
-}
-.orders-shipment-link-btn:hover {
-  text-decoration: underline;
 }
 
 .orders-detail-tfoot-row {

@@ -27,9 +27,9 @@ const { errors, generateReport } = dashboardStore;
 onMounted(() => {
   const businessId = iamStore.currentUser?.businessId ?? null;
   if (!businessId) return;
-  if (!productStore.productsLoaded)  productStore.fetchProducts(businessId);
-  if (!productStore.inventoryLoaded) productStore.fetchInventory(businessId);
-  if (!salesStore.salesLoaded)       salesStore.fetchSales(businessId);
+  if (!productStore.productsLoaded)  productStore.fetchProducts();
+  if (!productStore.inventoryLoaded) productStore.fetchInventory();
+  if (!salesStore.salesLoaded)       salesStore.fetchSales();
 });
 
 /** @type {import('vue').Ref<string>} */

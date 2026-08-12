@@ -168,11 +168,11 @@ const useProductStore = defineStore('product', () => {
     // ─── Commands ─────────────────────────────────────────────────────────────
 
     /**
-     * Fetches all products for the authenticated business.
-     * @param {number|string} businessId
+     * Fetches all products for the authenticated business — scoped
+     * server-side by the JWT, no businessId parameter needed or accepted.
      */
-    function fetchProducts(businessId) {
-        return productApi.getProducts(businessId)
+    function fetchProducts() {
+        return productApi.getProducts()
             .then(response => {
                 products.value       = ProductAssembler.toEntitiesFromResponse(response);
                 productsLoaded.value = true;
@@ -181,11 +181,11 @@ const useProductStore = defineStore('product', () => {
     }
 
     /**
-     * Fetches all inventory records for the authenticated business.
-     * @param {number|string} businessId
+     * Fetches all inventory records for the authenticated business — scoped
+     * server-side by the JWT, no businessId parameter needed or accepted.
      */
-    function fetchInventory(businessId) {
-        return productApi.getInventory(businessId)
+    function fetchInventory() {
+        return productApi.getInventory()
             .then(response => {
                 inventory.value       = InventoryItemAssembler.toEntitiesFromResponse(response);
                 inventoryLoaded.value = true;
@@ -222,10 +222,10 @@ const useProductStore = defineStore('product', () => {
      * most-recent-first. Used by the Inventory "Movimientos" tab — callers
      * must re-invoke this after an intake to reflect the new entry, since
      * this store no longer mirrors movements into local state on its own.
-     * @param {number|string} businessId
+     * Scoped server-side by the JWT, no businessId parameter needed or accepted.
      */
-    function fetchAllStockMovements(businessId) {
-        productApi.getStockMovements(businessId)
+    function fetchAllStockMovements() {
+        productApi.getStockMovements()
             .then(response => {
                 const entities = StockMovementAssembler.toEntitiesFromResponse(response);
                 stockMovements.value = entities.sort(
@@ -308,14 +308,14 @@ const useProductStore = defineStore('product', () => {
     }
 
     /**
-     * Fetches warehouses for a business and returns them as a plain array.
-     * Warehouses are not kept in store state because warehouse management
-     * belongs to a separate bounded context.
-     * @param {number|string} businessId
+     * Fetches warehouses for the authenticated business and returns them as
+     * a plain array. Warehouses are not kept in store state because
+     * warehouse management belongs to a separate bounded context. Scoped
+     * server-side by the JWT, no businessId parameter needed or accepted.
      * @returns {Promise<Array>}
      */
-    function fetchWarehousesForBusiness(businessId) {
-        return productApi.getWarehouses(businessId)
+    function fetchWarehousesForBusiness() {
+        return productApi.getWarehouses()
             .then(response => response.data instanceof Array ? response.data : [])
             .catch(error => {
                 errors.value.push(error);
@@ -340,12 +340,13 @@ const useProductStore = defineStore('product', () => {
     }
 
     /**
-     * Fetches suppliers for a business and returns them as a plain array.
-     * @param {number|string} businessId
+     * Fetches suppliers for the authenticated business and returns them as
+     * a plain array. Scoped server-side by the JWT, no businessId parameter
+     * needed or accepted.
      * @returns {Promise<Array>}
      */
-    function fetchSuppliersForBusiness(businessId) {
-        return productApi.getSuppliers(businessId)
+    function fetchSuppliersForBusiness() {
+        return productApi.getSuppliers()
             .then(response => response.data instanceof Array ? response.data : [])
             .catch(error => {
                 errors.value.push(error);
@@ -359,7 +360,7 @@ const useProductStore = defineStore('product', () => {
      * @returns {Promise<import('../domain/model/product.entity.js').Product>}
      */
     function addProduct(product) {
-        return productApi.createProduct(product)
+        return productApi.createProduct(ProductAssembler.toResourceFromEntity(product))
             .then(response => {
                 const createdProduct = ProductAssembler.toEntityFromResource(response.data);
                 products.value.push(createdProduct);
@@ -377,7 +378,7 @@ const useProductStore = defineStore('product', () => {
      * @returns {Promise<import('../domain/model/product.entity.js').Product>}
      */
     function updateProduct(product) {
-        return productApi.updateProduct(product.id, product)
+        return productApi.updateProduct(product.id, ProductAssembler.toResourceFromEntity(product))
             .then(response => {
                 const updatedProduct = ProductAssembler.toEntityFromResource(response.data);
                 const index = products.value.findIndex(existingProduct => existingProduct.id === updatedProduct.id);
@@ -543,7 +544,6 @@ const useProductStore = defineStore('product', () => {
             productId,
             expiration:    resource.expiration,
             purchasePrice: resource.purchasePrice || 0,
-            status:        'ACTIVE',
             inventoryId:   resource.inventoryId ?? existingBatch?.inventoryId ?? null
         };
 

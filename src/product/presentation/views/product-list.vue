@@ -119,11 +119,12 @@ function statusLabel(statusKey) {
 const warehouses = ref([]);
 
 onMounted(() => {
-  const businessId = iamStore.currentUser?.businessId ?? null;
-  if (businessId) {
-    if (!productsLoaded.value) fetchProducts(businessId);
-    fetchInventory(businessId);
-    productStore.fetchWarehousesForBusiness(businessId).then(list => {
+  // Guards on "is someone actually signed in yet", not on which business —
+  // every fetch below is scoped server-side by the JWT.
+  if (iamStore.currentUser?.businessId) {
+    if (!productsLoaded.value) fetchProducts();
+    fetchInventory();
+    productStore.fetchWarehousesForBusiness().then(list => {
       warehouses.value = list.filter(warehouse => warehouse.status === 'ACTIVE');
     });
   }
@@ -136,9 +137,8 @@ onMounted(() => {
  * page load regardless of whether that tab is ever viewed.
  */
 watch(activeTab, (tab) => {
-  if (tab === 'movements' && !stockMovementsLoaded.value) {
-    const businessId = iamStore.currentUser?.businessId ?? null;
-    if (businessId) fetchAllStockMovements(businessId);
+  if (tab === 'movements' && !stockMovementsLoaded.value && iamStore.currentUser?.businessId) {
+    fetchAllStockMovements();
   }
 });
 
@@ -365,7 +365,7 @@ function saveProductFromModal() {
         // Always create the inventory record, even with 0 initial stock, so
         // minimumStock has somewhere to persist (see registerStockIntake).
         const warehouseId = productModalForm.value.warehouseId ? parseInt(productModalForm.value.warehouseId) : null;
-        const intakePromise = registerStockIntake({ productId: createdProduct.id, businessId, quantity: initialStock, minimumStock, warehouseId });
+        const intakePromise = registerStockIntake({ productId: createdProduct.id, quantity: initialStock, minimumStock, warehouseId });
 
         return intakePromise.then(createdInventoryItem => {
           if (expirationDate) {
@@ -386,7 +386,7 @@ function saveProductFromModal() {
         // A new product with initial stock just recorded a StockMovement
         // server-side (see registerStockIntake) — refresh so "Movimientos"
         // reflects it without requiring a full page reload.
-        if (!editingProduct.value) fetchAllStockMovements(businessId);
+        if (!editingProduct.value) fetchAllStockMovements();
       })
       .catch(() => {
         toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-save-error'), life: 4500 });
@@ -475,12 +475,9 @@ function saveIntake() {
   const quantity = parseInt(intakeForm.value.quantity);
   if (!intakeForm.value.productId || !quantity || quantity <= 0) return;
 
-  const businessId = iamStore.currentUser?.businessId ?? null;
-
   savingIntake.value = true;
   registerStockIntake({
     productId:   parseInt(intakeForm.value.productId),
-    businessId:  businessId,
     quantity:    quantity,
     warehouseId: intakeForm.value.warehouseId ? parseInt(intakeForm.value.warehouseId) : null,
     supplier:    intakeForm.value.supplier,
@@ -491,7 +488,7 @@ function saveIntake() {
         showIntakeModal.value = false;
         // The intake just recorded a StockMovement server-side — refresh so
         // "Movimientos" reflects it without requiring a full page reload.
-        fetchAllStockMovements(businessId);
+        fetchAllStockMovements();
       })
       .catch(() => {
         toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-intake-error'), life: 4500 });
@@ -581,16 +578,13 @@ function saveWarehouse() {
   const name = warehouseForm.value.name.trim();
   if (!name) return;
 
-  const businessId = iamStore.currentUser?.businessId ?? null;
   savingWarehouse.value = true;
 
   productStore.createWarehouse({
     name,
-    code:      warehouseForm.value.code.trim(),
-    address:   warehouseForm.value.address.trim(),
-    capacity:  warehouseForm.value.capacity,
-    status:    'ACTIVE',
-    businessId
+    code:     warehouseForm.value.code.trim(),
+    address:  warehouseForm.value.address.trim(),
+    capacity: warehouseForm.value.capacity
   })
       .then(createdWarehouse => {
         warehouses.value.push(createdWarehouse);

@@ -109,12 +109,12 @@ const useSupplierStore = defineStore('supplier', () => {
     // ─── Commands ──────────────────────────────────────────────────────────────
 
     /**
-     * Fetches all suppliers for the authenticated business.
-     * @param {number|string} businessId
+     * Fetches all suppliers for the authenticated business. Scoped
+     * server-side by the JWT, no businessId parameter needed or accepted.
      * @returns {Promise<void>}
      */
-    function fetchSuppliers(businessId) {
-        return supplierApi.getSuppliers(businessId)
+    function fetchSuppliers() {
+        return supplierApi.getSuppliers()
             .then(response => {
                 suppliers.value       = SupplierAssembler.toEntitiesFromResponse(response);
                 suppliersLoaded.value = true;
@@ -135,14 +135,12 @@ const useSupplierStore = defineStore('supplier', () => {
      * each order's supplierName can be resolved regardless of whether the caller
      * happened to load suppliers first — this view can be reached directly
      * without visiting the Suppliers tab in the same session.
-     *
-     * @param {number|string} businessId
      */
-    function fetchPurchaseOrders(businessId) {
-        const suppliersReady = suppliersLoaded.value ? Promise.resolve() : fetchSuppliers(businessId);
+    function fetchPurchaseOrders() {
+        const suppliersReady = suppliersLoaded.value ? Promise.resolve() : fetchSuppliers();
 
         return suppliersReady
-            .then(() => supplierApi.getPurchaseOrders(businessId))
+            .then(() => supplierApi.getPurchaseOrders())
             .then(response => {
                 const rawOrders = Array.isArray(response.data) ? response.data : [];
                 purchaseOrders.value = rawOrders.map(rawOrder => {
@@ -345,14 +343,7 @@ const useSupplierStore = defineStore('supplier', () => {
             return Promise.reject(error);
         }
 
-        const resource = PurchaseOrderAssembler.toResourceFromEntity(existingOrder);
-        resource.status = newStatus;
-
-        if (newStatus === PurchaseOrderStatus.RECEIVED) {
-            resource.receivedDate = new Date().toISOString().slice(0, 10);
-        }
-
-        return supplierApi.updatePurchaseOrder(numericId, resource)
+        return supplierApi.updatePurchaseOrder(numericId, { status: newStatus })
             .then(response => {
                 const updatedOrder = PurchaseOrderAssembler.toEntityFromResource({
                     ...response.data,

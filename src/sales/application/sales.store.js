@@ -110,17 +110,18 @@ const useSalesStore = defineStore('sales', () => {
     // ─── Fetch Actions ────────────────────────────────────────────────────────
 
     /**
-     * Loads all sales for the given business and updates local state.
+     * Loads all sales for the authenticated business and updates local
+     * state. Scoped server-side by the JWT, no businessId parameter needed
+     * or accepted.
      *
      * The real backend already embeds each sale's line items in the /sales
      * response (GetAllSalesByBusinessIdQuery eager-loads SaleDetails), so
      * this no longer needs the mock-era one-fetch-per-sale hydration step.
      *
-     * @param {number|string} businessId - Business identifier from the IAM store.
      * @returns {void}
      */
-    function fetchSales(businessId) {
-        salesApi.getSales(businessId)
+    function fetchSales() {
+        salesApi.getSales()
             .then(response => {
                 sales.value        = SaleAssembler.toEntitiesFromResponse(response);
                 salesLoaded.value = true;
@@ -131,12 +132,13 @@ const useSalesStore = defineStore('sales', () => {
     }
 
     /**
-     * Loads all customers for the given business and updates local state.
-     * @param {number|string} businessId - Business identifier from the IAM store.
+     * Loads all customers for the authenticated business and updates local
+     * state. Scoped server-side by the JWT, no businessId parameter needed
+     * or accepted.
      * @returns {void}
      */
-    function fetchCustomers(businessId) {
-        salesApi.getCustomers(businessId).then(response => {
+    function fetchCustomers() {
+        salesApi.getCustomers().then(response => {
             customers.value   = CustomerAssembler.toEntitiesFromResponse(response);
             customersLoaded.value = true;
         }).catch(error => {
@@ -356,20 +358,8 @@ const useSalesStore = defineStore('sales', () => {
             return { success: false, restockedDetails: [] };
         }
 
-        const updatedResource = {
-            id:            sale.id,
-            businessId:    sale.businessId,
-            customerId:    sale.customerId,
-            status:        SaleStatus.CANCELLED,
-            totalAmount:   sale.totalAmount,
-            paymentMethod: sale.paymentMethod,
-            date:          sale.date,
-            description:   sale.description,
-            currency:      sale.currency
-        };
-
         try {
-            const response = await salesApi.updateSale(sale.id, updatedResource);
+            const response = await salesApi.updateSale(sale.id, { status: SaleStatus.CANCELLED });
             const cancelledSale = SaleAssembler.toEntityFromResource(response.data);
             const index = sales.value.findIndex(existingSale => existingSale.id === cancelledSale.id);
             if (index !== -1) {
@@ -395,7 +385,7 @@ const useSalesStore = defineStore('sales', () => {
      * @returns {Promise<import('../domain/model/customer.entity.js').Customer>}
      */
     function addCustomer(customer) {
-        return salesApi.createCustomer(customer).then(response => {
+        return salesApi.createCustomer(CustomerAssembler.toResourceFromEntity(customer)).then(response => {
             const newCustomer = CustomerAssembler.toEntityFromResource(response.data);
             customers.value.push(newCustomer);
             return newCustomer;
@@ -411,7 +401,7 @@ const useSalesStore = defineStore('sales', () => {
      * @returns {Promise<import('../domain/model/customer.entity.js').Customer>}
      */
     function updateCustomer(customer) {
-        return salesApi.updateCustomer(customer.id, customer).then(response => {
+        return salesApi.updateCustomer(customer.id, CustomerAssembler.toResourceFromEntity(customer)).then(response => {
             const updatedCustomer = CustomerAssembler.toEntityFromResource(response.data);
             const index = customers.value.findIndex(existingCustomer => existingCustomer.id === updatedCustomer.id);
             if (index !== -1) {

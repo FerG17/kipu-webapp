@@ -131,10 +131,9 @@ function getCategoryColor(category) {
 // ─── Lifecycle ─────────────────────────────────────────────────────────────────
 
 onMounted(() => {
-  const businessId = iamStore.currentUser?.businessId ?? null;
-  if (businessId) {
-    if (!suppliersLoaded.value) fetchSuppliers(businessId);
-    if (!productStore.productsLoaded) productStore.fetchProducts(businessId);
+  if (iamStore.currentUser?.businessId) {
+    if (!suppliersLoaded.value) fetchSuppliers();
+    if (!productStore.productsLoaded) productStore.fetchProducts();
   }
 });
 
