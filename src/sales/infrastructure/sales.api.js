@@ -40,12 +40,13 @@ export class SalesApi extends BaseApi {
     // ─── Sales ────────────────────────────────────────────────────────────────
 
     /**
-     * Fetches all sales for a given business.
-     * @param {number|string} businessId - Business identifier.
+     * Fetches all sales for the authenticated business. Scoped server-side
+     * by the JWT — SalesController.GetSales has no businessId query
+     * parameter at all (only optional dateFrom/dateTo).
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getSales(businessId) {
-        return this.#salesEndpoint.getAllByParam('businessId', businessId);
+    getSales() {
+        return this.#salesEndpoint.getAll();
     }
 
     /**
@@ -95,12 +96,13 @@ export class SalesApi extends BaseApi {
     // ─── Customers ────────────────────────────────────────────────────────────
 
     /**
-     * Fetches all customers for a given business.
-     * @param {number|string} businessId - Business identifier.
+     * Fetches all customers for the authenticated business. Scoped
+     * server-side by the JWT — CustomersController.GetCustomers has no
+     * query parameters at all.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getCustomers(businessId) {
-        return this.#customersEndpoint.getAllByParam('businessId', businessId);
+    getCustomers() {
+        return this.#customersEndpoint.getAll();
     }
 
     /**

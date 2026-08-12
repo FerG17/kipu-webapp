@@ -273,8 +273,7 @@ async function handlePaymentConfirm({ paymentMethod, customerId }) {
     // confirming the sale (SaleRegisteredEvent -> Product's stock decrement) —
     // refresh from that authoritative state rather than recomputing it here.
     try {
-      const businessId = iamStore.currentUser?.businessId;
-      await productStore.fetchInventory(businessId);
+      await productStore.fetchInventory();
     } catch (error) {
       showStockError(t('pos.error-stock-deduction-failed'));
     }
@@ -334,10 +333,10 @@ onMounted(() => {
   // Without a businessId the queries would resolve to an empty set yet still
   // flip productsLoaded/inventoryLoaded to true, blocking every later fetch.
   if (!businessId) return;
-  if (!productStore.productsLoaded)  productStore.fetchProducts(businessId);
-  if (!productStore.inventoryLoaded) productStore.fetchInventory(businessId);
+  if (!productStore.productsLoaded)  productStore.fetchProducts();
+  if (!productStore.inventoryLoaded) productStore.fetchInventory();
   if (!salesStore.currentSale)       salesStore.startNewSale(businessId);
-  if (!salesStore.customersLoaded)   salesStore.fetchCustomers(businessId);
+  if (!salesStore.customersLoaded)   salesStore.fetchCustomers();
 });
 </script>
 

@@ -113,9 +113,8 @@ onMounted(() => {
     router.push({ name: 'dashboard-report-filters' });
     return;
   }
-  const businessId = iamStore.currentUser?.businessId ?? null;
-  if (businessId) {
-    productStore.fetchWarehousesForBusiness(businessId).then(fetched => {
+  if (iamStore.currentUser?.businessId) {
+    productStore.fetchWarehousesForBusiness().then(fetched => {
       warehouses.value = fetched;
     });
   }

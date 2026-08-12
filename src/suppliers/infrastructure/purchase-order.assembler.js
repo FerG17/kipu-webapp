@@ -68,21 +68,17 @@ export class PurchaseOrderAssembler {
      * @param {number}      resource.quantity
      * @param {number}      resource.unitPrice
      * @param {number}      [resource.discount]
-     * @param {string}      [resource.deliveryStatus]
-     * @param {string}      [resource.deliveryTrackingNum]
      * @returns {PurchaseOrderDetail}
      */
     static toDetailEntityFromResource(resource) {
         return new PurchaseOrderDetail({
-            id:                  resource.id                  ?? null,
-            purchaseId:          resource.purchaseId          ?? null,
-            productId:           resource.productId           ?? null,
-            productName:         resource.productName         ?? '',
-            quantity:            resource.quantity            ?? 1,
-            unitPrice:           resource.unitPrice           ?? 0,
-            discount:            resource.discount            ?? 0,
-            deliveryStatus:      resource.deliveryStatus      ?? '',
-            deliveryTrackingNum: resource.deliveryTrackingNum ?? ''
+            id:          resource.id          ?? null,
+            purchaseId:  resource.purchaseId  ?? null,
+            productId:   resource.productId   ?? null,
+            productName: resource.productName ?? '',
+            quantity:    resource.quantity    ?? 1,
+            unitPrice:   resource.unitPrice   ?? 0,
+            discount:    resource.discount    ?? 0
         });
     }
 
@@ -114,14 +110,12 @@ export class PurchaseOrderAssembler {
      */
     static toDetailResourceFromEntity(detail) {
         return {
-            id:                  detail.id,
-            purchaseId:          detail.purchaseId,
-            productId:           detail.productId,
-            quantity:            detail.quantity,
-            unitPrice:           detail.unitPrice,
-            discount:            detail.discount,
-            deliveryStatus:      detail.deliveryStatus,
-            deliveryTrackingNum: detail.deliveryTrackingNum
+            id:         detail.id,
+            purchaseId: detail.purchaseId,
+            productId:  detail.productId,
+            quantity:   detail.quantity,
+            unitPrice:  detail.unitPrice,
+            discount:   detail.discount
         };
     }
 }

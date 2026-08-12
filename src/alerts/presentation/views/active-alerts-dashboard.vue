@@ -95,11 +95,10 @@ function getStatusConfig(status)     { return statusConfig[status]     ?? status
  * about — see resolveWarehouseName).
  */
 onMounted(() => {
-  const businessId = iamStore.currentUser?.businessId ?? null;
   fetchAlerts();
   fetchAlertRules();
-  if (businessId) {
-    productStore.fetchWarehousesForBusiness(businessId).then(fetched => {
+  if (iamStore.currentUser?.businessId) {
+    productStore.fetchWarehousesForBusiness().then(fetched => {
       warehouses.value = fetched;
     });
   }

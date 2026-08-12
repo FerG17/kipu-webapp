@@ -215,11 +215,10 @@ async function handleCancelSale(sale) {
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
 onMounted(() => {
-  const businessId = iamStore.currentUser?.businessId;
-  if (!salesStore.salesLoaded)      salesStore.fetchSales(businessId);
-  if (!salesStore.customersLoaded)  salesStore.fetchCustomers(businessId);
-  if (!productStore.productsLoaded) productStore.fetchProducts(businessId);
-  if (!productStore.inventoryLoaded) productStore.fetchInventory(businessId);
+  if (!salesStore.salesLoaded)      salesStore.fetchSales();
+  if (!salesStore.customersLoaded)  salesStore.fetchCustomers();
+  if (!productStore.productsLoaded) productStore.fetchProducts();
+  if (!productStore.inventoryLoaded) productStore.fetchInventory();
 });
 </script>
 

@@ -400,14 +400,13 @@ const useDashboardStore = defineStore('dashboard', () => {
      * computed from, so the "refresh" button picks up anything that changed
      * on the server since this session last loaded it (e.g. edited directly
      * in the mock, or from another tab) instead of just touching a timestamp.
-     * @param {number|string} businessId
      */
-    function refreshMetrics(businessId) {
+    function refreshMetrics() {
         const productStore = useProductStore();
         const salesStore   = useSalesStore();
-        productStore.fetchProducts(businessId);
-        productStore.fetchInventory(businessId);
-        salesStore.fetchSales(businessId);
+        productStore.fetchProducts();
+        productStore.fetchInventory();
+        salesStore.fetchSales();
     }
 
     /**
@@ -420,11 +419,9 @@ const useDashboardStore = defineStore('dashboard', () => {
      *   being a decimal fraction (0–1), matching SaleDetail.lineTotal.
      * - barHeightPercent is scaled so the day with maximum revenue = 100%.
      * - Days with no PAID sales render with totalAmount = 0 and barHeightPercent = 0.
-     *
-     * @param {number|string} businessId
      */
-    function fetchSalesByDay(businessId) {
-        dashboardApi.getSales(businessId)
+    function fetchSalesByDay() {
+        dashboardApi.getSales()
             .then(salesResponse => {
                 const allSales = salesResponse.data instanceof Array ? salesResponse.data : [];
 

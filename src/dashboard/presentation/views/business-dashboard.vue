@@ -54,13 +54,13 @@ onMounted(() => {
   const businessId = iamStore.currentUser?.businessId ?? null;
   if (businessId) {
     fetchAlerts();
-    productStore.fetchWarehousesForBusiness(businessId).then(fetched => {
+    productStore.fetchWarehousesForBusiness().then(fetched => {
       warehouses.value = fetched;
     });
-    if (!salesByDay.value.length)       fetchSalesByDay(businessId);
-    if (!productStore.productsLoaded)   productStore.fetchProducts(businessId);
-    if (!productStore.inventoryLoaded)  productStore.fetchInventory(businessId);
-    if (!salesStore.salesLoaded)        salesStore.fetchSales(businessId);
+    if (!salesByDay.value.length)       fetchSalesByDay();
+    if (!productStore.productsLoaded)   productStore.fetchProducts();
+    if (!productStore.inventoryLoaded)  productStore.fetchInventory();
+    if (!salesStore.salesLoaded)        salesStore.fetchSales();
   }
 });
 
@@ -71,8 +71,8 @@ onMounted(() => {
 function handleRefresh() {
   const businessId = iamStore.currentUser?.businessId ?? null;
   if (!businessId) return;
-  refreshMetrics(businessId);
-  fetchSalesByDay(businessId);
+  refreshMetrics();
+  fetchSalesByDay();
   fetchAlerts();
 }
 

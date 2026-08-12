@@ -39,29 +39,23 @@ export class PurchaseOrderDetail {
      * @param {number}      [params.quantity=1]
      * @param {number}      [params.unitPrice=0]
      * @param {number}      [params.discount=0]         - Decimal fraction (0–1).
-     * @param {string}      [params.deliveryStatus='']
-     * @param {string}      [params.deliveryTrackingNum='']
      */
     constructor({
-                    id                  = null,
-                    purchaseId          = null,
-                    productId           = null,
-                    productName         = '',
-                    quantity            = 1,
-                    unitPrice           = 0,
-                    discount            = 0,
-                    deliveryStatus      = '',
-                    deliveryTrackingNum = ''
+                    id          = null,
+                    purchaseId  = null,
+                    productId   = null,
+                    productName = '',
+                    quantity    = 1,
+                    unitPrice   = 0,
+                    discount    = 0
                 }) {
-        this.id                  = id;
-        this.purchaseId          = purchaseId;
-        this.productId           = productId;
-        this.productName         = productName;
-        this.quantity            = quantity;
-        this.unitPrice           = unitPrice;
-        this.discount            = discount;
-        this.deliveryStatus      = deliveryStatus;
-        this.deliveryTrackingNum = deliveryTrackingNum;
+        this.id          = id;
+        this.purchaseId  = purchaseId;
+        this.productId   = productId;
+        this.productName = productName;
+        this.quantity    = quantity;
+        this.unitPrice   = unitPrice;
+        this.discount    = discount;
     }
 
     /**
