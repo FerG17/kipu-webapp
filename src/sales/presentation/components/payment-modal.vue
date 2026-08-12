@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useI18n }       from 'vue-i18n';
 import { PaymentMethod } from '../../domain/model/sale.entity.js';
 
@@ -40,7 +40,8 @@ const props = defineProps({
 const emit = defineEmits([
   /**
    * Emitted when the user confirms the payment.
-   * payload: { paymentMethod: string, cashGiven: number, customerId: number|null }
+   * payload: { paymentMethod: string, cashGiven: number, customerId: number|null,
+   *            sellOnCredit: boolean, totalInstallments: number|null }
    */
   'confirm',
   /** Emitted when the user cancels/closes the modal. */
@@ -76,6 +77,27 @@ const cashGiven = computed(() => parseFloat(cashInput.value) || 0);
 const selectedCustomerId = ref('');
 
 /**
+ * Whether the cashier is attaching a credit payment plan to this sale
+ * ("vender a cuotas"). Requires a real (non-anonymous) customer, since a
+ * plan with no customer would have no one to collect the debt from — see
+ * canConfirm.
+ * @type {import('vue').Ref<boolean>}
+ */
+const sellOnCredit = ref(false);
+
+/**
+ * Number of installments to split the sale into when sellOnCredit is on.
+ * @type {import('vue').Ref<string>}
+ */
+const installmentsInput = ref('2');
+
+// Unchecking the customer while credit sale is active would otherwise leave
+// a checked-but-disabled checkbox and a stale sellOnCredit=true.
+watch(selectedCustomerId, (newCustomerId) => {
+  if (!newCustomerId) sellOnCredit.value = false;
+});
+
+/**
  * Change to return to the customer when paying with cash.
  * Only meaningful when selectedMethod is CASH.
  * @type {import('vue').ComputedRef<number>}
@@ -90,11 +112,15 @@ const changeAmount = computed(() =>
  * Whether the confirm button should be enabled.
  * For CASH: cashGiven must cover the total.
  * For other methods: always enabled.
+ * When selling on credit: a real customer must be selected (to know who
+ * owes the debt) and at least 2 installments must be entered.
  * @type {import('vue').ComputedRef<boolean>}
  */
-const canConfirm = computed(() =>
-    selectedMethod.value !== PaymentMethod.CASH || changeAmount.value >= 0
-);
+const canConfirm = computed(() => {
+  const paymentOk = selectedMethod.value !== PaymentMethod.CASH || changeAmount.value >= 0;
+  if (!sellOnCredit.value) return paymentOk;
+  return paymentOk && !!selectedCustomerId.value && (parseInt(installmentsInput.value) || 0) >= 2;
+});
 
 /**
  * Configuration for each payment method button.
@@ -122,9 +148,11 @@ function formatCurrency(amount) {
 function handleConfirm() {
   if (!canConfirm.value) return;
   emit('confirm', {
-    paymentMethod: selectedMethod.value,
-    cashGiven:     selectedMethod.value === PaymentMethod.CASH ? cashGiven.value : props.total,
-    customerId:    selectedCustomerId.value ? parseInt(selectedCustomerId.value) : null
+    paymentMethod:     selectedMethod.value,
+    cashGiven:         selectedMethod.value === PaymentMethod.CASH ? cashGiven.value : props.total,
+    customerId:        selectedCustomerId.value ? parseInt(selectedCustomerId.value) : null,
+    sellOnCredit:      sellOnCredit.value,
+    totalInstallments: sellOnCredit.value ? (parseInt(installmentsInput.value) || 0) : null
   });
 }
 </script>
@@ -182,6 +210,39 @@ function handleConfirm() {
             {{ customer.fullName }}
           </option>
         </select>
+      </div>
+
+      <!-- Sell on credit ("vender a cuotas") — requires a real customer -->
+      <div class="mb-4 border-round-xl px-3 py-3" style="border: 1px solid #E2E8F0;">
+        <label class="flex align-items-center gap-2" style="cursor: pointer;">
+          <input
+              v-model="sellOnCredit"
+              type="checkbox"
+              :disabled="!selectedCustomerId"
+              style="width: 16px; height: 16px; accent-color: #0E7490;"
+          />
+          <span style="font-size: 0.85rem; font-weight: 600; color: #1E293B;">
+            {{ t('pos.payment-modal-sell-on-credit') }}
+          </span>
+        </label>
+        <p v-if="!selectedCustomerId" class="m-0 mt-1" style="font-size: 0.72rem; color: #94A3B8;">
+          {{ t('pos.payment-modal-credit-needs-customer') }}
+        </p>
+        <div v-if="sellOnCredit" class="mt-3">
+          <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: #64748B;">
+            {{ t('pos.payment-modal-installments-label') }}
+          </label>
+          <input
+              v-model="installmentsInput"
+              type="number"
+              min="2"
+              class="w-full border-round-lg px-3"
+              style="border: 1px solid #E2E8F0; font-size: 0.95rem; font-weight: 700; color: #0B3558; padding: 8px 12px; outline: none;"
+          />
+          <p class="m-0 mt-2" style="font-size: 0.75rem; color: #64748B;">
+            {{ t('pos.payment-modal-installment-amount', { amount: formatCurrency(total / (parseInt(installmentsInput) || 1)) }) }}
+          </p>
+        </div>
       </div>
 
       <!-- Method selector -->
