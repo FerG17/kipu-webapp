@@ -4,9 +4,10 @@
  *
  * Business rules enforced here:
  * - Sign-in requires a non-empty email containing '@' and a non-empty password.
- * - Password must match the stored value (client-side check against mock API).
- * - Sign-up requires a business name, a full name, a valid email, a password
- *   of at least 6 characters, and matching confirmation.
+ * - Password is verified server-side (BCrypt) — never compared client-side.
+ * - Sign-up requires a business name, first/last name, a valid email, and a
+ *   password of at least 8 characters (matches the backend's
+ *   SignUpCommandValidator).
  * - Only one user can be authenticated at a time (currentUser).
  *
  * @module useIamStore
@@ -331,29 +332,34 @@ const useIamStore = defineStore('iam', () => {
     }
 
     /**
-     * Updates profile fields (full name, phone) of the currently authenticated user.
-     * Fetches the raw stored resource first and merges changes into it, since
-     * the mock's PUT replaces the entire resource and the UserAccount entity
-     * intentionally excludes the password field — merging avoids wiping it.
+     * Updates profile fields (first name, last name, phone) of the currently
+     * authenticated user.
+     *
+     * This used to accept one "fullName" field, fetch the full stored user
+     * resource, and merge a client-side `fullName.split(' ')` into it before
+     * PATCHing the whole thing back — built for a mock backend whose PUT
+     * replaced the entire resource. The real backend's PATCH endpoint
+     * (`UpdateUserProfileResource`) only ever reads Name/LastName/Phone from
+     * the body regardless of what else is sent, so neither the fetch nor the
+     * merge is needed — and the split silently produced an empty last name
+     * for anyone with a single-word full name.
      *
      * @param {Object} fields
-     * @param {string} fields.fullName
+     * @param {string} fields.firstName
+     * @param {string} fields.lastName
      * @param {string} [fields.phone]
      * @returns {Promise<{success: boolean}>}
      */
-    async function updateUserProfile({ fullName, phone }) {
+    async function updateUserProfile({ firstName, lastName, phone }) {
         if (!currentUser.value) return { success: false };
 
         try {
-            const existingResponse = await iamApi.getUserById(currentUser.value.id);
-            const nameParts = fullName.trim().split(' ');
-            const updatedResource = {
-                ...existingResponse.data,
-                name:     nameParts[0] ?? existingResponse.data.name,
-                lastName: nameParts.slice(1).join(' '),
-                phone:    phone ?? existingResponse.data.phone ?? ''
-            };
-            const response = await iamApi.updateUser(updatedResource);
+            const response = await iamApi.updateUser({
+                id:       currentUser.value.id,
+                name:     firstName,
+                lastName: lastName,
+                phone:    phone ?? currentUser.value.phone ?? ''
+            });
             currentUser.value = UserAccountAssembler.toEntityFromResource(response.data);
             persistSession(currentUser.value);
             return { success: true };
