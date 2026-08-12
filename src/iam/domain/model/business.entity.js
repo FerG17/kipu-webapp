@@ -1,11 +1,14 @@
 /**
- * Enumeration of the supported business types
- * within the Identity & Access Management bounded context.
+ * The one business type this product supports. This is a single bodega's
+ * own inventory/sales/supplier system, not a multi-vertical SaaS — the
+ * FARMACIA option that used to live here (and the sign-up/settings picker
+ * built around it) implied the opposite. The backend stores `type` as a
+ * plain string with no server-side enum restriction, so this only exists to
+ * keep the one legitimate value named instead of a magic string.
  * @enum {string}
  */
 export const BusinessType = Object.freeze({
-    BODEGA:   'BODEGA',
-    FARMACIA: 'FARMACIA'
+    BODEGA: 'BODEGA'
 });
 
 /**

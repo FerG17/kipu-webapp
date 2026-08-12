@@ -8,18 +8,13 @@ const { t }    = useI18n();
 const router   = useRouter();
 const iamStore = useIamStore();
 
-const form = ref({ firstName: '', lastName: '', businessName: '', businessType: '', email: '', password: '' });
+const form = ref({ firstName: '', lastName: '', businessName: '', email: '', password: '' });
 
-const fieldErrors = ref({ firstName: '', lastName: '', businessName: '', businessType: '', email: '', password: '' });
+const fieldErrors = ref({ firstName: '', lastName: '', businessName: '', email: '', password: '' });
 
 const showPassword = ref(false);
 const isLoading    = ref(false);
 const localError   = ref('');
-
-const businessTypeOptions = [
-  { value: 'BODEGA',   icon: 'pi pi-shopping-cart', labelKey: 'sign-up.type-bodega',   descKey: 'sign-up.type-bodega-desc'   },
-  { value: 'FARMACIA', icon: 'pi pi-heart',          labelKey: 'sign-up.type-farmacia', descKey: 'sign-up.type-farmacia-desc' }
-];
 
 function computePasswordStrength(password) {
   if (!password) return 0;
@@ -36,12 +31,11 @@ function resolveStrengthBarColor(level) { return strengthColors[level] || 'var(-
 function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabelKeys[level]) : ''; }
 
 function validateForm() {
-  fieldErrors.value = { firstName: '', lastName: '', businessName: '', businessType: '', email: '', password: '' };
+  fieldErrors.value = { firstName: '', lastName: '', businessName: '', email: '', password: '' };
   let isValid = true;
   if (!form.value.firstName.trim())    { fieldErrors.value.firstName    = t('sign-up.error-first-name');     isValid = false; }
   if (!form.value.lastName.trim())     { fieldErrors.value.lastName     = t('sign-up.error-last-name');      isValid = false; }
   if (!form.value.businessName.trim()) { fieldErrors.value.businessName = t('sign-up.error-business-name');  isValid = false; }
-  if (!form.value.businessType)        { fieldErrors.value.businessType = t('sign-up.error-business-type');  isValid = false; }
   if (!form.value.email || !form.value.email.includes('@')) { fieldErrors.value.email = t('sign-up.error-email');    isValid = false; }
   if (!form.value.password || form.value.password.length < 8) { fieldErrors.value.password = t('sign-up.error-password'); isValid = false; }
   return isValid;
@@ -52,6 +46,10 @@ function validateForm() {
  * SignUpResource (Name, LastName) exactly — the original port asked for a
  * single "fullName" field and split it on the first space, which silently
  * produced an empty LastName for anyone who typed a single-word name.
+ *
+ * businessType is always "BODEGA": this product is a single bodega's own
+ * system, not a multi-vertical SaaS signing up different kinds of shops —
+ * the Bodega/Farmacia picker that used to be here implied the opposite.
  */
 async function submitSignUp() {
   if (!validateForm()) return;
@@ -62,7 +60,7 @@ async function submitSignUp() {
       firstName: form.value.firstName,
       lastName: form.value.lastName,
       businessName: form.value.businessName,
-      businessType: form.value.businessType,
+      businessType: 'BODEGA',
       email: form.value.email,
       password: form.value.password
     });
@@ -75,11 +73,6 @@ async function submitSignUp() {
 }
 
 function navigateToSignIn() { router.push({ name: 'sign-in' }); }
-
-function selectBusinessType(typeValue) {
-  form.value.businessType = typeValue;
-  fieldErrors.value.businessType = '';
-}
 </script>
 
 <template>
@@ -178,28 +171,6 @@ function selectBusinessType(typeValue) {
               <input v-model="form.businessName" type="text" :placeholder="t('sign-up.business-placeholder')" required class="auth-input" style="padding-left: 40px;"/>
             </div>
             <p v-if="fieldErrors.businessName" class="auth-error"><i class="pi pi-exclamation-circle" style="font-size: 0.72rem;"/> {{ fieldErrors.businessName }}</p>
-          </div>
-
-          <!-- Business type -->
-          <div class="auth-field">
-            <label class="auth-label">{{ t('sign-up.business-type') }}</label>
-            <div class="business-type-grid">
-              <button
-                  v-for="typeOption in businessTypeOptions"
-                  :key="typeOption.value"
-                  type="button"
-                  class="business-type-card border-round-xl p-3 text-left cursor-pointer"
-                  :class="{ 'business-type-card--selected': form.businessType === typeOption.value }"
-                  @click="selectBusinessType(typeOption.value)"
-              >
-                <div class="business-type-icon flex align-items-center justify-content-center border-round-lg flex-shrink-0">
-                  <i :class="typeOption.icon" style="font-size: 0.88rem;"/>
-                </div>
-                <p class="m-0 business-type-label">{{ t(typeOption.labelKey) }}</p>
-                <p class="m-0 business-type-desc">{{ t(typeOption.descKey) }}</p>
-              </button>
-            </div>
-            <p v-if="fieldErrors.businessType" class="auth-error"><i class="pi pi-exclamation-circle" style="font-size: 0.72rem;"/> {{ fieldErrors.businessType }}</p>
           </div>
 
           <!-- Email -->
@@ -352,24 +323,6 @@ function selectBusinessType(typeValue) {
 
 .auth-error { margin: 2px 0 0; font-size: 0.78rem; color: var(--status-critical-fg); display: flex; align-items: center; gap: 4px; }
 
-.business-type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-.business-type-card {
-  background-color: var(--surface-alt);
-  border: 1.5px solid var(--border);
-  display: flex; flex-direction: column; gap: 6px;
-  transition: all 0.18s;
-}
-.business-type-card--selected {
-  background-color: var(--brand-soft);
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 14%, transparent);
-}
-.business-type-icon { width: 32px; height: 32px; margin-bottom: 2px; background-color: var(--surface); color: var(--text-faint); }
-.business-type-card--selected .business-type-icon { background-color: color-mix(in srgb, var(--brand) 16%, transparent); color: var(--brand); }
-.business-type-label { font-size: 0.82rem; font-weight: 700; color: var(--text); }
-.business-type-card--selected .business-type-label { color: var(--brand); }
-.business-type-desc { font-size: 0.74rem; color: var(--text-muted); line-height: 1.4; }
-
 .strength-bar { height: 4px; transition: background-color 0.3s; }
 .strength-label { font-size: 0.72rem; font-weight: 600; min-width: 42px; text-align: right; }
 
@@ -399,12 +352,12 @@ function selectBusinessType(typeValue) {
   .spin-ring { animation: none; }
 }
 
-/* Mobile tweaks: 16px inputs prevent iOS focus-zoom; stack type cards on narrow screens. */
+/* Mobile tweaks: 16px inputs prevent iOS focus-zoom; stack name fields on narrow screens. */
 @media (max-width: 640px) {
   .auth-input { font-size: 16px; }
   .auth-title { font-size: 1.4rem; }
 }
 @media (max-width: 380px) {
-  .business-type-grid, .name-grid { grid-template-columns: 1fr; }
+  .name-grid { grid-template-columns: 1fr; }
 }
 </style>
