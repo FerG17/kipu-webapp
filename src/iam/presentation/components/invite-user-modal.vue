@@ -8,14 +8,12 @@ import { roleLabelKey } from '../role-labels.js';
 /**
  * InviteUserModal component for the Identity & Access Management bounded context.
  *
- * Inline modal for inviting a new team member from Settings → Users.
- * Creates the account scoped to the current admin's business and assigns
- * a temporary password (the mock has no email-invite flow, so the account
- * is created directly — matching the same "mock hack" pattern already used
- * elsewhere for auth, ready to be swapped for a real invite endpoint later).
+ * Inline modal for inviting a new team member from Settings → Users. Calls
+ * the backend's real invite endpoint (POST /users) directly with a
+ * temporary password the admin sets here — there is no email-invite flow.
  *
  * Business rules:
- * - fullName is required (minimum 2 characters).
+ * - firstName and lastName are each required (minimum 2 characters).
  * - email is required and must contain '@'.
  * - roleId is required (one of the roles loaded from the API).
  * - temporary password is required, minimum 8 characters.
@@ -33,10 +31,11 @@ const emit = defineEmits([
 const { t }    = useI18n();
 const iamStore = useIamStore();
 
-const fullName = ref('');
-const email    = ref('');
-const roleId   = ref('');
-const password = ref('');
+const firstName = ref('');
+const lastName  = ref('');
+const email     = ref('');
+const roleId    = ref('');
+const password  = ref('');
 const showPassword = ref(false);
 
 /** @type {import('vue').Ref<Record<string, string>>} */
@@ -58,7 +57,8 @@ function roleLabel(position) {
 }
 
 const isFormValid = computed(() =>
-    fullName.value.trim().length >= 2 &&
+    firstName.value.trim().length >= 2 &&
+    lastName.value.trim().length >= 2 &&
     email.value.includes('@') &&
     roleId.value !== '' &&
     password.value.length >= 8
@@ -66,7 +66,8 @@ const isFormValid = computed(() =>
 
 function validateForm() {
   fieldErrors.value = {};
-  if (fullName.value.trim().length < 2)     fieldErrors.value.fullName = t('settings.invite-error-name');
+  if (firstName.value.trim().length < 2)     fieldErrors.value.firstName = t('settings.invite-error-name');
+  if (lastName.value.trim().length < 2)      fieldErrors.value.lastName  = t('settings.invite-error-last-name');
   if (!email.value.includes('@'))            fieldErrors.value.email    = t('settings.invite-error-email');
   if (roleId.value === '')                   fieldErrors.value.roleId   = t('settings.invite-error-role');
   if (password.value.length < 8)             fieldErrors.value.password = t('settings.invite-error-password');
@@ -78,12 +79,11 @@ async function handleSubmit() {
   if (!validateForm() || saving.value) return;
 
   saving.value = true;
-  const nameParts = fullName.value.trim().split(' ');
 
   const userAccount = new UserAccount({
     email:      email.value.trim(),
-    firstName:  nameParts[0] ?? fullName.value.trim(),
-    lastName:   nameParts.slice(1).join(' '),
+    firstName:  firstName.value.trim(),
+    lastName:   lastName.value.trim(),
     businessId: iamStore.currentUser?.businessId ?? null,
     status:     'ACTIVE',
     roleId:     parseInt(roleId.value)
@@ -123,19 +123,34 @@ async function handleSubmit() {
       <!-- Form -->
       <form class="px-5 pb-5 pt-4" style="display: flex; flex-direction: column; gap: 12px;" @submit.prevent="handleSubmit">
 
-        <!-- Full name -->
-        <div>
-          <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: #64748B;">
-            {{ t('settings.invite-field-name') }} *
-          </label>
-          <input
-              v-model="fullName" type="text" :placeholder="t('settings.invite-field-name-placeholder')"
-              class="w-full border-round-lg px-3 py-2"
-              style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
-              @focus="(e) => e.target.style.borderColor = '#0E7490'"
-              @blur="(e) => e.target.style.borderColor = fieldErrors.fullName ? '#EF4444' : '#E2E8F0'"
-          />
-          <small v-if="fieldErrors.fullName" style="color: #EF4444; font-size: 0.72rem;">{{ fieldErrors.fullName }}</small>
+        <!-- First / last name -->
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px; display: grid;">
+          <div>
+            <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: #64748B;">
+              {{ t('settings.invite-field-name') }} *
+            </label>
+            <input
+                v-model="firstName" type="text" :placeholder="t('settings.invite-field-name-placeholder')"
+                class="w-full border-round-lg px-3 py-2"
+                style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
+                @focus="(e) => e.target.style.borderColor = '#0E7490'"
+                @blur="(e) => e.target.style.borderColor = fieldErrors.firstName ? '#EF4444' : '#E2E8F0'"
+            />
+            <small v-if="fieldErrors.firstName" style="color: #EF4444; font-size: 0.72rem;">{{ fieldErrors.firstName }}</small>
+          </div>
+          <div>
+            <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: #64748B;">
+              {{ t('settings.invite-field-last-name') }} *
+            </label>
+            <input
+                v-model="lastName" type="text" :placeholder="t('settings.invite-field-last-name-placeholder')"
+                class="w-full border-round-lg px-3 py-2"
+                style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
+                @focus="(e) => e.target.style.borderColor = '#0E7490'"
+                @blur="(e) => e.target.style.borderColor = fieldErrors.lastName ? '#EF4444' : '#E2E8F0'"
+            />
+            <small v-if="fieldErrors.lastName" style="color: #EF4444; font-size: 0.72rem;">{{ fieldErrors.lastName }}</small>
+          </div>
         </div>
 
         <!-- Email -->

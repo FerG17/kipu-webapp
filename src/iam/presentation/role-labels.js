@@ -18,10 +18,15 @@
 export function roleLabelKey(position) {
     const keyByPosition = {
         ADMIN:     'settings.role-admin',
-        CASHIER:   'settings.role-collaborator',
-        WAREHOUSE: 'settings.role-seller'
+        CASHIER:   'settings.role-cashier',
+        WAREHOUSE: 'settings.role-warehouse'
     };
-    return keyByPosition[position] ?? 'settings.role-seller';
+    // Falls back to Warehouse (the least-privileged real role) instead of
+    // silently mislabeling an unresolved position as Admin — this used to
+    // fall back to a key literally named "role-seller" (Vendedor), which
+    // showed CASHIER accounts as "Colaborador" and WAREHOUSE accounts as
+    // "Vendedor" — backwards, since the cashier is the one who sells.
+    return keyByPosition[position] ?? 'settings.role-warehouse';
 }
 
 /**

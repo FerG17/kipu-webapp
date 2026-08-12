@@ -28,8 +28,9 @@ const profileForm = ref({
   businessType: 'BODEGA',
   address:      '',
   phone:        '',
-  fullName:     iamStore.currentUser ? iamStore.currentUser.fullName : '',
-  email:        iamStore.currentUser ? iamStore.currentUser.email    : ''
+  firstName:    iamStore.currentUser ? iamStore.currentUser.firstName : '',
+  lastName:     iamStore.currentUser ? iamStore.currentUser.lastName  : '',
+  email:        iamStore.currentUser ? iamStore.currentUser.email     : ''
 });
 
 const businessTypeOptions = [
@@ -45,9 +46,10 @@ function syncProfileFormFromStore() {
     profileForm.value.address      = currentBusiness.value.address;
   }
   if (iamStore.currentUser) {
-    profileForm.value.fullName = iamStore.currentUser.fullName;
-    profileForm.value.email    = iamStore.currentUser.email;
-    profileForm.value.phone    = iamStore.currentUser.phone;
+    profileForm.value.firstName = iamStore.currentUser.firstName;
+    profileForm.value.lastName  = iamStore.currentUser.lastName;
+    profileForm.value.email     = iamStore.currentUser.email;
+    profileForm.value.phone     = iamStore.currentUser.phone;
   }
 }
 watch(currentBusiness, syncProfileFormFromStore);
@@ -126,8 +128,9 @@ async function saveProfile() {
       address: profileForm.value.address
     }),
     iamStore.updateUserProfile({
-      fullName: profileForm.value.fullName,
-      phone:    profileForm.value.phone
+      firstName: profileForm.value.firstName,
+      lastName:  profileForm.value.lastName,
+      phone:     profileForm.value.phone
     })
   ]);
   syncProfileFormFromStore();
@@ -262,8 +265,12 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
               <input v-model="profileForm.address" type="text" class="settings-input"/>
             </div>
             <div class="settings-field">
-              <label class="settings-label"><i class="pi pi-user" style="font-size: 0.7rem;"/> {{ t('settings.field-full-name') }}</label>
-              <input v-model="profileForm.fullName" type="text" class="settings-input"/>
+              <label class="settings-label"><i class="pi pi-user" style="font-size: 0.7rem;"/> {{ t('settings.field-first-name') }}</label>
+              <input v-model="profileForm.firstName" type="text" class="settings-input"/>
+            </div>
+            <div class="settings-field">
+              <label class="settings-label"><i class="pi pi-user" style="font-size: 0.7rem;"/> {{ t('settings.field-last-name') }}</label>
+              <input v-model="profileForm.lastName" type="text" class="settings-input"/>
             </div>
             <div class="settings-field">
               <label class="settings-label"><i class="pi pi-phone" style="font-size: 0.7rem;"/> {{ t('settings.field-phone') }}</label>
