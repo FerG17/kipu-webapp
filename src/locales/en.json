@@ -379,6 +379,8 @@
     "intake-field-product": "Product *",
     "intake-field-warehouse": "Warehouse",
     "intake-field-qty": "Received quantity *",
+    "intake-field-cost": "Cost price (S/)",
+    "intake-field-expiration": "Expiration date",
     "intake-field-supplier": "Supplier *",
     "intake-field-supplier-placeholder": "e.g. Alicorp SAC",
     "intake-field-note": "Notes",
@@ -388,8 +390,10 @@
     "expiry-label": "Expires:",
     "toast-save-success": "Product saved successfully",
     "toast-save-error": "Could not save the product. Check your connection and try again.",
+    "toast-warehouse-required": "Select a warehouse to register the initial stock.",
     "toast-intake-success": "Stock intake registered successfully",
     "toast-intake-error": "Could not register the intake. Check your connection and try again.",
+    "toast-movements-forbidden": "You don't have permission to view stock movements.",
     "modal-saving": "Saving..."
   },
   "alerts": {

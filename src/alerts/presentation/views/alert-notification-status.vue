@@ -4,7 +4,6 @@ import { useRoute, useRouter }             from 'vue-router';
 import { useI18n }                         from 'vue-i18n';
 import { useConfirm }                      from 'primevue';
 import useAlertsStore                      from '../../application/alerts.store.js';
-import useIamStore                         from '../../../iam/application/iam.store.js';
 import { AlertType, AlertStatus, AlertSeverity } from '../../domain/model/alert.entity.js';
 
 const { t }       = useI18n();
@@ -12,7 +11,6 @@ const route       = useRoute();
 const router      = useRouter();
 const confirm     = useConfirm();
 const alertsStore = useAlertsStore();
-const iamStore    = useIamStore();
 
 const { fetchAlerts, resolveAlert } = alertsStore;
 
@@ -45,8 +43,7 @@ onMounted(() => {
     loadAlertFromStore();
     return;
   }
-  const businessId = iamStore.currentUser?.businessId ?? null;
-  fetchAlerts(businessId);
+  fetchAlerts();
 });
 
 /**
@@ -73,14 +70,25 @@ const badgeSeverity = computed(() => {
 });
 
 /**
+ * Per-type icon/color config, distinguishing all 4 real alert types instead
+ * of collapsing OUT_OF_STOCK/EXPIRED into the same "orange warning triangle"
+ * bucket that only EXPIRATION got its own look.
+ * @type {Record<string, {icon: string, background: string, color: string}>}
+ */
+const alertTypeVisuals = {
+  [AlertType.LOW_STOCK]:    { icon: 'pi pi-arrow-down',           background: '#FFEDD5', color: '#F97316' },
+  [AlertType.OUT_OF_STOCK]: { icon: 'pi pi-times-circle',         background: '#FEE2E2', color: '#DC2626' },
+  [AlertType.EXPIRATION]:   { icon: 'pi pi-clock',                background: '#FEF3C7', color: '#D97706' },
+  [AlertType.EXPIRED]:      { icon: 'pi pi-calendar-times',       background: '#FEE2E2', color: '#EF4444' }
+};
+
+/**
  * Returns the PrimeIcon class for the current alert type.
  * @type {import('vue').ComputedRef<string>}
  */
 const alertIcon = computed(() => {
   if (!currentAlert.value) return 'pi pi-bell';
-  return currentAlert.value.type === AlertType.EXPIRATION
-      ? 'pi pi-calendar'
-      : 'pi pi-exclamation-triangle';
+  return alertTypeVisuals[currentAlert.value.type]?.icon ?? 'pi pi-bell';
 });
 
 /**
@@ -89,7 +97,7 @@ const alertIcon = computed(() => {
  */
 const iconBackground = computed(() => {
   if (!currentAlert.value) return '#F3F4F6';
-  return currentAlert.value.type === AlertType.EXPIRATION ? '#FEE2E2' : '#FFEDD5';
+  return alertTypeVisuals[currentAlert.value.type]?.background ?? '#F3F4F6';
 });
 
 /**
@@ -98,7 +106,24 @@ const iconBackground = computed(() => {
  */
 const iconColor = computed(() => {
   if (!currentAlert.value) return '#6B7280';
-  return currentAlert.value.type === AlertType.EXPIRATION ? '#EF4444' : '#F97316';
+  return alertTypeVisuals[currentAlert.value.type]?.color ?? '#6B7280';
+});
+
+/**
+ * Returns the i18n key for the current alert type — covers all 4 real
+ * types (LOW_STOCK, OUT_OF_STOCK, EXPIRATION, EXPIRED) instead of the
+ * previous LOW_STOCK-vs-everything-else split that mislabeled
+ * OUT_OF_STOCK/EXPIRED alerts as "por vencer".
+ * @type {import('vue').ComputedRef<string>}
+ */
+const typeLabelKey = computed(() => {
+  const keyByType = {
+    [AlertType.LOW_STOCK]:    'alerts.type-low-stock',
+    [AlertType.OUT_OF_STOCK]: 'alerts.type-out-of-stock',
+    [AlertType.EXPIRATION]:   'alerts.type-expiration',
+    [AlertType.EXPIRED]:      'alerts.type-expired'
+  };
+  return keyByType[currentAlert.value?.type] ?? 'alerts.type-low-stock';
 });
 
 /**
@@ -217,9 +242,7 @@ function navigateToProduct() {
               <div class="col-12 md:col-6">
                 <div class="flex flex-column gap-1">
                   <span class="text-color-secondary text-sm font-medium">{{ t('alerts.field-type') }}</span>
-                  <span class="font-medium">
-                                        {{ currentAlert.type === 'LOW_STOCK' ? t('alerts.type-low-stock') : t('alerts.type-expiration') }}
-                                    </span>
+                  <span class="font-medium">{{ t(typeLabelKey) }}</span>
                 </div>
               </div>
               <div class="col-12 md:col-6">
