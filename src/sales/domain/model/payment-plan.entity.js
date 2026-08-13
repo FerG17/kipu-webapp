@@ -21,6 +21,7 @@ export class PaymentPlan {
      * @param {number}      [params.totalInstallments=1]
      * @param {number}      [params.paidInstallments=0]
      * @param {boolean}     [params.isFullyPaid=false]
+     * @param {boolean}     [params.isCancelled=false] - Set when the sale this plan belongs to was cancelled.
      */
     constructor({
                     id                = null,
@@ -28,7 +29,8 @@ export class PaymentPlan {
                     businessId        = null,
                     totalInstallments = 1,
                     paidInstallments  = 0,
-                    isFullyPaid       = false
+                    isFullyPaid       = false,
+                    isCancelled       = false
                 }) {
         this.id                = id;
         this.saleId            = saleId;
@@ -36,6 +38,7 @@ export class PaymentPlan {
         this.totalInstallments = totalInstallments;
         this.paidInstallments  = paidInstallments;
         this.isFullyPaid       = isFullyPaid;
+        this.isCancelled       = isCancelled;
     }
 
     /**
