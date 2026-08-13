@@ -4,7 +4,6 @@ import { useI18n }      from 'vue-i18n';
 import { useToast }     from 'primevue/usetoast';
 import useSalesStore    from '../../application/sales.store.js';
 import useProductStore  from '../../../product/application/product.store.js';
-import useIamStore      from '../../../iam/application/iam.store.js';
 import { SaleStatus }   from '../../domain/model/sale.entity.js';
 import { toDateLocale } from '../../../shared/presentation/date-locale.js';
 
@@ -27,7 +26,6 @@ const { t, locale } = useI18n();
 const toast        = useToast();
 const salesStore   = useSalesStore();
 const productStore = useProductStore();
-const iamStore     = useIamStore();
 
 // ─── UI state ──────────────────────────────────────────────────────────────
 
@@ -42,6 +40,9 @@ const expandedSaleId = ref(null);
 
 /** @type {import('vue').Ref<number|null>} The id of the sale whose line items are being fetched. */
 const loadingDetailsSaleId = ref(null);
+
+/** @type {import('vue').Ref<number|null>} The id of the sale currently being cancelled, to block double-submit. */
+const cancellingSaleId = ref(null);
 
 // ─── Computed ──────────────────────────────────────────────────────────────
 
@@ -183,32 +184,29 @@ async function toggleExpand(sale) {
 }
 
 /**
- * Cancels a sale after inline confirmation, then restores the sold
- * quantities back into inventory (the cancellation itself only flips
- * the sale's status; restocking is a Product & Inventory concern).
+ * Cancels a sale after inline confirmation. The backend restores the sold
+ * quantities back into inventory atomically as part of the same request
+ * (see sales.store.js#cancelSale) — this just reflects that in the UI by
+ * refreshing inventory, it does not restock a second time.
  * @param {import('../../domain/model/sale.entity.js').Sale} sale
  */
 async function handleCancelSale(sale) {
-  const businessId = iamStore.currentUser?.businessId;
-  const result = await salesStore.cancelSale(sale);
-
-  if (!result.success) {
-    toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('sales.toast-cancel-error'), life: 4500 });
-    return;
-  }
+  if (cancellingSaleId.value !== null) return;
+  cancellingSaleId.value = sale.id;
 
   try {
-    await Promise.all(result.restockedDetails.map(detail =>
-        productStore.registerStockIntake({
-          productId:   detail.productId,
-          businessId:  businessId,
-          quantity:    detail.quantity,
-          warehouseId: productStore.getInventoryByProduct(detail.productId)?.warehouseId
-        })
-    ));
+    const result = await salesStore.cancelSale(sale);
+
+    if (!result.success) {
+      toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('sales.toast-cancel-error'), life: 4500 });
+      return;
+    }
+
+    await productStore.fetchInventory();
+    productStore.invalidateStockMovements();
     toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('sales.toast-cancel-success'), life: 3500 });
-  } catch {
-    toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('sales.toast-cancel-error'), life: 4500 });
+  } finally {
+    cancellingSaleId.value = null;
   }
 }
 
@@ -346,6 +344,7 @@ onMounted(() => {
                   <button
                       v-if="sale.status !== SaleStatus.CANCELLED"
                       class="border-round-lg px-2 py-1"
+                      :disabled="cancellingSaleId === sale.id"
                       style="background-color: var(--status-critical-bg); color: var(--status-critical-fg); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
                       @click.stop="handleCancelSale(sale)"
                   >
@@ -508,6 +507,7 @@ onMounted(() => {
           <button
               v-if="sale.status !== SaleStatus.CANCELLED"
               class="w-full mt-3 border-round-lg py-2"
+              :disabled="cancellingSaleId === sale.id"
               style="background-color: var(--status-critical-bg); color: var(--status-critical-fg); font-size: 0.78rem; font-weight: 600; border: none; cursor: pointer;"
               @click="handleCancelSale(sale)"
           >

@@ -252,6 +252,16 @@ const useProductStore = defineStore('product', () => {
     }
 
     /**
+     * Marks the cached stock-movement history as stale without refetching it,
+     * so the next visit to the "Movimientos" tab reloads it lazily instead of
+     * showing what was true before a sale/cancellation happened elsewhere
+     * (Products has no way to know Sales changed stock unless told to).
+     */
+    function invalidateStockMovements() {
+        stockMovementsLoaded.value = false;
+    }
+
+    /**
      * Fetches every batch across all products, used to determine which
      * products have stock expiring soon (see getDaysToNearestExpiry).
      */
@@ -602,6 +612,7 @@ const useProductStore = defineStore('product', () => {
         fetchBatches,
         fetchStockMovements,
         fetchAllStockMovements,
+        invalidateStockMovements,
         fetchWarehousesForBusiness,
         createWarehouse,
         fetchSuppliersForBusiness,

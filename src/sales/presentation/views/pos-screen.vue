@@ -281,6 +281,7 @@ async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, t
     // refresh from that authoritative state rather than recomputing it here.
     try {
       await productStore.fetchInventory();
+      productStore.invalidateStockMovements();
     } catch (error) {
       showStockError(t('pos.error-stock-deduction-failed'));
     }
