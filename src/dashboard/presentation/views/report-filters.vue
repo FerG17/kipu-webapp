@@ -4,124 +4,121 @@ import { useRouter }     from 'vue-router';
 import { useI18n }       from 'vue-i18n';
 import useDashboardStore from '../../application/dashboard.store.js';
 import useProductStore   from '../../../product/application/product.store.js';
-import useSalesStore     from '../../../sales/application/sales.store.js';
 import useIamStore       from '../../../iam/application/iam.store.js';
 import { ReportType }    from '../../domain/model/report.entity.js';
-import { filterableCategoryOptions, isCustomCategory } from '../../../product/presentation/category-options.js';
 
 const { t }          = useI18n();
 const router         = useRouter();
 const dashboardStore = useDashboardStore();
 const productStore   = useProductStore();
-const salesStore     = useSalesStore();
 const iamStore       = useIamStore();
 
 const { errors, generateReport } = dashboardStore;
 
 /**
- * Ensures the real product/inventory/sales data liveMetrics is computed from
- * is loaded even when this screen is reached without ever visiting the Panel
- * first (e.g. a direct link or a page refresh) — otherwise the generated
- * report would silently show all zeros instead of real business metrics.
+ * Products/suppliers are only needed for the STOCK_MOVEMENTS filter
+ * dropdowns — loaded eagerly anyway so switching the type selector doesn't
+ * have to wait on a fetch.
+ * @type {import('vue').Ref<Array>}
  */
+const suppliers = ref([]);
+
 onMounted(() => {
   const businessId = iamStore.currentUser?.businessId ?? null;
   if (!businessId) return;
-  if (!productStore.productsLoaded)  productStore.fetchProducts();
-  if (!productStore.inventoryLoaded) productStore.fetchInventory();
-  if (!salesStore.salesLoaded)       salesStore.fetchSales();
+  if (!productStore.productsLoaded) productStore.fetchProducts();
+  productStore.fetchSuppliersForBusiness().then(fetched => { suppliers.value = fetched; });
 });
 
 /** @type {import('vue').Ref<string>} */
 const validationError = ref('');
+/** @type {import('vue').Ref<boolean>} */
+const generating = ref(false);
 
 /**
- * Reactive form state. businessId is read from the IAM store — never hardcoded.
+ * Reactive form state — mirrors GenerateReportResource exactly (flat
+ * fields, no category: the backend has no such filter). productId/supplierId
+ * only apply when type === STOCK_MOVEMENTS; the other two types ignore them.
  */
 const form = ref({
-  type:      ReportType.SALES,
-  startDate: '',
-  endDate:   '',
-  category:  ''
+  type:       ReportType.SALES,
+  startDate:  '',
+  endDate:    '',
+  productId:  '',
+  supplierId: ''
 });
 
 /**
- * Available report types for the dropdown, mapped to their i18n labels.
+ * Available report types for the dropdown — the 3 the backend actually
+ * supports. "Stock bajo"/"Reposición" were frontend-only inventions with no
+ * server-side persistence or export; that data is already covered live by
+ * Inventario/Alertas.
  * @type {Array<{label: string, value: string}>}
  */
 const reportTypeOptions = [
-  { label: t('reports.type-inventory'),     value: ReportType.INVENTORY     },
-  { label: t('reports.type-sales'),         value: ReportType.SALES         },
-  { label: t('reports.type-low-stock'),     value: ReportType.LOW_STOCK     },
-  { label: t('reports.type-replenishment'), value: ReportType.REPLENISHMENT }
+  { label: t('reports.type-sales'),           value: ReportType.SALES           },
+  { label: t('reports.type-inventory'),       value: ReportType.INVENTORY       },
+  { label: t('reports.type-stock-movements'), value: ReportType.STOCK_MOVEMENTS }
 ];
-
-/**
- * Translated label for a product category, reusing the same pos.category-*
- * keys used throughout the app (see product-list.vue's categoryLabel) —
- * custom free-text categories (typed in when "Otros" didn't fit) have no
- * i18n key and are shown verbatim.
- * @param {string} category
- * @returns {string}
- */
-function categoryLabel(category) {
-  if (isCustomCategory(category)) return category;
-  return t(`pos.category-${category.toLowerCase()}`);
-}
-
-/**
- * Category dropdown options, scoped to categories this business actually
- * uses (same categories Inventario's own filter shows) — a real dropdown
- * instead of free text, since the report's category filter compares against
- * Product.category's exact stored value, not a translated display label.
- * @type {import('vue').ComputedRef<Array<{label: string, value: string}>>}
- */
-const categoryOptions = computed(() => [
-  { label: t('reports.category-placeholder'), value: '' },
-  ...filterableCategoryOptions(productStore.products).map(category => ({
-    label: categoryLabel(category),
-    value: category
-  }))
-]);
 
 /** @type {Record<string, string>} Icon per report type value */
 const reportTypeIcons = {
-  [ReportType.INVENTORY]:     'pi pi-box',
-  [ReportType.SALES]:         'pi pi-shopping-cart',
-  [ReportType.LOW_STOCK]:     'pi pi-exclamation-triangle',
-  [ReportType.REPLENISHMENT]: 'pi pi-refresh'
+  [ReportType.SALES]:           'pi pi-shopping-cart',
+  [ReportType.INVENTORY]:       'pi pi-box',
+  [ReportType.STOCK_MOVEMENTS]: 'pi pi-arrow-right-arrow-left'
 };
 
+/** @type {import('vue').ComputedRef<boolean>} */
+const isStockMovements = computed(() => form.value.type === ReportType.STOCK_MOVEMENTS);
+
 /**
- * Validates inputs, delegates to the store, and navigates to the result view on success.
- * Rules: both dates required; startDate must not be after endDate.
+ * Product dropdown options for the STOCK_MOVEMENTS filter.
+ * @type {import('vue').ComputedRef<Array<{label: string, value: string}>>}
+ */
+const productOptions = computed(() => [
+  { label: t('reports.field-product-placeholder'), value: '' },
+  ...productStore.products.map(product => ({ label: product.name, value: String(product.id) }))
+]);
+
+/**
+ * Supplier dropdown options for the STOCK_MOVEMENTS filter.
+ * @type {import('vue').ComputedRef<Array<{label: string, value: string}>>}
+ */
+const supplierOptions = computed(() => [
+  { label: t('reports.field-supplier-placeholder'), value: '' },
+  ...suppliers.value.map(supplier => ({ label: supplier.name, value: String(supplier.id) }))
+]);
+
+/**
+ * Validates inputs, delegates to the store, and navigates to the result
+ * view on success. The backend accepts null dates for every type (INVENTORY
+ * ignores them entirely) — the only client-side rule left is date order,
+ * and only when both are actually filled in, mirroring the backend's own
+ * GenerateReportCommandValidator.
  */
 function applyFilters() {
   validationError.value = '';
 
-  if (!form.value.startDate || !form.value.endDate) {
-    validationError.value = t('reports.error-empty-dates');
-    return;
-  }
-
-  if (new Date(form.value.startDate) > new Date(form.value.endDate)) {
+  if (form.value.startDate && form.value.endDate && new Date(form.value.startDate) > new Date(form.value.endDate)) {
     validationError.value = t('reports.error-date-range');
     return;
   }
 
-  const businessId = iamStore.currentUser?.businessId ?? null;
-
+  generating.value = true;
   generateReport({
-    businessId: businessId,
     type:       form.value.type,
-    filters: {
-      startDate: form.value.startDate,
-      endDate:   form.value.endDate,
-      category:  form.value.category
-    }
-  });
-
-  router.push({ name: 'dashboard-report-result' });
+    dateFrom:   form.value.startDate || null,
+    dateTo:     form.value.endDate || null,
+    productId:  isStockMovements.value && form.value.productId  ? parseInt(form.value.productId)  : null,
+    supplierId: isStockMovements.value && form.value.supplierId ? parseInt(form.value.supplierId) : null
+  })
+      .then(() => router.push({ name: 'dashboard-report-result' }))
+      .catch(error => {
+        validationError.value = error.response?.status === 400
+            ? (error.response.data?.detail ?? t('reports.error-date-range'))
+            : t('errors.occurred');
+      })
+      .finally(() => { generating.value = false; });
 }
 
 /** Navigates back to the main dashboard. */
@@ -198,21 +195,38 @@ function navigateBack() {
         </div>
       </div>
 
-      <!-- Category (optional) -->
-      <div class="form-field">
-        <label for="category" class="form-label">
-          <i class="pi pi-tag form-label__icon"/>
-          {{ t('reports.category') }}
-        </label>
-        <pv-select
-            id="category"
-            v-model="form.category"
-            :options="categoryOptions"
-            option-label="label"
-            option-value="value"
-            class="w-full"
-        />
-      </div>
+      <!-- Product/Supplier (only meaningful for STOCK_MOVEMENTS) -->
+      <template v-if="isStockMovements">
+        <div class="form-field">
+          <label for="filter-product" class="form-label">
+            <i class="pi pi-box form-label__icon"/>
+            {{ t('reports.field-product') }}
+          </label>
+          <pv-select
+              id="filter-product"
+              v-model="form.productId"
+              :options="productOptions"
+              option-label="label"
+              option-value="value"
+              class="w-full"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="filter-supplier" class="form-label">
+            <i class="pi pi-truck form-label__icon"/>
+            {{ t('reports.field-supplier') }}
+          </label>
+          <pv-select
+              id="filter-supplier"
+              v-model="form.supplierId"
+              :options="supplierOptions"
+              option-label="label"
+              option-value="value"
+              class="w-full"
+          />
+        </div>
+      </template>
 
       <!-- Validation error -->
       <div v-if="validationError" class="validation-error">
@@ -222,11 +236,11 @@ function navigateBack() {
 
       <!-- Actions -->
       <div class="form-actions">
-        <button class="btn-secondary" @click="navigateBack">
+        <button class="btn-secondary" :disabled="generating" @click="navigateBack">
           {{ t('reports.cancel') }}
         </button>
-        <button class="btn-primary" @click="applyFilters">
-          <i class="pi pi-chart-bar"/>
+        <button class="btn-primary" :disabled="generating" @click="applyFilters">
+          <i :class="generating ? 'pi pi-spin pi-spinner' : 'pi pi-chart-bar'"/>
           {{ t('reports.apply') }}
         </button>
       </div>
@@ -390,12 +404,14 @@ function navigateBack() {
 }
 .btn-primary:hover  { filter: brightness(1.1); }
 .btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-secondary {
   background: var(--surface-alt);
   color: var(--text);
   border: 1px solid var(--border);
 }
 .btn-secondary:hover { background: var(--border); }
+.btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* ── Store errors ────────────────────────────────────────────────────── */
 .store-errors {
