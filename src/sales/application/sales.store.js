@@ -346,18 +346,18 @@ const useSalesStore = defineStore('sales', () => {
      *
      * Business rule: only PAID sales can be cancelled.
      *
-     * Stock is NOT reverted here: reverting inventory belongs to the Product &
-     * Inventory Management bounded context, so this returns the line items
-     * that were sold and lets the caller (presentation layer) restock them
-     * via the ProductStore, mirroring how other cross-context orchestration
-     * is already done in this codebase (see purchase-order-list.vue).
+     * Stock IS reverted here, but server-side: the backend restores every
+     * sold line back into inventory atomically as part of this same request
+     * (SaleCommandService, PR #18). The caller must not also restock via
+     * ProductStore — that used to be necessary before PR #18 and is now a
+     * double-restore (a cancelled sale of 4 units put 8 back on the shelf).
      *
      * @param {Sale} sale - The Sale entity to cancel.
-     * @returns {Promise<{ success: boolean, restockedDetails: SaleDetail[] }>}
+     * @returns {Promise<{ success: boolean }>}
      */
     async function cancelSale(sale) {
         if (sale.status === SaleStatus.CANCELLED) {
-            return { success: false, restockedDetails: [] };
+            return { success: false };
         }
 
         try {
@@ -368,14 +368,10 @@ const useSalesStore = defineStore('sales', () => {
                 sales.value[index] = cancelledSale;
             }
 
-            const restockedDetails = sale.details.length > 0
-                ? sale.details
-                : await fetchSaleDetailsForSale(sale.id);
-
-            return { success: true, restockedDetails };
+            return { success: true };
         } catch (error) {
             errors.value.push(error);
-            return { success: false, restockedDetails: [] };
+            return { success: false };
         }
     }
 
