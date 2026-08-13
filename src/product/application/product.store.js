@@ -126,6 +126,21 @@ const useProductStore = defineStore('product', () => {
     }
 
     /**
+     * Looks up an active product by its exact barcode, among the products
+     * already loaded for the business (the full catalog is loaded upfront,
+     * see fetchProducts — no dedicated backend lookup endpoint needed).
+     * Used both by the Products scan-in entry point and by the POS screen
+     * when a physical scanner types a code into the search bar.
+     * @param {string} barcode
+     * @returns {import('../domain/model/product.entity.js').Product|undefined}
+     */
+    function getProductByBarcode(barcode) {
+        const trimmed = (barcode ?? '').trim();
+        if (!trimmed) return undefined;
+        return products.value.find(product => product.isActive && product.barcode === trimmed);
+    }
+
+    /**
      * Returns the first inventory record linked to the given productId.
      * Only meaningful when the caller needs one specific record tied to a
      * particular warehouse (e.g. defaulting the intake modal's warehouse
@@ -602,6 +617,7 @@ const useProductStore = defineStore('product', () => {
         productsCount,
         stockStatusCounts,
         getProductById,
+        getProductByBarcode,
         getInventoryByProduct,
         getTotalInventoryForProduct,
         getDaysToNearestExpiry,

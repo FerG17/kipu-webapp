@@ -198,6 +198,25 @@ function addProductToCart(product) {
 }
 
 /**
+ * Called on Enter in the search bar — the natural point where the owner's
+ * physical barcode scanner is used at the register (it types the code
+ * followed by Enter into whatever input is focused). If the typed text
+ * matches a product's barcode exactly, that product is added straight to
+ * the cart and the search bar is cleared; otherwise it's left as a normal
+ * name search (already handled live by filteredProducts), no special case.
+ */
+function handleSearchSubmit() {
+  const match = productStore.getProductByBarcode(searchQuery.value);
+  if (!match) return;
+
+  const enrichedMatch = enrichedProducts.value.find(product => product.id === match.id);
+  if (!enrichedMatch) return;
+
+  addProductToCart(enrichedMatch);
+  searchQuery.value = '';
+}
+
+/**
  * Handles the +/- quantity change events emitted by CartPanel.
  * @param {{ productId: number, delta: number }} payload
  */
@@ -388,6 +407,7 @@ onMounted(() => {
               style="padding: 8px 12px 8px 36px; border: 1px solid var(--border); font-size: 0.85rem; color: var(--text); background-color: var(--surface-alt); outline: none;"
               @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
               @blur="(e) => e.target.style.borderColor = 'var(--border)'"
+              @keyup.enter="handleSearchSubmit"
           />
         </div>
 

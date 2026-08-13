@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, toRefs, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, toRefs, watch } from 'vue';
 import { useI18n }        from 'vue-i18n';
 import { useToast }       from 'primevue/usetoast';
 import { useConfirm }     from 'primevue';
@@ -34,6 +34,9 @@ const showProductModal     = ref(false);
 const editingProduct       = ref(null);
 const showIntakeModal      = ref(false);
 const intakeTargetProduct  = ref(null);
+const showScanModal        = ref(false);
+const scanInput            = ref('');
+const scanInputEl          = ref(null);
 
 /**
  * Filter dropdown options: only the categories actually in use by this
@@ -309,16 +312,59 @@ const productModalForm = ref({
   basePrice:      '',
   cost:           '',
   expirationDate: '',
-  warehouseId:    ''
+  warehouseId:    '',
+  barcode:        ''
 });
 
-function openCreateProductModal() {
+/**
+ * @param {string} [prefillBarcode] - Set when opened from the scan entry
+ *   point after a code didn't match any known product, so the code isn't
+ *   lost — the admin only has to fill in the rest of the manual form.
+ */
+function openCreateProductModal(prefillBarcode = '') {
   editingProduct.value   = null;
   productModalForm.value = {
     name: '', category: ProductCategory.OTHER, customCategory: '', supplier: '', currentStock: '', minimumStock: '', basePrice: '', cost: '', expirationDate: '',
-    warehouseId: warehouses.value[0] ? String(warehouses.value[0].id) : ''
+    warehouseId: warehouses.value[0] ? String(warehouses.value[0].id) : '',
+    barcode: prefillBarcode
   };
   showProductModal.value = true;
+}
+
+/**
+ * Entry point for the physical barcode scanner (types digits + Enter into
+ * whatever input is focused). Looks up the code among already-loaded
+ * products: known → opens the stock-intake modal for it (confirm only,
+ * no re-registration); unknown → opens manual product creation with the
+ * code pre-filled, so it gets remembered from now on (progressive
+ * learning, per the owner's 2026-08-12 request).
+ *
+ * The scan input is focused programmatically via nextTick + a template ref,
+ * not just the `autofocus` HTML attribute: the modal is toggled by a click
+ * handler, and Vue patches the DOM asynchronously, so the browser's native
+ * autofocus-on-insert heuristic unreliably misses that window — the owner
+ * had to click into the box by hand before the scanner's keystrokes landed.
+ */
+function openScanModal() {
+  scanInput.value = '';
+  showScanModal.value = true;
+  nextTick(() => scanInputEl.value?.focus());
+}
+
+function handleScanSubmit() {
+  const code = scanInput.value.trim();
+  if (!code) return;
+
+  const match = productStore.getProductByBarcode(code);
+  showScanModal.value = false;
+
+  if (match) {
+    toast.add({ severity: 'info', summary: t('inventory.scan-known-title'), detail: t('inventory.scan-known-detail', { name: match.name }), life: 3500 });
+    openIntakeModal(match);
+  } else {
+    toast.add({ severity: 'info', summary: t('inventory.scan-unknown-title'), detail: t('inventory.scan-unknown-detail'), life: 4500 });
+    openCreateProductModal(code);
+  }
 }
 
 function openEditProductModal(product) {
@@ -344,7 +390,8 @@ function openEditProductModal(product) {
     basePrice:      String(product.basePrice),
     cost:           activeBatch ? String(activeBatch.purchasePrice) : '',
     expirationDate: activeBatch ? activeBatch.expiration : '',
-    warehouseId:    ''
+    warehouseId:    '',
+    barcode:        product.barcode ?? ''
   };
   showProductModal.value = true;
 }
@@ -435,7 +482,8 @@ function persistProductFromModal(resolvedCategory) {
     category:    resolvedCategory,
     description: productModalForm.value.supplier,
     basePrice:   parseFloat(productModalForm.value.basePrice) || 0,
-    status:      ProductStatus.ACTIVE
+    status:      ProductStatus.ACTIVE,
+    barcode:     productModalForm.value.barcode.trim() || null
   });
 
   const minimumStock   = parseInt(productModalForm.value.minimumStock) || 0;
@@ -482,8 +530,14 @@ function persistProductFromModal(resolvedCategory) {
         // it up right away instead of only after visiting Alertas.
         alertsStore.fetchAlerts();
       })
-      .catch(() => {
-        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-save-error'), life: 4500 });
+      .catch(error => {
+        const isDuplicateBarcode = error.response?.status === 409 && error.response?.data?.title === 'DuplicateBarcode';
+        toast.add({
+          severity: 'error',
+          summary:  t('common.toast-error-title'),
+          detail:   isDuplicateBarcode ? t('inventory.toast-duplicate-barcode') : t('inventory.toast-save-error'),
+          life: 4500
+        });
       })
       .finally(() => {
         savingProduct.value = false;
@@ -525,7 +579,7 @@ function handleDeleteProduct(product) {
 
 // ── Intake modal ───────────────────────────────────────────────────────────────
 
-const intakeForm = ref({ productId: '', quantity: '', cost: '', expirationDate: '', supplier: '', note: '', warehouseId: '' });
+const intakeForm = ref({ productId: '', quantity: '', cost: '', expirationDate: '', supplier: '', note: '', warehouseId: '', basePrice: '' });
 
 /**
  * Defaults the intake warehouse to where a product's stock already lives,
@@ -541,30 +595,54 @@ function resolveWarehouseIdForProduct(productId) {
   return warehouses.value[0] ? String(warehouses.value[0].id) : '';
 }
 
+/**
+ * Pre-fills the intake form from what's already known about a product —
+ * its last purchase cost/expiration (its active batch), its distributor
+ * (Product.description) and its current sale price — so re-stocking a
+ * known product (typically via the barcode scanner) only requires typing
+ * the quantity instead of retyping everything by hand. Every field stays
+ * a normal editable input, this is only the starting value.
+ * @param {number|string} productId
+ * @returns {{warehouseId: string, cost: string, expirationDate: string, supplier: string, basePrice: string}}
+ */
+function resolveIntakeDefaultsForProduct(productId) {
+  const product = products.value.find(p => p.id === parseInt(productId));
+  const activeBatch = productStore.batches.find(
+      batch => batch.productId === parseInt(productId) && batch.status === 'ACTIVE'
+  );
+  return {
+    warehouseId:    resolveWarehouseIdForProduct(productId),
+    cost:           activeBatch ? String(activeBatch.purchasePrice) : '',
+    expirationDate: activeBatch ? activeBatch.expiration : '',
+    supplier:       product?.description ?? '',
+    basePrice:      product ? String(product.basePrice) : ''
+  };
+}
+
 function openIntakeModal(product) {
   intakeTargetProduct.value = product;
   const initialProductId = product ? String(product.id) : (products.value[0] ? String(products.value[0].id) : '');
   intakeForm.value = {
-    productId:      initialProductId,
-    quantity:       '',
-    cost:           '',
-    expirationDate: '',
-    supplier:       '',
-    note:           '',
-    warehouseId:    resolveWarehouseIdForProduct(initialProductId)
+    productId: initialProductId,
+    quantity:  '',
+    note:      '',
+    ...(initialProductId
+        ? resolveIntakeDefaultsForProduct(initialProductId)
+        : { warehouseId: '', cost: '', expirationDate: '', supplier: '', basePrice: '' })
   };
   showIntakeModal.value = true;
 }
 
 /**
- * Keeps the warehouse selector in sync when the admin picks a different
- * product from the dropdown (the generic "Registrar ingreso" entry point,
- * not tied to one product's row), so it still defaults to that product's
- * real current warehouse instead of staying on whatever was selected before.
+ * Keeps cost/expiration/supplier/sale-price/warehouse in sync when the
+ * admin picks a different product from the dropdown (the generic
+ * "Registrar ingreso" entry point, not tied to one product's row), so they
+ * still default to that product's own known data instead of staying on
+ * whatever the previously selected product had.
  */
 watch(() => intakeForm.value.productId, (newProductId) => {
   if (!showIntakeModal.value || !newProductId) return;
-  intakeForm.value.warehouseId = resolveWarehouseIdForProduct(newProductId);
+  Object.assign(intakeForm.value, resolveIntakeDefaultsForProduct(newProductId));
 });
 
 function saveIntake() {
@@ -579,6 +657,14 @@ function saveIntake() {
     return;
   }
 
+  // The sale price field is pre-filled from the product's current basePrice
+  // (see resolveIntakeDefaultsForProduct) purely to save re-typing when it
+  // hasn't changed — only persisted as a real product update when the admin
+  // actually edited it, so an untouched intake never triggers an extra call.
+  const targetProduct  = products.value.find(p => p.id === parseInt(intakeForm.value.productId));
+  const newBasePrice   = parseFloat(intakeForm.value.basePrice);
+  const basePriceEdited = targetProduct && !isNaN(newBasePrice) && newBasePrice !== targetProduct.basePrice;
+
   savingIntake.value = true;
   registerStockIntake({
     productId:     parseInt(intakeForm.value.productId),
@@ -589,6 +675,9 @@ function saveIntake() {
     supplier:      intakeForm.value.supplier,
     note:          intakeForm.value.note
   })
+      .then(() => basePriceEdited
+          ? updateProduct(new Product({ ...targetProduct, basePrice: newBasePrice }))
+          : null)
       .then(() => {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-intake-success'), life: 3500 });
         showIntakeModal.value = false;
@@ -731,10 +820,19 @@ function saveWarehouse() {
             <i class="pi pi-inbox" style="font-size: 0.9rem;"/>
             {{ t('inventory.btn-register-intake') }}
           </button>
+          <!-- Scan barcode -->
+          <button
+              class="hidden sm:flex align-items-center gap-2 px-3 py-2 border-round-xl cursor-pointer btn-intake-outline"
+              :title="t('inventory.btn-scan-barcode')"
+              @click="openScanModal"
+          >
+            <i class="pi pi-qrcode" style="font-size: 0.9rem;"/>
+            {{ t('inventory.btn-scan-barcode') }}
+          </button>
           <!-- New product -->
           <button
               class="flex align-items-center gap-2 px-3 py-2 border-round-xl border-none cursor-pointer btn-primary"
-              @click="openCreateProductModal"
+              @click="openCreateProductModal()"
           >
             <i class="pi pi-plus" style="font-size: 0.9rem;"/>
             {{ t('inventory.btn-new-product') }}
@@ -1355,6 +1453,12 @@ function saveWarehouse() {
               <input v-model="productModalForm.name" :placeholder="t('inventory.modal-field-name-placeholder')" class="modal-input"/>
             </div>
 
+            <!-- Barcode (optional — pre-filled when opened from the scan entry point) -->
+            <div>
+              <label class="modal-label">{{ t('inventory.modal-field-barcode') }}</label>
+              <input v-model="productModalForm.barcode" :placeholder="t('inventory.modal-field-barcode-placeholder')" class="modal-input"/>
+            </div>
+
             <!-- Category + Supplier (2-col on sm+) -->
             <div class="flex flex-column sm:flex-row gap-4">
               <div style="flex: 1;">
@@ -1450,6 +1554,49 @@ function saveWarehouse() {
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════
+         MODAL: SCAN BARCODE
+    ═══════════════════════════════════════════════════════════════ -->
+    <div
+        v-if="showScanModal"
+        class="fixed inset-0 z-50 flex align-items-end sm:align-items-center justify-content-center modal-overlay"
+        @click.self="showScanModal = false"
+    >
+      <div class="w-full border-round-t-2xl sm:border-round-2xl overflow-y-auto modal-container" style="max-width: 420px;">
+        <div class="flex align-items-center justify-content-between px-5 py-4 modal-header">
+          <div class="flex align-items-center gap-3">
+            <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: linear-gradient(135deg, var(--brand-soft), #DBEAFE);">
+              <i class="pi pi-qrcode" style="color: var(--brand); font-size: 0.95rem;"/>
+            </div>
+            <p class="m-0 modal-title">{{ t('inventory.scan-modal-title') }}</p>
+          </div>
+          <button class="p-2 border-round-lg border-none cursor-pointer btn-modal-close" @click="showScanModal = false">
+            <i class="pi pi-times" style="font-size: 1rem;"/>
+          </button>
+        </div>
+
+        <div class="px-5 py-5">
+          <label class="modal-label">{{ t('inventory.scan-modal-hint') }}</label>
+          <input
+              ref="scanInputEl"
+              v-model="scanInput"
+              :placeholder="t('inventory.scan-modal-placeholder')"
+              class="modal-input"
+              @keyup.enter="handleScanSubmit"
+          />
+
+          <div class="flex gap-3 mt-5">
+            <button class="flex-1 py-2 border-round-xl cursor-pointer btn-modal-cancel" @click="showScanModal = false">
+              {{ t('inventory.modal-cancel') }}
+            </button>
+            <button class="flex-1 py-2 border-round-xl border-none cursor-pointer btn-modal-primary" @click="handleScanSubmit">
+              {{ t('inventory.scan-modal-submit') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
          MODAL: STOCK INTAKE
     ═══════════════════════════════════════════════════════════════ -->
     <div
@@ -1501,6 +1648,11 @@ function saveWarehouse() {
               <label class="modal-label">{{ t('inventory.intake-field-expiration') }}</label>
               <input v-model="intakeForm.expirationDate" type="date" class="modal-input"/>
             </div>
+          </div>
+          <!-- Sale price -->
+          <div>
+            <label class="modal-label">{{ t('inventory.intake-field-sale-price') }}</label>
+            <input v-model="intakeForm.basePrice" type="number" min="0" step="0.01" placeholder="0.00" class="modal-input"/>
           </div>
           <!-- Warehouse -->
           <div>

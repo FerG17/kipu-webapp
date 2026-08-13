@@ -42,7 +42,8 @@ export class ProductAssembler {
             name:        product.name,
             description: product.description,
             category:    product.category,
-            basePrice:   product.basePrice
+            basePrice:   product.basePrice,
+            barcode:     product.barcode || null
         };
     }
 }
