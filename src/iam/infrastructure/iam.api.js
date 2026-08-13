@@ -72,6 +72,15 @@ export class IamApi extends BaseApi {
     }
 
     /**
+     * Ends the current session server-side: clears the httpOnly session
+     * cookie and revokes the token everywhere (see AuthenticationController).
+     * @returns {Promise<import('axios').AxiosResponse>} 204 No Content.
+     */
+    signOut() {
+        return this.http.post(`${authenticationEndpointPath}/sign-out`);
+    }
+
+    /**
      * Fetches all user accounts scoped to the given business.
      * @param {number|string} businessId
      * @returns {Promise<import('axios').AxiosResponse>} User resources for that business.

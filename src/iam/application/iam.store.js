@@ -145,9 +145,10 @@ const useIamStore = defineStore('iam', () => {
 
     restoreSession();
 
-    // When BaseApi sees a 401, it clears the token and dispatches this event.
-    // Wired here (not in BaseApi) so the shared/infrastructure layer never
-    // depends on IAM. Never fires today since no real token is issued yet.
+    // When BaseApi sees a 401 (session cookie missing/expired/revoked), it
+    // dispatches this event. Wired here (not in BaseApi) so the
+    // shared/infrastructure layer never depends on IAM. Fire-and-forget is
+    // fine — nothing here needs to wait on the backend sign-out call.
     window.addEventListener(SESSION_EXPIRED_EVENT, () => signOut());
 
     /**
@@ -235,10 +236,14 @@ const useIamStore = defineStore('iam', () => {
     }
 
     /**
-     * Signs the current user out and clears session state.
-     * @returns {void}
+     * Ends the session server-side (clears the httpOnly cookie, revokes the
+     * token) and clears local session state. Awaited by callers (see
+     * layout.vue) before navigating away, so the backend call has a chance
+     * to complete before the page unloads.
+     * @returns {Promise<void>}
      */
-    function signOut() {
+    async function signOut() {
+        await authProvider.signOut();
         currentUser.value     = null;
         isAuthenticated.value = false;
         errors.value          = [];

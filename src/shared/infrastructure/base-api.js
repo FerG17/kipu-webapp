@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { getSessionToken, setSessionToken } from './session-token.js';
 
 const platformApiUrl = import.meta.env.VITE_BODEGA_API_BASE_URL;
 
@@ -15,14 +14,11 @@ export const SESSION_EXPIRED_EVENT = 'bodega:session-expired';
  * Shared infrastructure base class that configures the Axios HTTP client.
  * All bounded-context API classes extend this class to inherit the HTTP client.
  *
- * Extension point for phase 2 (real backend, real JWT):
- * - Request interceptor already attaches `Authorization: Bearer <token>` from
- *   the centralized session-token store. Today `getSessionToken()` always
- *   returns null, so this is a no-op — no `*.api.js` file needs to change
- *   when phase 2 starts issuing real tokens.
- * - Response interceptor already reacts to 401 by clearing the token and
- *   dispatching SESSION_EXPIRED_EVENT. It never fires today (no real tokens
- *   expire yet), but the wiring is in place.
+ * Session auth is an httpOnly cookie set by the backend on sign-in/sign-up
+ * (see AuthenticationController) — this class never touches the raw JWT
+ * itself, it just tells Axios to include credentials (`withCredentials`) so
+ * the browser sends the cookie automatically. There is deliberately no
+ * request interceptor attaching an Authorization header anymore.
  *
  * @class BaseApi
  */
@@ -35,31 +31,23 @@ export class BaseApi {
     #http;
 
     /**
-     * Initializes the Axios HTTP client with the base URL from environment variables,
-     * default JSON headers, and the auth request/response interceptors.
+     * Initializes the Axios HTTP client with the base URL from environment
+     * variables, default JSON headers, credentialed requests, and the 401
+     * response interceptor.
      */
     constructor() {
         this.#http = axios.create({
             baseURL: platformApiUrl,
+            withCredentials: true,
             headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+                'Content-Type': 'application/json'
             }
-        });
-
-        this.#http.interceptors.request.use(config => {
-            const token = getSessionToken();
-            if (token) {
-                config.headers.Authorization = `Bearer ${token}`;
-            }
-            return config;
         });
 
         this.#http.interceptors.response.use(
             response => response,
             error => {
                 if (error.response?.status === 401) {
-                    setSessionToken(null);
                     window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
                 }
                 return Promise.reject(error);
