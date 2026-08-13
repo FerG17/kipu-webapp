@@ -34,6 +34,8 @@ const showProductModal     = ref(false);
 const editingProduct       = ref(null);
 const showIntakeModal      = ref(false);
 const intakeTargetProduct  = ref(null);
+const showScanModal        = ref(false);
+const scanInput            = ref('');
 
 /**
  * Filter dropdown options: only the categories actually in use by this
@@ -309,16 +311,52 @@ const productModalForm = ref({
   basePrice:      '',
   cost:           '',
   expirationDate: '',
-  warehouseId:    ''
+  warehouseId:    '',
+  barcode:        ''
 });
 
-function openCreateProductModal() {
+/**
+ * @param {string} [prefillBarcode] - Set when opened from the scan entry
+ *   point after a code didn't match any known product, so the code isn't
+ *   lost — the admin only has to fill in the rest of the manual form.
+ */
+function openCreateProductModal(prefillBarcode = '') {
   editingProduct.value   = null;
   productModalForm.value = {
     name: '', category: ProductCategory.OTHER, customCategory: '', supplier: '', currentStock: '', minimumStock: '', basePrice: '', cost: '', expirationDate: '',
-    warehouseId: warehouses.value[0] ? String(warehouses.value[0].id) : ''
+    warehouseId: warehouses.value[0] ? String(warehouses.value[0].id) : '',
+    barcode: prefillBarcode
   };
   showProductModal.value = true;
+}
+
+/**
+ * Entry point for the physical barcode scanner (types digits + Enter into
+ * whatever input is focused). Looks up the code among already-loaded
+ * products: known → opens the stock-intake modal for it (confirm only,
+ * no re-registration); unknown → opens manual product creation with the
+ * code pre-filled, so it gets remembered from now on (progressive
+ * learning, per the owner's 2026-08-12 request).
+ */
+function openScanModal() {
+  scanInput.value = '';
+  showScanModal.value = true;
+}
+
+function handleScanSubmit() {
+  const code = scanInput.value.trim();
+  if (!code) return;
+
+  const match = productStore.getProductByBarcode(code);
+  showScanModal.value = false;
+
+  if (match) {
+    toast.add({ severity: 'info', summary: t('inventory.scan-known-title'), detail: t('inventory.scan-known-detail', { name: match.name }), life: 3500 });
+    openIntakeModal(match);
+  } else {
+    toast.add({ severity: 'info', summary: t('inventory.scan-unknown-title'), detail: t('inventory.scan-unknown-detail'), life: 4500 });
+    openCreateProductModal(code);
+  }
 }
 
 function openEditProductModal(product) {
@@ -344,7 +382,8 @@ function openEditProductModal(product) {
     basePrice:      String(product.basePrice),
     cost:           activeBatch ? String(activeBatch.purchasePrice) : '',
     expirationDate: activeBatch ? activeBatch.expiration : '',
-    warehouseId:    ''
+    warehouseId:    '',
+    barcode:        product.barcode ?? ''
   };
   showProductModal.value = true;
 }
@@ -435,7 +474,8 @@ function persistProductFromModal(resolvedCategory) {
     category:    resolvedCategory,
     description: productModalForm.value.supplier,
     basePrice:   parseFloat(productModalForm.value.basePrice) || 0,
-    status:      ProductStatus.ACTIVE
+    status:      ProductStatus.ACTIVE,
+    barcode:     productModalForm.value.barcode.trim() || null
   });
 
   const minimumStock   = parseInt(productModalForm.value.minimumStock) || 0;
@@ -482,8 +522,14 @@ function persistProductFromModal(resolvedCategory) {
         // it up right away instead of only after visiting Alertas.
         alertsStore.fetchAlerts();
       })
-      .catch(() => {
-        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-save-error'), life: 4500 });
+      .catch(error => {
+        const isDuplicateBarcode = error.response?.status === 409 && error.response?.data?.title === 'DuplicateBarcode';
+        toast.add({
+          severity: 'error',
+          summary:  t('common.toast-error-title'),
+          detail:   isDuplicateBarcode ? t('inventory.toast-duplicate-barcode') : t('inventory.toast-save-error'),
+          life: 4500
+        });
       })
       .finally(() => {
         savingProduct.value = false;
@@ -731,10 +777,19 @@ function saveWarehouse() {
             <i class="pi pi-inbox" style="font-size: 0.9rem;"/>
             {{ t('inventory.btn-register-intake') }}
           </button>
+          <!-- Scan barcode -->
+          <button
+              class="hidden sm:flex align-items-center gap-2 px-3 py-2 border-round-xl cursor-pointer btn-intake-outline"
+              :title="t('inventory.btn-scan-barcode')"
+              @click="openScanModal"
+          >
+            <i class="pi pi-qrcode" style="font-size: 0.9rem;"/>
+            {{ t('inventory.btn-scan-barcode') }}
+          </button>
           <!-- New product -->
           <button
               class="flex align-items-center gap-2 px-3 py-2 border-round-xl border-none cursor-pointer btn-primary"
-              @click="openCreateProductModal"
+              @click="openCreateProductModal()"
           >
             <i class="pi pi-plus" style="font-size: 0.9rem;"/>
             {{ t('inventory.btn-new-product') }}
@@ -1355,6 +1410,12 @@ function saveWarehouse() {
               <input v-model="productModalForm.name" :placeholder="t('inventory.modal-field-name-placeholder')" class="modal-input"/>
             </div>
 
+            <!-- Barcode (optional — pre-filled when opened from the scan entry point) -->
+            <div>
+              <label class="modal-label">{{ t('inventory.modal-field-barcode') }}</label>
+              <input v-model="productModalForm.barcode" :placeholder="t('inventory.modal-field-barcode-placeholder')" class="modal-input"/>
+            </div>
+
             <!-- Category + Supplier (2-col on sm+) -->
             <div class="flex flex-column sm:flex-row gap-4">
               <div style="flex: 1;">
@@ -1443,6 +1504,49 @@ function saveWarehouse() {
             >
               <i v-if="savingProduct" class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>
               {{ savingProduct ? t('inventory.modal-saving') : (editingProduct ? t('inventory.modal-save') : t('inventory.modal-register')) }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         MODAL: SCAN BARCODE
+    ═══════════════════════════════════════════════════════════════ -->
+    <div
+        v-if="showScanModal"
+        class="fixed inset-0 z-50 flex align-items-end sm:align-items-center justify-content-center modal-overlay"
+        @click.self="showScanModal = false"
+    >
+      <div class="w-full border-round-t-2xl sm:border-round-2xl overflow-y-auto modal-container" style="max-width: 420px;">
+        <div class="flex align-items-center justify-content-between px-5 py-4 modal-header">
+          <div class="flex align-items-center gap-3">
+            <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: linear-gradient(135deg, var(--brand-soft), #DBEAFE);">
+              <i class="pi pi-qrcode" style="color: var(--brand); font-size: 0.95rem;"/>
+            </div>
+            <p class="m-0 modal-title">{{ t('inventory.scan-modal-title') }}</p>
+          </div>
+          <button class="p-2 border-round-lg border-none cursor-pointer btn-modal-close" @click="showScanModal = false">
+            <i class="pi pi-times" style="font-size: 1rem;"/>
+          </button>
+        </div>
+
+        <div class="px-5 py-5">
+          <label class="modal-label">{{ t('inventory.scan-modal-hint') }}</label>
+          <input
+              v-model="scanInput"
+              autofocus
+              :placeholder="t('inventory.scan-modal-placeholder')"
+              class="modal-input"
+              @keyup.enter="handleScanSubmit"
+          />
+
+          <div class="flex gap-3 mt-5">
+            <button class="flex-1 py-2 border-round-xl cursor-pointer btn-modal-cancel" @click="showScanModal = false">
+              {{ t('inventory.modal-cancel') }}
+            </button>
+            <button class="flex-1 py-2 border-round-xl border-none cursor-pointer btn-modal-primary" @click="handleScanSubmit">
+              {{ t('inventory.scan-modal-submit') }}
             </button>
           </div>
         </div>
