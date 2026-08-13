@@ -14,7 +14,7 @@ const supplierRoutes = [
         path:      'suppliers',
         name:      'suppliers',
         component: () => import('./views/suppliers-page.vue'),
-        meta:      { title: 'Suppliers' }
+        meta:      { title: 'Suppliers', requiredPermission: 'suppliers' }
     }
 ];
 

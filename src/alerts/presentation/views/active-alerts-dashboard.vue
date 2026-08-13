@@ -7,6 +7,7 @@ import useIamStore        from '../../../iam/application/iam.store.js';
 import useProductStore    from '../../../product/application/product.store.js';
 import { AlertStatus, AlertType } from '../../domain/model/alert.entity.js';
 import { toDateLocale } from '../../../shared/presentation/date-locale.js';
+import { canModerateAlerts, canManageAlertRules } from '../../../iam/application/permissions.js';
 
 const { t, locale } = useI18n();
 const toast       = useToast();
@@ -26,6 +27,21 @@ const {
 } = toRefs(alertsStore);
 
 const { fetchAlerts, fetchAlertRules, acknowledgeAlert, resolveAlert, toggleAlertRule, updateAlertRuleThreshold } = alertsStore;
+
+/**
+ * Whether the current role may acknowledge/resolve alerts — reads stay open
+ * to every role (Fase B4), a CASHIER can only view.
+ * @type {import('vue').ComputedRef<boolean>}
+ */
+const canModerate = computed(() => canModerateAlerts(iamStore.currentUserPosition));
+
+/**
+ * Whether the current role may edit alert-rule thresholds — admin only,
+ * stricter than canModerate (WAREHOUSE can acknowledge/resolve alerts but
+ * not change the thresholds that generate them).
+ * @type {import('vue').ComputedRef<boolean>}
+ */
+const canManageRules = computed(() => canManageAlertRules(iamStore.currentUserPosition));
 
 /**
  * Warehouses of the current business, fetched once so LOW_STOCK/OUT_OF_STOCK
@@ -437,7 +453,7 @@ function formatDateTime(isoDate) {
                   <p class="alerts-rule-desc">{{ t(rule.descKey) }}</p>
                 </div>
               </div>
-              <button class="alerts-rule-toggle" :style="{ backgroundColor: rule.active ? 'var(--brand)' : 'var(--text-faint)' }" @click="toggleAlertRule(rule.type)">
+              <button v-if="canManageRules" class="alerts-rule-toggle" :style="{ backgroundColor: rule.active ? 'var(--brand)' : 'var(--text-faint)' }" @click="toggleAlertRule(rule.type)">
                 <span class="alerts-rule-toggle-thumb" :style="{ left: rule.active ? '22px' : '2px' }" />
               </button>
             </div>
@@ -460,7 +476,7 @@ function formatDateTime(isoDate) {
                                 <span class="alerts-rule-threshold-value" :style="{ color: getTypeConfig(rule.type).color }">
                                     {{ rule.threshold }} {{ t(rule.unitKey) }}
                                 </span>
-                <button v-if="rule.active" class="alerts-rule-threshold-edit-btn" @click="startEditRule(rule)">
+                <button v-if="rule.active && canManageRules" class="alerts-rule-threshold-edit-btn" @click="startEditRule(rule)">
                   {{ t('alerts.rule-edit-threshold') }}
                 </button>
               </template>
@@ -554,7 +570,7 @@ function formatDateTime(isoDate) {
             </div>
           </div>
           <!-- Actions -->
-          <div v-if="selectedAlert.status !== 'RESOLVED'" class="alerts-modal-actions">
+          <div v-if="selectedAlert.status !== 'RESOLVED' && canModerate" class="alerts-modal-actions">
             <button v-if="selectedAlert.status === 'ACTIVE'" class="alerts-modal-btn-acknowledge" :disabled="acknowledging" @click="handleAcknowledge">
               <i :class="acknowledging ? 'pi pi-spin pi-spinner' : 'pi pi-eye'" /> {{ t('alerts.btn-acknowledge') }}
             </button>

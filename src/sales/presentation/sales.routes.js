@@ -24,6 +24,7 @@ const salesRoutes = [
     {
         path:      'sales',
         component: salesLayout,
+        meta:      { requiredPermission: 'sales' },
         children:  [
             {
                 path:     '',

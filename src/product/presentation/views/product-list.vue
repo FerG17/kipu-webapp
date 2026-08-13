@@ -9,6 +9,7 @@ import useAlertsStore     from '../../../alerts/application/alerts.store.js';
 import { Product, ProductCategory, ProductStatus } from '../../domain/model/product.entity.js';
 import { toDateLocale }   from '../../../shared/presentation/date-locale.js';
 import { isCustomCategory, orderedCategoryOptions, filterableCategoryOptions } from '../category-options.js';
+import { canWriteInventory } from '../../../iam/application/permissions.js';
 
 const { t, locale } = useI18n();
 const toast        = useToast();
@@ -37,6 +38,14 @@ const intakeTargetProduct  = ref(null);
 const showScanModal        = ref(false);
 const scanInput            = ref('');
 const scanInputEl          = ref(null);
+
+/**
+ * Whether the current role may create/edit/delete products, register stock
+ * intake, or create warehouses — reads stay open to every role (Fase B4),
+ * only writes are admin+warehouse. A CASHIER sees this whole tab read-only.
+ * @type {import('vue').ComputedRef<boolean>}
+ */
+const canWrite = computed(() => canWriteInventory(iamStore.currentUserPosition));
 
 /**
  * Filter dropdown options: only the categories actually in use by this
@@ -810,7 +819,7 @@ function saveWarehouse() {
           <h1 class="m-0 page-title">{{ t('inventory.title') }}</h1>
           <p class="m-0 mt-1 page-subtitle">{{ t('inventory.subtitle') }}</p>
         </div>
-        <div class="flex align-items-center gap-2 flex-shrink-0">
+        <div v-if="canWrite" class="flex align-items-center gap-2 flex-shrink-0">
           <!-- Register intake (hidden on mobile, replaced by FAB) -->
           <button
               class="hidden sm:flex align-items-center gap-2 px-3 py-2 border-round-xl cursor-pointer btn-intake-outline"
@@ -1043,7 +1052,7 @@ function saveWarehouse() {
               </td>
               <!-- Actions -->
               <td class="px-4 py-3">
-                <div class="flex align-items-center gap-1 justify-content-end">
+                <div v-if="canWrite" class="flex align-items-center gap-1 justify-content-end">
                   <button
                       class="p-2 border-round-lg border-none cursor-pointer btn-icon-intake"
                       :title="t('inventory.btn-register-intake')"
@@ -1151,7 +1160,7 @@ function saveWarehouse() {
           </div>
 
           <!-- Action buttons -->
-          <div class="flex gap-2">
+          <div v-if="canWrite" class="flex gap-2">
             <button
                 class="flex-1 flex align-items-center justify-content-center gap-2 py-2 border-round-xl border-none cursor-pointer btn-mobile-intake"
                 @click="openIntakeModal(product)"
@@ -1181,7 +1190,7 @@ function saveWarehouse() {
 
     <!-- FAB: mobile quick intake -->
     <button
-        v-if="activeTab === 'products'"
+        v-if="activeTab === 'products' && canWrite"
         class="sm:hidden fixed flex align-items-center justify-content-center border-round-3xl border-none cursor-pointer fab"
         @click="openIntakeModal(null)"
     >
@@ -1321,7 +1330,7 @@ function saveWarehouse() {
     ═══════════════════════════════════════════════════════════════ -->
     <div v-if="activeTab === 'warehouse'" style="display: flex; flex-direction: column; gap: 1rem;">
 
-      <div class="flex justify-content-end">
+      <div v-if="canWrite" class="flex justify-content-end">
         <button
             class="flex align-items-center gap-2 px-3 py-2 border-round-xl border-none cursor-pointer btn-primary"
             @click="openWarehouseModal"

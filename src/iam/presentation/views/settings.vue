@@ -1,11 +1,12 @@
 <script setup>
-import { onMounted, ref, toRefs, watch } from 'vue';
+import { computed, onMounted, ref, toRefs, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirm } from 'primevue';
 import useIamStore from '../../application/iam.store.js';
 import LanguageSwitcher from '../../../shared/presentation/components/language-switcher.vue';
 import InviteUserModal from '../components/invite-user-modal.vue';
 import { roleLabelKey, roleStyleByPosition } from '../role-labels.js';
+import { canManageTeam, canEditBusinessProfile } from '../../application/permissions.js';
 
 const { t }    = useI18n();
 const confirm  = useConfirm();
@@ -16,12 +17,28 @@ const { fetchUsers, fetchRoles, fetchBusiness, getRolePosition, deleteUser } = i
 
 const activeTab = ref('profile');
 
-const tabs = [
+/**
+ * Whether the current role may manage the team (invite/remove users) — the
+ * backend's GET /users (team roster) is admin-only, so the Team tab isn't
+ * just write-gated, it's not even readable for CASHIER/WAREHOUSE.
+ * @type {import('vue').ComputedRef<boolean>}
+ */
+const canSeeTeamTab = computed(() => canManageTeam(iamStore.currentUserPosition));
+
+/**
+ * Whether the current role may edit the business's own profile fields
+ * (name/address) — admin only. Personal fields (name/phone) stay editable
+ * by anyone, self-o-admin per the backend.
+ * @type {import('vue').ComputedRef<boolean>}
+ */
+const canEditBusiness = computed(() => canEditBusinessProfile(iamStore.currentUserPosition));
+
+const tabs = computed(() => [
   { key: 'profile',     labelKey: 'settings.tab-profile',     icon: 'pi pi-user'      },
-  { key: 'users',       labelKey: 'settings.tab-users',       icon: 'pi pi-users'     },
+  ...(canSeeTeamTab.value ? [{ key: 'users', labelKey: 'settings.tab-users', icon: 'pi pi-users' }] : []),
   { key: 'preferences', labelKey: 'settings.tab-preferences', icon: 'pi pi-sliders-h' },
   { key: 'security',    labelKey: 'settings.tab-security',    icon: 'pi pi-shield'    }
-];
+]);
 
 // businessType is not user-editable — this product is a single bodega's own
 // system, not a multi-vertical SaaS, so there is nothing to pick. Kept as an
@@ -68,8 +85,15 @@ const showInviteModal = ref(false);
 const notificationsEnabled = ref(true);
 
 onMounted(() => {
-  if (!usersLoaded.value) fetchUsers(iamStore.currentUser?.businessId);
-  if (!rolesLoaded.value) fetchRoles();
+  const loadUsersIfAllowed = rolesLoaded.value
+      ? Promise.resolve()
+      : fetchRoles();
+  // GET /users (team roster) is admin-only server-side — only fetch it once
+  // the role is known to be ADMIN, instead of firing a request that always
+  // 403s for CASHIER/WAREHOUSE.
+  loadUsersIfAllowed.then(() => {
+    if (!usersLoaded.value && canSeeTeamTab.value) fetchUsers(iamStore.currentUser?.businessId);
+  });
   if (!businessLoaded.value && iamStore.currentUser?.businessId) {
     fetchBusiness(iamStore.currentUser.businessId).then(syncProfileFormFromStore);
   } else {
@@ -108,6 +132,11 @@ function confirmDeleteUser(userAccount) {
  * Both requests run in parallel since they touch independent aggregates
  * (Business and User).
  *
+ * Business rule: `updateBusiness` is admin-only server-side — a non-admin
+ * skips it entirely instead of firing a request that always 403s, which
+ * used to mark the whole save as 'error' (Promise.all needs every result to
+ * succeed) even when their own personal fields saved fine.
+ *
  * Business rule: re-syncs the form from both stores only after BOTH requests
  * have settled. The `watch(currentBusiness, ...)` below also re-syncs the
  * whole form (phone included) the instant updateBusiness resolves — if that
@@ -122,11 +151,13 @@ async function saveProfile() {
   profileSaveState.value = '';
 
   const [businessResult, userResult] = await Promise.all([
-    iamStore.updateBusiness({
-      name:    profileForm.value.businessName,
-      type:    profileForm.value.businessType,
-      address: profileForm.value.address
-    }),
+    canEditBusiness.value
+        ? iamStore.updateBusiness({
+          name:    profileForm.value.businessName,
+          type:    profileForm.value.businessType,
+          address: profileForm.value.address
+        })
+        : Promise.resolve({ success: true }),
     iamStore.updateUserProfile({
       firstName: profileForm.value.firstName,
       lastName:  profileForm.value.lastName,
@@ -252,11 +283,11 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
           <div class="settings-form-grid">
             <div class="settings-field">
               <label class="settings-label"><i class="pi pi-building" style="font-size: 0.7rem;"/> {{ t('settings.field-business-name') }}</label>
-              <input v-model="profileForm.businessName" type="text" class="settings-input"/>
+              <input v-model="profileForm.businessName" type="text" class="settings-input" :disabled="!canEditBusiness" :title="!canEditBusiness ? t('settings.field-admin-only') : undefined"/>
             </div>
             <div class="settings-field">
               <label class="settings-label"><i class="pi pi-map-marker" style="font-size: 0.7rem;"/> {{ t('settings.field-address') }}</label>
-              <input v-model="profileForm.address" type="text" class="settings-input"/>
+              <input v-model="profileForm.address" type="text" class="settings-input" :disabled="!canEditBusiness" :title="!canEditBusiness ? t('settings.field-admin-only') : undefined"/>
             </div>
             <div class="settings-field">
               <label class="settings-label"><i class="pi pi-user" style="font-size: 0.7rem;"/> {{ t('settings.field-first-name') }}</label>
@@ -606,6 +637,10 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
   color: var(--brand); font-size: 0.9rem;
   outline: none; transition: all 0.18s;
   box-sizing: border-box; font-family: inherit;
+}
+.settings-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 .settings-input:focus {
   border-color: var(--brand);

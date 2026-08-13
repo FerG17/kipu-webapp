@@ -115,6 +115,7 @@
     "profile-title": "Business Profile",
     "field-business-name": "Business name",
     "field-address": "Address",
+    "field-admin-only": "Only the admin can edit the business's information",
     "field-phone": "Phone",
     "field-first-name": "First name",
     "field-last-name": "Last name",

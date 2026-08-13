@@ -269,10 +269,16 @@ const useIamStore = defineStore('iam', () => {
      * role labels — presentation components must resolve a roleId to its
      * `position` (ADMIN/CASHIER/WAREHOUSE) via getRolePosition instead of
      * hardcoding their own numeric-id-to-label mapping.
-     * @returns {void}
+     *
+     * Returns its promise (unlike most fire-and-forget fetches in this store)
+     * so the router guard can await it before deciding whether the current
+     * role may enter a permission-gated route — roles are otherwise only
+     * fetched lazily on layout mount, which would race the very first
+     * navigation after sign-in.
+     * @returns {Promise<void>}
      */
     function fetchRoles() {
-        iamApi.getRoles().then(response => {
+        return iamApi.getRoles().then(response => {
             roles.value = response.data instanceof Array ? response.data : [];
             rolesLoaded.value = true;
         }).catch(error => {
@@ -290,6 +296,16 @@ const useIamStore = defineStore('iam', () => {
         const role = roles.value.find(roleItem => roleItem.id === numericId);
         return role ? role.position : null;
     }
+
+    /**
+     * The current user's role position (ADMIN/CASHIER/WAREHOUSE), the single
+     * value every UI permission check in `permissions.js` is keyed on. Null
+     * until both the session and the roles catalog have loaded.
+     * @type {import('vue').ComputedRef<string|null>}
+     */
+    const currentUserPosition = computed(() =>
+        currentUser.value ? getRolePosition(currentUser.value.roleId) : null
+    );
 
     /**
      * Loads the business (tenant) the given identifier points to.
@@ -501,6 +517,7 @@ const useIamStore = defineStore('iam', () => {
         fetchRoles,
         fetchBusiness,
         getRolePosition,
+        currentUserPosition,
         getUserById,
         addUser,
         updateUser,
