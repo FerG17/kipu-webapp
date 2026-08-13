@@ -4,6 +4,7 @@ import { useI18n }      from 'vue-i18n';
 import { useToast }     from 'primevue/usetoast';
 import useSalesStore    from '../../application/sales.store.js';
 import useProductStore  from '../../../product/application/product.store.js';
+import useAlertsStore   from '../../../alerts/application/alerts.store.js';
 import { SaleStatus }   from '../../domain/model/sale.entity.js';
 import { toDateLocale } from '../../../shared/presentation/date-locale.js';
 
@@ -26,6 +27,7 @@ const { t, locale } = useI18n();
 const toast        = useToast();
 const salesStore   = useSalesStore();
 const productStore = useProductStore();
+const alertsStore  = useAlertsStore();
 
 // ─── UI state ──────────────────────────────────────────────────────────────
 
@@ -204,6 +206,9 @@ async function handleCancelSale(sale) {
 
     await productStore.fetchInventory();
     productStore.invalidateStockMovements();
+    // Restoring stock can resolve a LOW_STOCK/OUT_OF_STOCK alert — refresh
+    // so the sidebar badge drops immediately instead of staying stale.
+    alertsStore.fetchAlerts();
     toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('sales.toast-cancel-success'), life: 3500 });
   } finally {
     cancellingSaleId.value = null;
