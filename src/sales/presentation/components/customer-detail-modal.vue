@@ -102,21 +102,21 @@ function formatCurrency(amount) {
     <!-- Modal panel -->
     <div
         class="w-full border-round-top-2xl sm:border-round-2xl shadow-8"
-        style="max-width: 400px; background-color: #fff; border: 1px solid #E2E8F0;"
+        style="max-width: 400px; background-color: var(--surface); border: 1px solid var(--border);"
     >
       <!-- Header -->
       <div
           class="flex align-items-center justify-content-between px-5 pt-5 pb-3"
-          style="border-bottom: 1px solid #F1F5F9;"
+          style="border-bottom: 1px solid var(--surface-alt);"
       >
-        <h2 class="m-0" style="font-size: 1.05rem; font-weight: 700; color: #0B3558;">
+        <h2 class="m-0" style="font-size: 1.05rem; font-weight: 700; color: var(--brand);">
           {{ t('customers.detail-title') }}
         </h2>
         <button
             style="background: none; border: none; cursor: pointer; padding: 4px;"
             @click="emit('close')"
         >
-          <i class="pi pi-times" style="color: #94A3B8; font-size: 1.1rem;" />
+          <i class="pi pi-times" style="color: var(--text-faint); font-size: 1.1rem;" />
         </button>
       </div>
 
@@ -127,17 +127,17 @@ function formatCurrency(amount) {
         <div class="flex align-items-center gap-3">
           <div
               class="flex align-items-center justify-content-center border-round-3xl shrink-0"
-              style="width: 48px; height: 48px; background-color: #E0F2FE;"
+              style="width: 48px; height: 48px; background-color: var(--brand-soft);"
           >
-                        <span style="font-size: 1.1rem; font-weight: 700; color: #0E7490;">
+                        <span style="font-size: 1.1rem; font-weight: 700; color: var(--brand);">
                             {{ avatarInitials }}
                         </span>
           </div>
           <div>
-            <p class="m-0" style="font-weight: 700; color: #0B3558; font-size: 1rem;">
+            <p class="m-0" style="font-weight: 700; color: var(--brand); font-size: 1rem;">
               {{ customer.fullName }}
             </p>
-            <p class="m-0" style="color: #64748B; font-size: 0.78rem;">
+            <p class="m-0" style="color: var(--text-muted); font-size: 0.78rem;">
               {{ t('customers.detail-since') }} {{ formatDate(customer.registeredAt) }}
             </p>
           </div>
@@ -157,10 +157,10 @@ function formatCurrency(amount) {
           >
             <div
                 class="border-round-xl p-3"
-                style="background-color: #F8FAFC; border: 1px solid #E2E8F0;"
+                style="background-color: var(--surface-alt); border: 1px solid var(--border);"
             >
-              <p class="m-0 mb-1" style="font-size: 0.68rem; color: #94A3B8;">{{ info.label }}</p>
-              <p class="m-0" style="font-size: 0.88rem; font-weight: 600; color: #1E293B;">{{ info.value }}</p>
+              <p class="m-0 mb-1" style="font-size: 0.68rem; color: var(--text-faint);">{{ info.label }}</p>
+              <p class="m-0" style="font-size: 0.88rem; font-weight: 600; color: var(--text);">{{ info.value }}</p>
             </div>
           </div>
         </div>
@@ -168,23 +168,23 @@ function formatCurrency(amount) {
         <!-- Total spent highlight -->
         <div
             class="border-round-xl p-4 flex align-items-center justify-content-between"
-            style="background-color: #E0F2FE;"
+            style="background-color: var(--brand-soft);"
         >
           <div>
-            <p class="m-0" style="font-size: 0.72rem; color: #0E7490;">
+            <p class="m-0" style="font-size: 0.72rem; color: var(--brand);">
               {{ t('customers.detail-total-spent') }}
             </p>
-            <p class="m-0" style="font-size: 1.4rem; font-weight: 800; color: #0B3558; line-height: 1.1;">
+            <p class="m-0" style="font-size: 1.4rem; font-weight: 800; color: var(--brand); line-height: 1.1;">
               {{ formatCurrency(totalSpent) }}
             </p>
           </div>
-          <i class="pi pi-receipt" style="font-size: 1.75rem; color: #0E7490; opacity: 0.6;" />
+          <i class="pi pi-receipt" style="font-size: 1.75rem; color: var(--brand); opacity: 0.6;" />
         </div>
 
         <!-- Close button -->
         <button
             class="w-full border-round-xl"
-            style="background-color: #0B3558; color: #fff; font-size: 0.88rem; font-weight: 600; padding: 10px; border: none; cursor: pointer;"
+            style="background-color: var(--brand); color: var(--surface); font-size: 0.88rem; font-weight: 600; padding: 10px; border: none; cursor: pointer;"
             @click="emit('close')"
         >
           {{ t('customers.detail-close') }}

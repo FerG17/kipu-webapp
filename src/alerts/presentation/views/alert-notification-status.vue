@@ -76,10 +76,10 @@ const badgeSeverity = computed(() => {
  * @type {Record<string, {icon: string, background: string, color: string}>}
  */
 const alertTypeVisuals = {
-  [AlertType.LOW_STOCK]:    { icon: 'pi pi-arrow-down',           background: '#FFEDD5', color: '#F97316' },
-  [AlertType.OUT_OF_STOCK]: { icon: 'pi pi-times-circle',         background: '#FEE2E2', color: '#DC2626' },
-  [AlertType.EXPIRATION]:   { icon: 'pi pi-clock',                background: '#FEF3C7', color: '#D97706' },
-  [AlertType.EXPIRED]:      { icon: 'pi pi-calendar-times',       background: '#FEE2E2', color: '#EF4444' }
+  [AlertType.LOW_STOCK]:    { icon: 'pi pi-arrow-down',           background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
+  [AlertType.OUT_OF_STOCK]: { icon: 'pi pi-times-circle',         background: 'var(--status-critical-bg)', color: 'var(--status-critical-fg)' },
+  [AlertType.EXPIRATION]:   { icon: 'pi pi-clock',                background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
+  [AlertType.EXPIRED]:      { icon: 'pi pi-calendar-times',       background: 'var(--status-critical-bg)', color: 'var(--status-critical-fg)' }
 };
 
 /**
@@ -96,8 +96,8 @@ const alertIcon = computed(() => {
  * @type {import('vue').ComputedRef<string>}
  */
 const iconBackground = computed(() => {
-  if (!currentAlert.value) return '#F3F4F6';
-  return alertTypeVisuals[currentAlert.value.type]?.background ?? '#F3F4F6';
+  if (!currentAlert.value) return 'var(--surface-alt)';
+  return alertTypeVisuals[currentAlert.value.type]?.background ?? 'var(--surface-alt)';
 });
 
 /**
@@ -105,8 +105,8 @@ const iconBackground = computed(() => {
  * @type {import('vue').ComputedRef<string>}
  */
 const iconColor = computed(() => {
-  if (!currentAlert.value) return '#6B7280';
-  return alertTypeVisuals[currentAlert.value.type]?.color ?? '#6B7280';
+  if (!currentAlert.value) return 'var(--text-muted)';
+  return alertTypeVisuals[currentAlert.value.type]?.color ?? 'var(--text-muted)';
 });
 
 /**

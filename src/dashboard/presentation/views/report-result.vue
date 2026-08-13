@@ -255,7 +255,7 @@ function formatDate(isoDate) {
     <div class="flex align-items-center gap-3 mb-4 flex-wrap">
       <pv-button icon="pi pi-arrow-left" text rounded @click="navigateBack"/>
       <div class="flex-1">
-        <h1 class="m-0" style="color: #0B3558;">{{ t('reports.result-title') }}</h1>
+        <h1 class="m-0" style="color: var(--brand);">{{ t('reports.result-title') }}</h1>
       </div>
       <pv-button
           v-if="latestReport"
@@ -274,7 +274,7 @@ function formatDate(isoDate) {
 
     <!-- No report available -->
     <div v-if="!latestReport" class="flex justify-content-center align-items-center" style="min-height: 200px;">
-      <p style="color: #64748B;">{{ t('reports.no-reports') }}</p>
+      <p style="color: var(--text-muted);">{{ t('reports.no-reports') }}</p>
     </div>
 
     <div v-else>
@@ -283,21 +283,21 @@ function formatDate(isoDate) {
         <template #content>
           <div class="grid">
             <div class="col-12 md:col-4">
-              <p class="m-0 text-sm" style="color: #64748B;">{{ t('reports.type') }}</p>
-              <p class="m-0 mt-1 font-semibold" style="color: #0B3558;">{{ reportTypeLabel(latestReport.type) }}</p>
+              <p class="m-0 text-sm" style="color: var(--text-muted);">{{ t('reports.type') }}</p>
+              <p class="m-0 mt-1 font-semibold" style="color: var(--brand);">{{ reportTypeLabel(latestReport.type) }}</p>
             </div>
             <div class="col-12 md:col-4">
-              <p class="m-0 text-sm" style="color: #64748B;">{{ t('reports.filters') }}</p>
-              <p class="m-0 mt-1" style="color: #0B3558;">
+              <p class="m-0 text-sm" style="color: var(--text-muted);">{{ t('reports.filters') }}</p>
+              <p class="m-0 mt-1" style="color: var(--brand);">
                 {{ formatDate(latestReport.filters.startDate) }} – {{ formatDate(latestReport.filters.endDate) }}
               </p>
-              <p v-if="latestReport.filters.category" class="m-0 text-sm" style="color: #64748B;">
+              <p v-if="latestReport.filters.category" class="m-0 text-sm" style="color: var(--text-muted);">
                 {{ latestReport.filters.category }}
               </p>
             </div>
             <div class="col-12 md:col-4">
-              <p class="m-0 text-sm" style="color: #64748B;">{{ t('reports.generated-at') }}</p>
-              <p class="m-0 mt-1" style="color: #0B3558;">{{ formatDate(latestReport.generatedAt) }}</p>
+              <p class="m-0 text-sm" style="color: var(--text-muted);">{{ t('reports.generated-at') }}</p>
+              <p class="m-0 mt-1" style="color: var(--brand);">{{ formatDate(latestReport.generatedAt) }}</p>
             </div>
           </div>
         </template>
@@ -307,7 +307,7 @@ function formatDate(isoDate) {
       <pv-card v-if="reportData" class="shadow-1 mb-4">
         <template #header>
           <div class="p-3 pb-0">
-            <h3 class="m-0" style="color: #0B3558;">{{ t('reports.list-title') }}</h3>
+            <h3 class="m-0" style="color: var(--brand);">{{ t('reports.list-title') }}</h3>
           </div>
         </template>
         <template #content>
@@ -329,11 +329,11 @@ function formatDate(isoDate) {
       <pv-card v-if="reportData && tableColumns.length" class="shadow-1">
         <template #header>
           <div class="p-3 pb-0">
-            <h3 class="m-0" style="color: #0B3558;">{{ t('reports.detail-title') }}</h3>
+            <h3 class="m-0" style="color: var(--brand);">{{ t('reports.detail-title') }}</h3>
           </div>
         </template>
         <template #content>
-          <p v-if="reportData.tableRows.length === 0" class="m-0" style="color: #64748B;">
+          <p v-if="reportData.tableRows.length === 0" class="m-0" style="color: var(--text-muted);">
             {{ t('reports.no-table-data') }}
           </p>
           <pv-data-table
@@ -359,7 +359,7 @@ function formatDate(isoDate) {
 
     <!-- Errors -->
     <div v-if="errors.length" class="mt-3">
-      <p style="color: #EF4444;">{{ t('errors.occurred') }}: {{ errors.map(error => error.message).join(', ') }}</p>
+      <p style="color: var(--status-critical-fg);">{{ t('errors.occurred') }}: {{ errors.map(error => error.message).join(', ') }}</p>
     </div>
   </div>
 </template>

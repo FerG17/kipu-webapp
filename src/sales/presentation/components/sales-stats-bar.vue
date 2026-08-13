@@ -93,14 +93,14 @@ const statCards = computed(() => [
   {
     labelKey:   'sales.stats-today-revenue',
     value:      formatCurrency(todayRevenue.value),
-    color:      '#0B3558',
-    background: '#E0F2FE'
+    color:      'var(--brand)',
+    background: 'var(--brand-soft)'
   },
   {
     labelKey:   'sales.stats-today-count',
     value:      `${todayTransactionCount.value} ${t('sales.stats-transactions')}`,
-    color:      '#16A34A',
-    background: '#DCFCE7'
+    color:      'var(--status-ok-fg)',
+    background: 'var(--status-ok-bg)'
   },
   {
     labelKey:   'sales.stats-accumulated',
@@ -111,8 +111,8 @@ const statCards = computed(() => [
   {
     labelKey:   'sales.stats-cancelled',
     value:      `${cancelledCount.value} ${t('sales.stats-cancelled-unit', { count: cancelledCount.value })}`,
-    color:      '#EF4444',
-    background: '#FEE2E2'
+    color:      'var(--status-critical-fg)',
+    background: 'var(--status-critical-bg)'
   }
 ]);
 </script>
@@ -120,7 +120,7 @@ const statCards = computed(() => [
 <template>
   <div
       class="grid"
-      style="border-bottom: 1px solid #E2E8F0; padding: 12px 16px;"
+      style="border-bottom: 1px solid var(--border); padding: 12px 16px;"
   >
     <div
         v-for="card in statCards"

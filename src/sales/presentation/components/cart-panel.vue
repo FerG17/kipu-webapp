@@ -87,16 +87,16 @@ function removeItem(productId) {
     <!-- Cart header -->
     <div
         class="flex align-items-center gap-2 px-4 py-3"
-        style="border-bottom: 1px solid #F1F5F9;"
+        style="border-bottom: 1px solid var(--surface-alt);"
     >
-      <i class="pi pi-shopping-cart" style="color: #0B3558; font-size: 1rem;" />
-      <span style="font-size: 0.95rem; font-weight: 700; color: #0B3558;">
+      <i class="pi pi-shopping-cart" style="color: var(--brand); font-size: 1rem;" />
+      <span style="font-size: 0.95rem; font-weight: 700; color: var(--brand);">
                 {{ t('pos.cart-title') }}
             </span>
       <span
           v-if="cartItems.length > 0"
           class="ml-auto px-2 py-1 border-round-3xl"
-          style="background-color: #0B3558; color: #fff; font-size: 0.7rem; font-weight: 700;"
+          style="background-color: var(--brand); color: var(--surface); font-size: 0.7rem; font-weight: 700;"
       >
                 {{ totalUnitCount }}
             </span>
@@ -111,9 +111,9 @@ function removeItem(productId) {
           class="flex flex-column align-items-center justify-content-center h-full text-center"
           style="min-height: 120px;"
       >
-        <i class="pi pi-shopping-cart mb-2" style="font-size: 2rem; color: #CBD5E1;" />
-        <p class="m-0" style="color: #94A3B8; font-size: 0.8rem;">{{ t('pos.empty-cart') }}</p>
-        <p class="m-0 mt-1" style="color: #CBD5E1; font-size: 0.72rem;">{{ t('pos.empty-cart-hint') }}</p>
+        <i class="pi pi-shopping-cart mb-2" style="font-size: 2rem; color: var(--text-faint);" />
+        <p class="m-0" style="color: var(--text-faint); font-size: 0.8rem;">{{ t('pos.empty-cart') }}</p>
+        <p class="m-0 mt-1" style="color: var(--text-faint); font-size: 0.72rem;">{{ t('pos.empty-cart-hint') }}</p>
       </div>
 
       <!-- Item rows -->
@@ -121,17 +121,17 @@ function removeItem(productId) {
           v-for="item in cartItems"
           :key="item.productId"
           class="flex align-items-start gap-2 py-2"
-          style="border-bottom: 1px solid #F8FAFC;"
+          style="border-bottom: 1px solid var(--surface-alt);"
       >
         <!-- Product info -->
         <div class="flex-1 min-w-0">
           <p
               class="m-0"
-              style="font-size: 0.8rem; font-weight: 600; color: #1E293B; line-height: 1.3;"
+              style="font-size: 0.8rem; font-weight: 600; color: var(--text); line-height: 1.3;"
           >
             {{ item.productName }}
           </p>
-          <p class="m-0" style="font-size: 0.72rem; color: #64748B;">
+          <p class="m-0" style="font-size: 0.72rem; color: var(--text-muted);">
             {{ formatCurrency(item.unitPrice) }} {{ t('pos.per-unit') }}
           </p>
         </div>
@@ -140,17 +140,17 @@ function removeItem(productId) {
         <div class="flex align-items-center shrink-0" style="gap: 6px;">
           <button
               class="flex align-items-center justify-content-center border-round-lg"
-              style="width: 24px; height: 24px; background-color: #F1F5F9; color: #64748B; border: none; cursor: pointer;"
+              style="width: 24px; height: 24px; background-color: var(--surface-alt); color: var(--text-muted); border: none; cursor: pointer;"
               @click="changeQuantity(item.productId, -1)"
           >
             <i class="pi pi-minus" style="font-size: 0.55rem;" />
           </button>
-          <span style="font-size: 0.82rem; font-weight: 700; color: #0B3558; min-width: 18px; text-align: center;">
+          <span style="font-size: 0.82rem; font-weight: 700; color: var(--brand); min-width: 18px; text-align: center;">
                         {{ item.quantity }}
                     </span>
           <button
               class="flex align-items-center justify-content-center border-round-lg"
-              style="width: 24px; height: 24px; background-color: #E0F2FE; color: #0E7490; border: none; cursor: pointer;"
+              style="width: 24px; height: 24px; background-color: var(--brand-soft); color: var(--brand); border: none; cursor: pointer;"
               :disabled="item.quantity >= item.availableStock"
               :style="item.quantity >= item.availableStock ? 'opacity: 0.4; cursor: not-allowed;' : ''"
               @click="changeQuantity(item.productId, 1)"
@@ -159,7 +159,7 @@ function removeItem(productId) {
           </button>
           <button
               class="flex align-items-center justify-content-center border-round-lg ml-1"
-              style="width: 24px; height: 24px; background-color: #FEE2E2; color: #EF4444; border: none; cursor: pointer;"
+              style="width: 24px; height: 24px; background-color: var(--status-critical-bg); color: var(--status-critical-fg); border: none; cursor: pointer;"
               @click="removeItem(item.productId)"
           >
             <i class="pi pi-trash" style="font-size: 0.55rem;" />
@@ -169,7 +169,7 @@ function removeItem(productId) {
         <!-- Line total -->
         <p
             class="m-0 shrink-0"
-            style="font-size: 0.82rem; font-weight: 700; color: #0B3558; min-width: 52px; text-align: right;"
+            style="font-size: 0.82rem; font-weight: 700; color: var(--brand); min-width: 52px; text-align: right;"
         >
           {{ formatCurrency(item.lineTotal) }}
         </p>
@@ -180,22 +180,22 @@ function removeItem(productId) {
     <div
         v-if="cartItems.length > 0"
         class="px-4 py-3"
-        style="border-top: 1px solid #E2E8F0; display: flex; flex-direction: column; gap: 12px;"
+        style="border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px;"
     >
       <div class="flex justify-content-between align-items-center">
-        <span style="font-size: 0.9rem; color: #64748B;">{{ t('pos.subtotal') }}</span>
-        <span style="font-size: 0.9rem; font-weight: 600; color: #1E293B;">{{ formatCurrency(total) }}</span>
+        <span style="font-size: 0.9rem; color: var(--text-muted);">{{ t('pos.subtotal') }}</span>
+        <span style="font-size: 0.9rem; font-weight: 600; color: var(--text);">{{ formatCurrency(total) }}</span>
       </div>
       <div class="flex justify-content-between align-items-center">
-        <span style="font-size: 0.9rem; font-weight: 700; color: #0B3558;">{{ t('pos.grand-total') }}</span>
-        <span style="font-size: 1.2rem; font-weight: 800; color: #0B3558;">{{ formatCurrency(total) }}</span>
+        <span style="font-size: 0.9rem; font-weight: 700; color: var(--brand);">{{ t('pos.grand-total') }}</span>
+        <span style="font-size: 1.2rem; font-weight: 800; color: var(--brand);">{{ formatCurrency(total) }}</span>
       </div>
       <button
           class="w-full border-round-xl"
-          style="background-color: #0B3558; color: #fff; font-size: 0.92rem; font-weight: 700; padding: 12px; border: none; cursor: pointer;"
+          style="background-color: var(--brand); color: var(--surface); font-size: 0.92rem; font-weight: 700; padding: 12px; border: none; cursor: pointer;"
           @click="emit('pay')"
-          @mouseenter="(e) => e.currentTarget.style.backgroundColor = '#0E7490'"
-          @mouseleave="(e) => e.currentTarget.style.backgroundColor = '#0B3558'"
+          @mouseenter="(e) => e.currentTarget.style.backgroundColor = 'var(--brand)'"
+          @mouseleave="(e) => e.currentTarget.style.backgroundColor = 'var(--brand)'"
       >
         {{ t('pos.pay-button') }} {{ formatCurrency(total) }}
       </button>

@@ -140,26 +140,26 @@ onMounted(() => {
     <!-- Header bar: search + register button -->
     <div
         class="flex flex-column sm:flex-row sm:align-items-center gap-2 px-4 py-3"
-        style="border-bottom: 1px solid #E2E8F0;"
+        style="border-bottom: 1px solid var(--border);"
     >
       <div class="flex-1" style="position: relative;">
         <i
             class="pi pi-search"
-            style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94A3B8; font-size: 0.85rem;"
+            style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 0.85rem;"
         />
         <input
             v-model="searchQuery"
             type="text"
             :placeholder="t('customers.search-placeholder')"
             class="w-full border-round-lg"
-            style="padding: 8px 12px 8px 36px; border: 1px solid #E2E8F0; font-size: 0.85rem; background-color: #F8FAFC; outline: none;"
-            @focus="(e) => e.target.style.borderColor = '#0E7490'"
-            @blur="(e) => e.target.style.borderColor = '#E2E8F0'"
+            style="padding: 8px 12px 8px 36px; border: 1px solid var(--border); font-size: 0.85rem; background-color: var(--surface-alt); outline: none;"
+            @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+            @blur="(e) => e.target.style.borderColor = 'var(--border)'"
         />
       </div>
       <button
           class="flex align-items-center gap-2 border-round-lg px-4 py-2 shrink-0"
-          style="background-color: #0B3558; color: #fff; font-size: 0.85rem; font-weight: 600; border: none; cursor: pointer;"
+          style="background-color: var(--brand); color: var(--surface); font-size: 0.85rem; font-weight: 600; border: none; cursor: pointer;"
           @click="showRegisterModal = true"
       >
         <i class="pi pi-user-plus" style="font-size: 1rem;" />
@@ -174,7 +174,7 @@ onMounted(() => {
       <div class="hidden md:block">
         <table class="w-full" style="border-collapse: collapse;">
           <thead>
-          <tr style="background-color: #F8FAFC; border-bottom: 1px solid #E2E8F0;">
+          <tr style="background-color: var(--surface-alt); border-bottom: 1px solid var(--border);">
             <th
                 v-for="header in [
                                     t('customers.col-name'),
@@ -185,7 +185,7 @@ onMounted(() => {
                                 ]"
                 :key="header"
                 class="px-4 py-3 text-left"
-                style="font-size: 0.72rem; font-weight: 600; color: #94A3B8;"
+                style="font-size: 0.72rem; font-weight: 600; color: var(--text-faint);"
             >
               {{ header }}
             </th>
@@ -195,8 +195,8 @@ onMounted(() => {
           <tr
               v-for="customer in filteredCustomers"
               :key="customer.id"
-              style="border-bottom: 1px solid #F1F5F9;"
-              @mouseenter="(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'"
+              style="border-bottom: 1px solid var(--surface-alt);"
+              @mouseenter="(e) => e.currentTarget.style.backgroundColor = 'var(--surface-alt)'"
               @mouseleave="(e) => e.currentTarget.style.backgroundColor = 'transparent'"
           >
             <!-- Name + avatar -->
@@ -204,37 +204,37 @@ onMounted(() => {
               <div class="flex align-items-center gap-3">
                 <div
                     class="flex align-items-center justify-content-center border-round-3xl shrink-0"
-                    style="width: 32px; height: 32px; background-color: #E0F2FE;"
+                    style="width: 32px; height: 32px; background-color: var(--brand-soft);"
                 >
-                                        <span style="font-size: 0.65rem; font-weight: 700; color: #0E7490;">
+                                        <span style="font-size: 0.65rem; font-weight: 700; color: var(--brand);">
                                             {{ getAvatarInitials(customer.fullName) }}
                                         </span>
                 </div>
                 <div>
-                  <p class="m-0" style="font-size: 0.82rem; font-weight: 600; color: #1E293B;">
+                  <p class="m-0" style="font-size: 0.82rem; font-weight: 600; color: var(--text);">
                     {{ customer.fullName }}
                   </p>
-                  <p class="m-0" style="font-size: 0.68rem; color: #94A3B8;">
+                  <p class="m-0" style="font-size: 0.68rem; color: var(--text-faint);">
                     {{ t('customers.col-since') }} {{ formatDate(customer.registeredAt) }}
                   </p>
                 </div>
               </div>
             </td>
-            <td class="px-4 py-3" style="font-size: 0.78rem; color: #64748B;">
+            <td class="px-4 py-3" style="font-size: 0.78rem; color: var(--text-muted);">
               {{ customer.documentNumber || '—' }}
             </td>
-            <td class="px-4 py-3" style="font-size: 0.78rem; color: #64748B;">
+            <td class="px-4 py-3" style="font-size: 0.78rem; color: var(--text-muted);">
               {{ customer.phoneNumber || '—' }}
             </td>
-            <td class="px-4 py-3" style="font-size: 0.78rem; color: #64748B;">
+            <td class="px-4 py-3" style="font-size: 0.78rem; color: var(--text-muted);">
               {{ formatDate(customer.registeredAt) }}
             </td>
             <td class="px-4 py-3">
               <button
                   class="flex align-items-center gap-1 border-round-lg px-3 py-2"
-                  style="background-color: #E0F2FE; color: #0E7490; font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
-                  @mouseenter="(e) => e.currentTarget.style.backgroundColor = '#BAE6FD'"
-                  @mouseleave="(e) => e.currentTarget.style.backgroundColor = '#E0F2FE'"
+                  style="background-color: var(--brand-soft); color: var(--brand); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
+                  @mouseenter="(e) => e.currentTarget.style.backgroundColor = 'var(--brand-soft)'"
+                  @mouseleave="(e) => e.currentTarget.style.backgroundColor = 'var(--brand-soft)'"
                   @click="openDetail(customer)"
               >
                 <i class="pi pi-eye" style="font-size: 0.8rem;" />
@@ -252,28 +252,28 @@ onMounted(() => {
             v-for="customer in filteredCustomers"
             :key="customer.id"
             class="bg-white border-round-xl p-4"
-            style="border: 1px solid #E2E8F0;"
+            style="border: 1px solid var(--border);"
         >
           <div class="flex align-items-center gap-3 mb-3">
             <div
                 class="flex align-items-center justify-content-center border-round-3xl shrink-0"
-                style="width: 40px; height: 40px; background-color: #E0F2FE;"
+                style="width: 40px; height: 40px; background-color: var(--brand-soft);"
             >
-                            <span style="font-size: 0.75rem; font-weight: 700; color: #0E7490;">
+                            <span style="font-size: 0.75rem; font-weight: 700; color: var(--brand);">
                                 {{ getAvatarInitials(customer.fullName) }}
                             </span>
             </div>
             <div class="flex-1">
-              <p class="m-0" style="font-size: 0.88rem; font-weight: 700; color: #1E293B;">
+              <p class="m-0" style="font-size: 0.88rem; font-weight: 700; color: var(--text);">
                 {{ customer.fullName }}
               </p>
-              <p class="m-0" style="font-size: 0.72rem; color: #94A3B8;">
+              <p class="m-0" style="font-size: 0.72rem; color: var(--text-faint);">
                 DNI: {{ customer.documentNumber || '—' }}
               </p>
             </div>
             <button
                 class="flex align-items-center justify-content-center border-round-lg"
-                style="width: 36px; height: 36px; background-color: #E0F2FE; color: #0E7490; border: none; cursor: pointer;"
+                style="width: 36px; height: 36px; background-color: var(--brand-soft); color: var(--brand); border: none; cursor: pointer;"
                 @click="openDetail(customer)"
             >
               <i class="pi pi-chevron-right" style="font-size: 1rem;" />
@@ -288,9 +288,9 @@ onMounted(() => {
                 :key="info.label"
                 class="col-6"
             >
-              <div class="border-round-lg p-2" style="background-color: #F8FAFC;">
-                <p class="m-0" style="font-size: 0.62rem; color: #94A3B8;">{{ info.label }}</p>
-                <p class="m-0" style="font-size: 0.78rem; font-weight: 600; color: #1E293B;">{{ info.value }}</p>
+              <div class="border-round-lg p-2" style="background-color: var(--surface-alt);">
+                <p class="m-0" style="font-size: 0.62rem; color: var(--text-faint);">{{ info.label }}</p>
+                <p class="m-0" style="font-size: 0.78rem; font-weight: 600; color: var(--text);">{{ info.value }}</p>
               </div>
             </div>
           </div>
@@ -302,8 +302,8 @@ onMounted(() => {
           v-if="filteredCustomers.length === 0"
           class="flex flex-column align-items-center justify-content-center py-12 text-center"
       >
-        <i class="pi pi-users mb-2" style="font-size: 2.25rem; color: #CBD5E1;" />
-        <p class="m-0" style="color: #94A3B8; font-size: 0.88rem;">
+        <i class="pi pi-users mb-2" style="font-size: 2.25rem; color: var(--text-faint);" />
+        <p class="m-0" style="color: var(--text-faint); font-size: 0.88rem;">
           {{ t('customers.no-results') }}
         </p>
       </div>

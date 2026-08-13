@@ -109,12 +109,12 @@ function categoryLabel(category) {
 
 const categoryColorMap = {
   DAIRY:     { background: '#DBEAFE', color: '#1D4ED8' },
-  GRAINS:    { background: '#FEF9C3', color: '#A16207' },
-  OILS:      { background: '#D1FAE5', color: '#065F46' },
-  BEVERAGES: { background: '#CFFAFE', color: '#0E7490' },
+  GRAINS:    { background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
+  OILS:      { background: 'var(--status-ok-bg)', color: 'var(--status-ok-fg)' },
+  BEVERAGES: { background: '#CFFAFE', color: 'var(--brand)' },
   CLEANING:  { background: '#EDE9FE', color: '#6D28D9' },
-  MEDICINE:  { background: '#FFE4E6', color: '#BE123C' },
-  OTHER:     { background: '#F1F5F9', color: '#475569' }
+  MEDICINE:  { background: 'var(--status-critical-bg)', color: 'var(--status-critical-fg)' },
+  OTHER:     { background: 'var(--surface-alt)', color: 'var(--text)' }
 };
 
 /**
@@ -407,7 +407,7 @@ function formatCurrency(amount) {
           <td class="supplier-list-td">
             <div class="supplier-list-name-cell">
               <div class="supplier-list-avatar">
-                <i class="pi pi-truck" style="color: #0E7490;" />
+                <i class="pi pi-truck" style="color: var(--brand);" />
               </div>
               <div>
                 <p class="supplier-list-name-text">{{ supplier.fullName }}</p>
@@ -489,7 +489,7 @@ function formatCurrency(amount) {
             @click="toggleExpandedRow(supplier.id)"
         >
           <div class="supplier-list-avatar supplier-list-avatar-lg">
-            <i class="pi pi-truck" style="color: #0E7490;" />
+            <i class="pi pi-truck" style="color: var(--brand);" />
           </div>
           <div class="supplier-list-card-info">
             <p class="supplier-list-card-name">{{ supplier.fullName }}</p>
@@ -708,7 +708,7 @@ function formatCurrency(amount) {
           <!-- Supplier header card -->
           <div class="supplier-detail-card-header">
             <div class="supplier-detail-avatar">
-              <i class="pi pi-truck" style="color: #0E7490; font-size: 1.4rem;" />
+              <i class="pi pi-truck" style="color: var(--brand); font-size: 1.4rem;" />
             </div>
             <div>
               <p class="supplier-detail-name">{{ detailSupplier.fullName }}</p>
@@ -728,7 +728,7 @@ function formatCurrency(amount) {
           <div class="supplier-detail-info-list">
             <div class="supplier-detail-info-row">
               <div class="supplier-detail-info-icon-wrapper">
-                <i class="pi pi-hashtag" style="color: #94A3B8; font-size: 0.78rem;" />
+                <i class="pi pi-hashtag" style="color: var(--text-faint); font-size: 0.78rem;" />
               </div>
               <div>
                 <p class="supplier-detail-info-label">{{ t('suppliers.col-ruc') }}</p>
@@ -737,7 +737,7 @@ function formatCurrency(amount) {
             </div>
             <div class="supplier-detail-info-row">
               <div class="supplier-detail-info-icon-wrapper">
-                <i class="pi pi-user" style="color: #94A3B8; font-size: 0.78rem;" />
+                <i class="pi pi-user" style="color: var(--text-faint); font-size: 0.78rem;" />
               </div>
               <div>
                 <p class="supplier-detail-info-label">{{ t('suppliers.col-contact') }}</p>
@@ -746,7 +746,7 @@ function formatCurrency(amount) {
             </div>
             <div class="supplier-detail-info-row">
               <div class="supplier-detail-info-icon-wrapper">
-                <i class="pi pi-phone" style="color: #94A3B8; font-size: 0.78rem;" />
+                <i class="pi pi-phone" style="color: var(--text-faint); font-size: 0.78rem;" />
               </div>
               <div>
                 <p class="supplier-detail-info-label">{{ t('suppliers.col-phone') }}</p>
@@ -755,7 +755,7 @@ function formatCurrency(amount) {
             </div>
             <div class="supplier-detail-info-row">
               <div class="supplier-detail-info-icon-wrapper">
-                <i class="pi pi-envelope" style="color: #94A3B8; font-size: 0.78rem;" />
+                <i class="pi pi-envelope" style="color: var(--text-faint); font-size: 0.78rem;" />
               </div>
               <div>
                 <p class="supplier-detail-info-label">{{ t('suppliers.col-email') }}</p>
@@ -764,7 +764,7 @@ function formatCurrency(amount) {
             </div>
             <div class="supplier-detail-info-row">
               <div class="supplier-detail-info-icon-wrapper">
-                <i class="pi pi-map-marker" style="color: #94A3B8; font-size: 0.78rem;" />
+                <i class="pi pi-map-marker" style="color: var(--text-faint); font-size: 0.78rem;" />
               </div>
               <div>
                 <p class="supplier-detail-info-label">{{ t('suppliers.col-address') }}</p>
@@ -845,7 +845,7 @@ function formatCurrency(amount) {
   align-items:     center;
   gap:             0.75rem;
   padding:         0.75rem 1.25rem;
-  border-bottom:   1px solid #E2E8F0;
+  border-bottom:   1px solid var(--border);
   flex-wrap:       wrap;
 }
 
@@ -860,24 +860,24 @@ function formatCurrency(amount) {
   left:      0.75rem;
   top:       50%;
   transform: translateY(-50%);
-  color:     #94A3B8;
+  color:     var(--text-faint);
   font-size: 0.85rem;
 }
 
 .supplier-list-search-input {
   width:            100%;
   padding:          0.5rem 0.75rem 0.5rem 2.25rem;
-  border:           1px solid #E2E8F0;
+  border:           1px solid var(--border);
   border-radius:    0.5rem;
   font-size:        0.85rem;
-  background-color: #F8FAFC;
-  color:            #1E293B;
+  background-color: var(--surface-alt);
+  color:            var(--text);
   outline:          none;
   transition:       border-color 0.15s;
 }
 
 .supplier-list-search-input:focus {
-  border-color: #0E7490;
+  border-color: var(--brand);
 }
 
 .supplier-list-actions {
@@ -888,11 +888,11 @@ function formatCurrency(amount) {
 
 .supplier-list-category-select {
   padding:          0.5rem 0.75rem;
-  border:           1px solid #E2E8F0;
+  border:           1px solid var(--border);
   border-radius:    0.5rem;
   font-size:        0.82rem;
-  color:            #64748B;
-  background-color: #fff;
+  color:            var(--text-muted);
+  background-color: var(--surface);
   outline:          none;
   cursor:           pointer;
 }
@@ -902,8 +902,8 @@ function formatCurrency(amount) {
   align-items:      center;
   gap:              0.4rem;
   padding:          0.5rem 1rem;
-  background-color: #0B3558;
-  color:            #fff;
+  background-color: var(--brand);
+  color:            var(--brand-ink);
   border:           none;
   border-radius:    0.5rem;
   font-size:        0.85rem;
@@ -914,7 +914,7 @@ function formatCurrency(amount) {
 }
 
 .supplier-list-btn-add:hover {
-  background-color: #0d3f6b;
+  background-color: var(--brand);
 }
 
 /* ─── Loading ───────────────────────────────────────────────────────────────── */
@@ -924,13 +924,13 @@ function formatCurrency(amount) {
   justify-content: center;
   gap:             0.5rem;
   padding:         3rem;
-  color:           #94A3B8;
+  color:           var(--text-faint);
   font-size:       0.88rem;
 }
 
 .supplier-list-spinner {
   font-size: 1.2rem;
-  color:     #0E7490;
+  color:     var(--brand);
 }
 
 /* ─── Desktop table (hidden on mobile) ─────────────────────────────────────── */
@@ -945,8 +945,8 @@ function formatCurrency(amount) {
 }
 
 .supplier-list-thead-row {
-  background-color: #F8FAFC;
-  border-bottom:    1px solid #E2E8F0;
+  background-color: var(--surface-alt);
+  border-bottom:    1px solid var(--border);
 }
 
 .supplier-list-th {
@@ -954,7 +954,7 @@ function formatCurrency(amount) {
   text-align:  left;
   font-size:   0.72rem;
   font-weight: 600;
-  color:       #94A3B8;
+  color:       var(--text-faint);
 }
 
 .supplier-list-th-actions {
@@ -962,23 +962,23 @@ function formatCurrency(amount) {
 }
 
 .supplier-list-tr {
-  border-bottom: 1px solid #F1F5F9;
+  border-bottom: 1px solid var(--surface-alt);
   transition:    background-color 0.1s;
 }
 
 .supplier-list-tr:hover {
-  background-color: #F8FAFC;
+  background-color: var(--surface-alt);
 }
 
 .supplier-list-td {
   padding:    0.75rem 1rem;
   font-size:  0.82rem;
-  color:      #1E293B;
+  color:      var(--text);
   vertical-align: middle;
 }
 
 .supplier-list-td-muted {
-  color: #64748B;
+  color: var(--text-muted);
 }
 
 /* ─── Name cell ─────────────────────────────────────────────────────────────── */
@@ -992,7 +992,7 @@ function formatCurrency(amount) {
   width:            2rem;
   height:           2rem;
   border-radius:    0.5rem;
-  background-color: #E0F2FE;
+  background-color: var(--brand-soft);
   display:          flex;
   align-items:      center;
   justify-content:  center;
@@ -1007,25 +1007,25 @@ function formatCurrency(amount) {
 .supplier-list-name-text {
   font-size:   0.82rem;
   font-weight: 600;
-  color:       #1E293B;
+  color:       var(--text);
   margin:      0;
 }
 
 .supplier-list-name-since {
   font-size: 0.68rem;
-  color:     #94A3B8;
+  color:     var(--text-faint);
   margin:    0;
 }
 
 .supplier-list-contact-name {
   font-size: 0.78rem;
-  color:     #1E293B;
+  color:     var(--text);
   margin:    0;
 }
 
 .supplier-list-contact-phone {
   font-size: 0.68rem;
-  color:     #94A3B8;
+  color:     var(--text-faint);
   margin:    0;
 }
 
@@ -1047,13 +1047,13 @@ function formatCurrency(amount) {
 }
 
 .supplier-list-status-active {
-  background-color: #DCFCE7;
-  color:            #16A34A;
+  background-color: var(--status-ok-bg);
+  color:            var(--status-ok-fg);
 }
 
 .supplier-list-status-inactive {
-  background-color: #F1F5F9;
-  color:            #64748B;
+  background-color: var(--surface-alt);
+  color:            var(--text-muted);
 }
 
 /* ─── View button ───────────────────────────────────────────────────────────── */
@@ -1062,8 +1062,8 @@ function formatCurrency(amount) {
   align-items:      center;
   gap:              0.3rem;
   padding:          0.35rem 0.65rem;
-  background-color: #E0F2FE;
-  color:            #0E7490;
+  background-color: var(--brand-soft);
+  color:            var(--brand);
   border:           none;
   border-radius:    0.4rem;
   font-size:        0.72rem;
@@ -1073,7 +1073,7 @@ function formatCurrency(amount) {
 }
 
 .supplier-list-btn-view:hover {
-  background-color: #BAE6FD;
+  background-color: var(--brand-soft);
 }
 
 /* ─── Empty state ───────────────────────────────────────────────────────────── */
@@ -1088,12 +1088,12 @@ function formatCurrency(amount) {
 
 .supplier-list-empty-icon {
   font-size: 2.5rem;
-  color:     #CBD5E1;
+  color:     var(--text-faint);
 }
 
 .supplier-list-empty-text {
   font-size: 0.88rem;
-  color:     #94A3B8;
+  color:     var(--text-faint);
   margin:    0;
 }
 
@@ -1106,8 +1106,8 @@ function formatCurrency(amount) {
 }
 
 .supplier-list-card {
-  background-color: #fff;
-  border:           1px solid #E2E8F0;
+  background-color: var(--surface);
+  border:           1px solid var(--border);
   border-radius:    0.75rem;
   overflow:         hidden;
 }
@@ -1132,7 +1132,7 @@ function formatCurrency(amount) {
 .supplier-list-card-name {
   font-size:     0.88rem;
   font-weight:   700;
-  color:         #1E293B;
+  color:         var(--text);
   margin:        0;
   overflow:      hidden;
   text-overflow: ellipsis;
@@ -1141,13 +1141,13 @@ function formatCurrency(amount) {
 
 .supplier-list-card-ruc {
   font-size: 0.72rem;
-  color:     #94A3B8;
+  color:     var(--text-faint);
   margin:    0;
 }
 
 .supplier-list-chevron {
   font-size:  0.8rem;
-  color:      #94A3B8;
+  color:      var(--text-faint);
   flex-shrink: 0;
   transition: transform 0.2s;
 }
@@ -1158,7 +1158,7 @@ function formatCurrency(amount) {
 
 .supplier-list-card-body {
   padding:      0 1rem 1rem;
-  border-top:   1px solid #F1F5F9;
+  border-top:   1px solid var(--surface-alt);
 }
 
 .supplier-list-card-grid {
@@ -1170,29 +1170,29 @@ function formatCurrency(amount) {
 }
 
 .supplier-list-card-stat {
-  background-color: #F8FAFC;
+  background-color: var(--surface-alt);
   border-radius:    0.5rem;
   padding:          0.5rem;
 }
 
 .supplier-list-card-stat-label {
   font-size: 0.62rem;
-  color:     #94A3B8;
+  color:     var(--text-faint);
   margin:    0;
 }
 
 .supplier-list-card-stat-value {
   font-size:   0.78rem;
   font-weight: 600;
-  color:       #1E293B;
+  color:       var(--text);
   margin:      0;
 }
 
 .supplier-list-btn-view-full {
   width:            100%;
   padding:          0.5rem;
-  background-color: #E0F2FE;
-  color:            #0E7490;
+  background-color: var(--brand-soft);
+  color:            var(--brand);
   border:           none;
   border-radius:    0.5rem;
   font-size:        0.82rem;
@@ -1202,16 +1202,16 @@ function formatCurrency(amount) {
 }
 
 .supplier-list-btn-view-full:hover {
-  background-color: #BAE6FD;
+  background-color: var(--brand-soft);
 }
 
 /* ─── Errors ────────────────────────────────────────────────────────────────── */
 .supplier-list-errors {
   padding:    0.75rem 1.25rem;
-  color:      #EF4444;
+  color:      var(--status-critical-fg);
   font-size:  0.8rem;
-  background: #FEF2F2;
-  border-top: 1px solid #FECACA;
+  background: var(--status-critical-bg);
+  border-top: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent);
 }
 
 /* ─── Modal overlay ─────────────────────────────────────────────────────────── */
@@ -1230,9 +1230,9 @@ function formatCurrency(amount) {
 .supplier-detail-modal,
 .supplier-confirm-modal {
   width:            100%;
-  background-color: #fff;
+  background-color: var(--surface);
   border-radius:    1.25rem 1.25rem 0 0;
-  border:           1px solid #E2E8F0;
+  border:           1px solid var(--border);
   box-shadow:       0 25px 50px rgba(0, 0, 0, 0.15);
   max-height:       90dvh;
   overflow-y:       auto;
@@ -1243,16 +1243,16 @@ function formatCurrency(amount) {
   align-items:     center;
   justify-content: space-between;
   padding:         1.25rem 1.25rem 0.75rem;
-  border-bottom:   1px solid #F1F5F9;
+  border-bottom:   1px solid var(--surface-alt);
   position:        sticky;
   top:             0;
-  background-color: #fff;
+  background-color: var(--surface);
 }
 
 .supplier-modal-title {
   font-size:   1rem;
   font-weight: 700;
-  color:       #0B3558;
+  color:       var(--brand);
   margin:      0;
 }
 
@@ -1260,14 +1260,14 @@ function formatCurrency(amount) {
   background:  none;
   border:      none;
   cursor:      pointer;
-  color:       #94A3B8;
+  color:       var(--text-faint);
   font-size:   1rem;
   padding:     0.25rem;
   transition:  color 0.15s;
 }
 
 .supplier-modal-close:hover {
-  color: #475569;
+  color: var(--text);
 }
 
 .supplier-modal-body {
@@ -1294,17 +1294,17 @@ function formatCurrency(amount) {
 .supplier-modal-label {
   font-size:   0.75rem;
   font-weight: 600;
-  color:       #64748B;
+  color:       var(--text-muted);
 }
 
 .supplier-modal-input,
 .supplier-modal-select {
   padding:          0.5rem 0.75rem;
-  border:           1px solid #E2E8F0;
+  border:           1px solid var(--border);
   border-radius:    0.5rem;
   font-size:        0.88rem;
-  color:            #1E293B;
-  background-color: #fff;
+  color:            var(--text);
+  background-color: var(--surface);
   outline:          none;
   transition:       border-color 0.15s;
   width:            100%;
@@ -1312,22 +1312,22 @@ function formatCurrency(amount) {
 
 .supplier-modal-input:focus,
 .supplier-modal-select:focus {
-  border-color: #0E7490;
+  border-color: var(--brand);
 }
 
 .supplier-modal-input-error {
-  border-color: #EF4444;
+  border-color: var(--status-critical-fg);
 }
 
 .supplier-modal-error-msg {
   font-size: 0.72rem;
-  color:     #EF4444;
+  color:     var(--status-critical-fg);
   margin:    0;
 }
 
 .supplier-modal-field-hint {
   font-size: 0.7rem;
-  color:     #94A3B8;
+  color:     var(--text-faint);
   margin:    0;
 }
 
@@ -1341,24 +1341,24 @@ function formatCurrency(amount) {
 
 .supplier-modal-btn-cancel {
   padding:      0.6rem 1.25rem;
-  border:       1px solid #E2E8F0;
+  border:       1px solid var(--border);
   border-radius: 0.75rem;
-  color:         #64748B;
+  color:         var(--text-muted);
   font-size:     0.88rem;
   font-weight:   600;
-  background:    #fff;
+  background:    var(--surface);
   cursor:        pointer;
   transition:    background-color 0.15s;
 }
 
 .supplier-modal-btn-cancel:hover {
-  background-color: #F8FAFC;
+  background-color: var(--surface-alt);
 }
 
 .supplier-modal-btn-save {
   padding:          0.6rem 1.5rem;
-  background-color: #0B3558;
-  color:            #fff;
+  background-color: var(--brand);
+  color:            var(--brand-ink);
   border:           none;
   border-radius:    0.75rem;
   font-size:        0.88rem;
@@ -1368,7 +1368,7 @@ function formatCurrency(amount) {
 }
 
 .supplier-modal-btn-save:hover {
-  background-color: #0d3f6b;
+  background-color: var(--brand);
 }
 
 /* ─── Supplier detail modal specifics ──────────────────────────────────────── */
@@ -1383,7 +1383,7 @@ function formatCurrency(amount) {
   width:            3rem;
   height:           3rem;
   border-radius:    0.75rem;
-  background-color: #E0F2FE;
+  background-color: var(--brand-soft);
   display:          flex;
   align-items:      center;
   justify-content:  center;
@@ -1393,7 +1393,7 @@ function formatCurrency(amount) {
 .supplier-detail-name {
   font-size:   1rem;
   font-weight: 700;
-  color:       #0B3558;
+  color:       var(--brand);
   margin:      0 0 0.3rem;
   line-height: 1.3;
 }
@@ -1415,7 +1415,7 @@ function formatCurrency(amount) {
   width:            1.75rem;
   height:           1.75rem;
   border-radius:    0.4rem;
-  background-color: #F8FAFC;
+  background-color: var(--surface-alt);
   display:          flex;
   align-items:      center;
   justify-content:  center;
@@ -1425,31 +1425,31 @@ function formatCurrency(amount) {
 
 .supplier-detail-info-label {
   font-size: 0.68rem;
-  color:     #94A3B8;
+  color:     var(--text-faint);
   margin:    0;
 }
 
 .supplier-detail-info-value {
   font-size:   0.85rem;
-  color:       #1E293B;
+  color:       var(--text);
   font-weight: 500;
   margin:      0;
 }
 
 .supplier-detail-btn-deactivate {
   padding:      0.6rem 1.25rem;
-  border:       1px solid #EF4444;
+  border:       1px solid var(--status-critical-fg);
   border-radius: 0.75rem;
-  color:         #EF4444;
+  color:         var(--status-critical-fg);
   font-size:     0.88rem;
   font-weight:   600;
-  background:    #FEF2F2;
+  background:    var(--status-critical-bg);
   cursor:        pointer;
   transition:    background-color 0.15s;
 }
 
 .supplier-detail-btn-deactivate:hover {
-  background-color: #FEE2E2;
+  background-color: var(--status-critical-bg);
 }
 
 /* ─── Confirm modal ─────────────────────────────────────────────────────────── */
@@ -1459,7 +1459,7 @@ function formatCurrency(amount) {
 
 .supplier-confirm-text {
   font-size:     0.9rem;
-  color:         #475569;
+  color:         var(--text);
   line-height:   1.6;
   margin-bottom: 0.5rem;
 }

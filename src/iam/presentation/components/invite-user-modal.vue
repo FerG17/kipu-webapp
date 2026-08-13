@@ -108,15 +108,15 @@ async function handleSubmit() {
   >
     <div
         class="w-full border-round-top-2xl sm:border-round-2xl shadow-8"
-        style="max-width: 420px; background-color: #fff; border: 1px solid #E2E8F0;"
+        style="max-width: 420px; background-color: var(--surface); border: 1px solid var(--border);"
     >
       <!-- Header -->
-      <div class="flex align-items-center justify-content-between px-5 pt-5 pb-3" style="border-bottom: 1px solid #F1F5F9;">
-        <h2 class="m-0" style="font-size: 1.05rem; font-weight: 700; color: #0B3558;">
+      <div class="flex align-items-center justify-content-between px-5 pt-5 pb-3" style="border-bottom: 1px solid var(--surface-alt);">
+        <h2 class="m-0" style="font-size: 1.05rem; font-weight: 700; color: var(--brand);">
           {{ t('settings.invite-modal-title') }}
         </h2>
         <button style="background: none; border: none; cursor: pointer; padding: 4px;" @click="emit('close')">
-          <i class="pi pi-times" style="color: #94A3B8; font-size: 1.1rem;"/>
+          <i class="pi pi-times" style="color: var(--text-faint); font-size: 1.1rem;"/>
         </button>
       </div>
 
@@ -126,69 +126,69 @@ async function handleSubmit() {
         <!-- First / last name -->
         <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px; display: grid;">
           <div>
-            <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: #64748B;">
+            <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
               {{ t('settings.invite-field-name') }} *
             </label>
             <input
                 v-model="firstName" type="text" :placeholder="t('settings.invite-field-name-placeholder')"
                 class="w-full border-round-lg px-3 py-2"
-                style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
-                @focus="(e) => e.target.style.borderColor = '#0E7490'"
-                @blur="(e) => e.target.style.borderColor = fieldErrors.firstName ? '#EF4444' : '#E2E8F0'"
+                style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none;"
+                @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+                @blur="(e) => e.target.style.borderColor = fieldErrors.firstName ? 'var(--status-critical-fg)' : 'var(--border)'"
             />
-            <small v-if="fieldErrors.firstName" style="color: #EF4444; font-size: 0.72rem;">{{ fieldErrors.firstName }}</small>
+            <small v-if="fieldErrors.firstName" style="color: var(--status-critical-fg); font-size: 0.72rem;">{{ fieldErrors.firstName }}</small>
           </div>
           <div>
-            <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: #64748B;">
+            <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
               {{ t('settings.invite-field-last-name') }} *
             </label>
             <input
                 v-model="lastName" type="text" :placeholder="t('settings.invite-field-last-name-placeholder')"
                 class="w-full border-round-lg px-3 py-2"
-                style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
-                @focus="(e) => e.target.style.borderColor = '#0E7490'"
-                @blur="(e) => e.target.style.borderColor = fieldErrors.lastName ? '#EF4444' : '#E2E8F0'"
+                style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none;"
+                @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+                @blur="(e) => e.target.style.borderColor = fieldErrors.lastName ? 'var(--status-critical-fg)' : 'var(--border)'"
             />
-            <small v-if="fieldErrors.lastName" style="color: #EF4444; font-size: 0.72rem;">{{ fieldErrors.lastName }}</small>
+            <small v-if="fieldErrors.lastName" style="color: var(--status-critical-fg); font-size: 0.72rem;">{{ fieldErrors.lastName }}</small>
           </div>
         </div>
 
         <!-- Email -->
         <div>
-          <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: #64748B;">
+          <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
             {{ t('settings.invite-field-email') }} *
           </label>
           <input
               v-model="email" type="email" :placeholder="t('settings.invite-field-email-placeholder')"
               class="w-full border-round-lg px-3 py-2"
-              style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
-              @focus="(e) => e.target.style.borderColor = '#0E7490'"
-              @blur="(e) => e.target.style.borderColor = fieldErrors.email ? '#EF4444' : '#E2E8F0'"
+              style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none;"
+              @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+              @blur="(e) => e.target.style.borderColor = fieldErrors.email ? 'var(--status-critical-fg)' : 'var(--border)'"
           />
-          <small v-if="fieldErrors.email" style="color: #EF4444; font-size: 0.72rem;">{{ fieldErrors.email }}</small>
+          <small v-if="fieldErrors.email" style="color: var(--status-critical-fg); font-size: 0.72rem;">{{ fieldErrors.email }}</small>
         </div>
 
         <!-- Role -->
         <div>
-          <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: #64748B;">
+          <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
             {{ t('settings.invite-field-role') }} *
           </label>
           <select
               v-model="roleId"
               class="w-full border-round-lg px-3 py-2"
-              style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none; background: #fff;"
+              style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none; background: var(--surface);"
           >
             <option value="" disabled>{{ t('settings.invite-field-role-placeholder') }}</option>
             <option v-for="role in iamStore.roles" :key="role.id" :value="String(role.id)">
               {{ roleLabel(role.position) }}
             </option>
           </select>
-          <small v-if="fieldErrors.roleId" style="color: #EF4444; font-size: 0.72rem;">{{ fieldErrors.roleId }}</small>
+          <small v-if="fieldErrors.roleId" style="color: var(--status-critical-fg); font-size: 0.72rem;">{{ fieldErrors.roleId }}</small>
         </div>
 
         <!-- Temporary password -->
         <div>
-          <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: #64748B;">
+          <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
             {{ t('settings.invite-field-password') }} *
           </label>
           <div class="relative">
@@ -196,29 +196,29 @@ async function handleSubmit() {
                 v-model="password" :type="showPassword ? 'text' : 'password'"
                 :placeholder="t('settings.invite-field-password-placeholder')"
                 class="w-full border-round-lg px-3 py-2"
-                style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none; padding-right: 40px;"
-                @focus="(e) => e.target.style.borderColor = '#0E7490'"
-                @blur="(e) => e.target.style.borderColor = fieldErrors.password ? '#EF4444' : '#E2E8F0'"
+                style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none; padding-right: 40px;"
+                @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+                @blur="(e) => e.target.style.borderColor = fieldErrors.password ? 'var(--status-critical-fg)' : 'var(--border)'"
             />
             <button
-                type="button" class="absolute" style="right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94A3B8; cursor: pointer; padding: 4px;"
+                type="button" class="absolute" style="right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-faint); cursor: pointer; padding: 4px;"
                 @click="showPassword = !showPassword"
             >
               <i :class="showPassword ? 'pi pi-eye-slash' : 'pi pi-eye'" style="font-size: 0.9rem;"/>
             </button>
           </div>
-          <small v-if="fieldErrors.password" style="color: #EF4444; font-size: 0.72rem;">{{ fieldErrors.password }}</small>
-          <p class="m-0 mt-1" style="font-size: 0.72rem; color: #94A3B8;">{{ t('settings.invite-field-password-hint') }}</p>
+          <small v-if="fieldErrors.password" style="color: var(--status-critical-fg); font-size: 0.72rem;">{{ fieldErrors.password }}</small>
+          <p class="m-0 mt-1" style="font-size: 0.72rem; color: var(--text-faint);">{{ t('settings.invite-field-password-hint') }}</p>
         </div>
 
-        <p v-if="submitError" class="m-0" style="color: #EF4444; font-size: 0.78rem;">{{ submitError }}</p>
+        <p v-if="submitError" class="m-0" style="color: var(--status-critical-fg); font-size: 0.78rem;">{{ submitError }}</p>
 
         <!-- Actions -->
         <div class="flex gap-2 mt-1">
           <button
               type="button"
               class="flex-1 border-round-xl py-3"
-              style="border: 1px solid #E2E8F0; color: #64748B; font-size: 0.88rem; font-weight: 600; background: #fff; cursor: pointer;"
+              style="border: 1px solid var(--border); color: var(--text-muted); font-size: 0.88rem; font-weight: 600; background: var(--surface); cursor: pointer;"
               @click="emit('close')"
           >
             {{ t('settings.invite-btn-cancel') }}
@@ -227,8 +227,8 @@ async function handleSubmit() {
               type="submit"
               class="flex-1 border-round-xl py-3"
               :style="{
-                backgroundColor: isFormValid ? '#0B3558' : '#CBD5E1',
-                color: '#fff', fontSize: '0.88rem', fontWeight: 600, border: 'none',
+                backgroundColor: isFormValid ? 'var(--brand)' : 'var(--text-faint)',
+                color: 'var(--brand-ink)', fontSize: '0.88rem', fontWeight: 600, border: 'none',
                 cursor: isFormValid && !saving ? 'pointer' : 'not-allowed'
               }"
               :disabled="!isFormValid || saving"

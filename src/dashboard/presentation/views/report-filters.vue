@@ -259,12 +259,12 @@ function navigateBack() {
   margin: 0;
   font-size: 1.4rem;
   font-weight: 700;
-  color: #0B3558;
+  color: var(--brand);
 }
 .filters-header__subtitle {
   margin: 0.2rem 0 0;
   font-size: 0.85rem;
-  color: #64748B;
+  color: var(--text-muted);
 }
 .back-btn {
   display: flex;
@@ -272,21 +272,21 @@ function navigateBack() {
   justify-content: center;
   width: 38px;
   height: 38px;
-  border: 1px solid #E2E8F0;
+  border: 1px solid var(--border);
   border-radius: 50%;
-  background: #fff;
-  color: #64748B;
+  background: var(--surface);
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 0.9rem;
   transition: background-color 0.15s, color 0.15s;
   flex-shrink: 0;
 }
-.back-btn:hover { background-color: #F1F5F9; color: #0B3558; }
+.back-btn:hover { background-color: var(--surface-alt); color: var(--brand); }
 
 /* ── Form card ───────────────────────────────────────────────────────── */
 .form-card {
-  background: #fff;
-  border: 1px solid #E2E8F0;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 0.875rem;
   padding: 1.75rem;
   display: flex;
@@ -306,13 +306,13 @@ function navigateBack() {
   gap: 0.4rem;
   font-size: 0.82rem;
   font-weight: 600;
-  color: #475569;
+  color: var(--text);
   text-transform: uppercase;
   letter-spacing: 0.035em;
 }
 .form-label__icon {
   font-size: 0.75rem;
-  color: #0E7490;
+  color: var(--brand);
 }
 
 /* ── Date range layout ───────────────────────────────────────────────── */
@@ -325,7 +325,7 @@ function navigateBack() {
 .date-range__separator {
   padding-bottom: 0.6rem;
   font-size: 1rem;
-  color: #94A3B8;
+  color: var(--text-faint);
   flex-shrink: 0;
 }
 
@@ -333,21 +333,21 @@ function navigateBack() {
 .date-input {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  border: 1px solid #CBD5E1;
+  border: 1px solid var(--text-faint);
   border-radius: 0.5rem;
   font-size: 0.9rem;
-  color: #1E293B;
-  background: #fff;
+  color: var(--text);
+  background: var(--surface);
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
   box-sizing: border-box;
 }
 .date-input:focus {
-  border-color: #0E7490;
+  border-color: var(--brand);
   box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.12);
 }
 .date-input--error {
-  border-color: #EF4444;
+  border-color: var(--status-critical-fg);
 }
 
 /* ── Validation error ────────────────────────────────────────────────── */
@@ -356,10 +356,10 @@ function navigateBack() {
   align-items: center;
   gap: 0.5rem;
   padding: 0.65rem 0.9rem;
-  background: #FEF2F2;
-  border: 1px solid #FECACA;
+  background: var(--status-critical-bg);
+  border: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent);
   border-radius: 0.5rem;
-  color: #DC2626;
+  color: var(--status-critical-fg);
   font-size: 0.83rem;
   font-weight: 500;
 }
@@ -385,17 +385,17 @@ function navigateBack() {
   border: none;
 }
 .btn-primary {
-  background: #0E7490;
-  color: #fff;
+  background: var(--brand);
+  color: var(--brand-ink);
 }
 .btn-primary:hover  { filter: brightness(1.1); }
 .btn-primary:active { transform: scale(0.98); }
 .btn-secondary {
-  background: #F1F5F9;
-  color: #475569;
-  border: 1px solid #E2E8F0;
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
-.btn-secondary:hover { background: #E2E8F0; }
+.btn-secondary:hover { background: var(--border); }
 
 /* ── Store errors ────────────────────────────────────────────────────── */
 .store-errors {
@@ -403,10 +403,10 @@ function navigateBack() {
   align-items: center;
   gap: 0.5rem;
   padding: 0.65rem 0.9rem;
-  background: #FEF2F2;
-  border: 1px solid #FECACA;
+  background: var(--status-critical-bg);
+  border: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent);
   border-radius: 0.5rem;
-  color: #DC2626;
+  color: var(--status-critical-fg);
   font-size: 0.82rem;
 }
 </style>

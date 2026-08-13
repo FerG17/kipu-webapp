@@ -116,21 +116,21 @@ function handleSave() {
     <!-- Modal panel -->
     <div
         class="w-full border-round-top-2xl sm:border-round-2xl shadow-8"
-        style="max-width: 420px; background-color: #fff; border: 1px solid #E2E8F0;"
+        style="max-width: 420px; background-color: var(--surface); border: 1px solid var(--border);"
     >
       <!-- Header -->
       <div
           class="flex align-items-center justify-content-between px-5 pt-5 pb-3"
-          style="border-bottom: 1px solid #F1F5F9;"
+          style="border-bottom: 1px solid var(--surface-alt);"
       >
-        <h2 class="m-0" style="font-size: 1.05rem; font-weight: 700; color: #0B3558;">
+        <h2 class="m-0" style="font-size: 1.05rem; font-weight: 700; color: var(--brand);">
           {{ t('customers.modal-register-title') }}
         </h2>
         <button
             style="background: none; border: none; cursor: pointer; padding: 4px;"
             @click="emit('close')"
         >
-          <i class="pi pi-times" style="color: #94A3B8; font-size: 1.1rem;" />
+          <i class="pi pi-times" style="color: var(--text-faint); font-size: 1.1rem;" />
         </button>
       </div>
 
@@ -141,7 +141,7 @@ function handleSave() {
         <div>
           <label
               class="block mb-1"
-              style="font-size: 0.78rem; font-weight: 600; color: #64748B;"
+              style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);"
           >
             {{ t('customer-form.full-name') }} *
           </label>
@@ -150,11 +150,11 @@ function handleSave() {
               type="text"
               :placeholder="t('customer-form.full-name-placeholder')"
               class="w-full border-round-lg px-3 py-2"
-              style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
-              @focus="(e) => e.target.style.borderColor = '#0E7490'"
-              @blur="(e) => e.target.style.borderColor = fieldErrors.fullName ? '#EF4444' : '#E2E8F0'"
+              style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none;"
+              @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+              @blur="(e) => e.target.style.borderColor = fieldErrors.fullName ? 'var(--status-critical-fg)' : 'var(--border)'"
           />
-          <small v-if="fieldErrors.fullName" style="color: #EF4444; font-size: 0.72rem;">
+          <small v-if="fieldErrors.fullName" style="color: var(--status-critical-fg); font-size: 0.72rem;">
             {{ fieldErrors.fullName }}
           </small>
         </div>
@@ -163,7 +163,7 @@ function handleSave() {
         <div>
           <label
               class="block mb-1"
-              style="font-size: 0.78rem; font-weight: 600; color: #64748B;"
+              style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);"
           >
             {{ t('customer-form.document-number') }} *
           </label>
@@ -172,11 +172,11 @@ function handleSave() {
               type="text"
               :placeholder="t('customer-form.document-placeholder')"
               class="w-full border-round-lg px-3 py-2"
-              style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
-              @focus="(e) => e.target.style.borderColor = '#0E7490'"
-              @blur="(e) => e.target.style.borderColor = fieldErrors.documentNumber ? '#EF4444' : '#E2E8F0'"
+              style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none;"
+              @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+              @blur="(e) => e.target.style.borderColor = fieldErrors.documentNumber ? 'var(--status-critical-fg)' : 'var(--border)'"
           />
-          <small v-if="fieldErrors.documentNumber" style="color: #EF4444; font-size: 0.72rem;">
+          <small v-if="fieldErrors.documentNumber" style="color: var(--status-critical-fg); font-size: 0.72rem;">
             {{ fieldErrors.documentNumber }}
           </small>
         </div>
@@ -185,7 +185,7 @@ function handleSave() {
         <div>
           <label
               class="block mb-1"
-              style="font-size: 0.78rem; font-weight: 600; color: #64748B;"
+              style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);"
           >
             {{ t('customer-form.phone-number') }} *
           </label>
@@ -194,11 +194,11 @@ function handleSave() {
               type="tel"
               :placeholder="t('customer-form.phone-placeholder')"
               class="w-full border-round-lg px-3 py-2"
-              style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
-              @focus="(e) => e.target.style.borderColor = '#0E7490'"
-              @blur="(e) => e.target.style.borderColor = fieldErrors.phoneNumber ? '#EF4444' : '#E2E8F0'"
+              style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none;"
+              @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+              @blur="(e) => e.target.style.borderColor = fieldErrors.phoneNumber ? 'var(--status-critical-fg)' : 'var(--border)'"
           />
-          <small v-if="fieldErrors.phoneNumber" style="color: #EF4444; font-size: 0.72rem;">
+          <small v-if="fieldErrors.phoneNumber" style="color: var(--status-critical-fg); font-size: 0.72rem;">
             {{ fieldErrors.phoneNumber }}
           </small>
         </div>
@@ -207,7 +207,7 @@ function handleSave() {
         <div>
           <label
               class="block mb-1"
-              style="font-size: 0.78rem; font-weight: 600; color: #64748B;"
+              style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);"
           >
             {{ t('customer-form.email') }}
           </label>
@@ -216,9 +216,9 @@ function handleSave() {
               type="email"
               :placeholder="t('customer-form.email-placeholder')"
               class="w-full border-round-lg px-3 py-2"
-              style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
-              @focus="(e) => e.target.style.borderColor = '#0E7490'"
-              @blur="(e) => e.target.style.borderColor = '#E2E8F0'"
+              style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none;"
+              @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+              @blur="(e) => e.target.style.borderColor = 'var(--border)'"
           />
         </div>
 
@@ -226,7 +226,7 @@ function handleSave() {
         <div class="flex gap-2 mt-1">
           <button
               class="flex-1 border-round-xl py-3"
-              style="border: 1px solid #E2E8F0; color: #64748B; font-size: 0.88rem; font-weight: 600; background: #fff; cursor: pointer;"
+              style="border: 1px solid var(--border); color: var(--text-muted); font-size: 0.88rem; font-weight: 600; background: var(--surface); cursor: pointer;"
               :disabled="saving"
               @click="emit('close')"
           >
@@ -235,8 +235,8 @@ function handleSave() {
           <button
               class="flex-1 border-round-xl py-3"
               :style="{
-                            backgroundColor: (isFormValid && !saving) ? '#0B3558' : '#CBD5E1',
-                            color: '#fff',
+                            backgroundColor: (isFormValid && !saving) ? 'var(--brand)' : 'var(--text-faint)',
+                            color: 'var(--brand-ink)',
                             fontSize: '0.88rem',
                             fontWeight: 600,
                             border: 'none',
