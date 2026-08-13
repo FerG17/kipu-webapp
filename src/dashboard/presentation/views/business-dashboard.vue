@@ -26,6 +26,8 @@ const {
 
 const { alerts, alertsLoaded, expirationActiveCount } = toRefs(alertsStore);
 
+const { salesError } = toRefs(salesStore);
+
 const { fetchSalesByDay, refreshMetrics } = dashboardStore;
 
 const { fetchAlerts } = alertsStore;
@@ -116,6 +118,15 @@ const expiringCount = computed(() =>
 const metricsReady = computed(() =>
     productStore.productsLoaded && productStore.inventoryLoaded && salesStore.salesLoaded
 );
+
+/**
+ * Whether the current role was denied read access to Sales (e.g. WAREHOUSE,
+ * per the backend's permission matrix) — surfaced explicitly instead of
+ * leaving the sales-derived KPI cards silently stuck at 0 with no
+ * explanation.
+ * @type {import('vue').ComputedRef<boolean>}
+ */
+const salesForbidden = computed(() => salesError.value?.response?.status === 403);
 
 /**
  * The six KPI cards rendered in the top grid.
@@ -376,6 +387,12 @@ const quickActions = computed(() => [
       </div>
     </div>
 
+    <!-- ── Sales access notice ─────────────────────────────────────────────── -->
+    <div v-if="salesForbidden" class="sales-forbidden-notice mb-3">
+      <i class="pi pi-lock"/>
+      {{ t('dashboard.sales-forbidden-notice') }}
+    </div>
+
     <!-- ── 6 KPI Cards ─────────────────────────────────────────────────────── -->
     <div class="kpi-grid mb-2">
       <div
@@ -563,7 +580,7 @@ const quickActions = computed(() => [
     </div>
 
     <!-- ── Errors ──────────────────────────────────────────────────────────── -->
-    <div v-if="errors.length" class="error-banner mt-3">
+    <div v-if="errors.length && !salesForbidden" class="error-banner mt-3">
       <i class="pi pi-exclamation-triangle"/>
       {{ t('errors.occurred') }}: {{ errors.map(error => error.message).join(', ') }}
     </div>
@@ -994,6 +1011,19 @@ const quickActions = computed(() => [
   background: var(--status-ok-bg);
   color: var(--status-ok-fg);
   white-space: nowrap;
+}
+
+/* ── Sales access notice ────────────────────────────────────────────── */
+.sales-forbidden-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.625rem;
+  background: var(--status-warning-bg);
+  border: 1px solid color-mix(in srgb, var(--status-warning-fg) 35%, transparent);
+  color: var(--status-warning-fg);
+  font-size: 0.85rem;
 }
 
 /* ── Error banner ───────────────────────────────────────────────────── */

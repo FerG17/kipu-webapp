@@ -199,6 +199,7 @@
     "severity-medium": "Medium",
     "severity-low": "Low",
     "loading": "Loading metrics...",
+    "sales-forbidden-notice": "Your role doesn't have access to sales data. This panel's sales figures aren't available.",
     "expiring-soon": "Expiring Soon",
     "weekly-movements": "Weekly Movements",
     "weekday-mon": "Mon",

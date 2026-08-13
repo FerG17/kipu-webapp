@@ -199,6 +199,7 @@
     "severity-medium": "Media",
     "severity-low": "Baja",
     "loading": "Cargando métricas...",
+    "sales-forbidden-notice": "Tu rol no tiene acceso a los datos de ventas. Las cifras de ventas de este panel no están disponibles.",
     "expiring-soon": "Por Vencer",
     "weekly-movements": "Movimientos de la semana",
     "weekday-mon": "Lun",
