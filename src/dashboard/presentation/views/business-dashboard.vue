@@ -5,7 +5,6 @@ import { useI18n }                     from 'vue-i18n';
 import useDashboardStore               from '../../application/dashboard.store.js';
 import useAlertsStore                  from '../../../alerts/application/alerts.store.js';
 import useProductStore                 from '../../../product/application/product.store.js';
-import useSalesStore                   from '../../../sales/application/sales.store.js';
 import useIamStore                     from '../../../iam/application/iam.store.js';
 import { AlertType }                   from '../../../alerts/domain/model/alert.entity.js';
 import { toDateLocale }                from '../../../shared/presentation/date-locale.js';
@@ -15,20 +14,21 @@ const router         = useRouter();
 const dashboardStore = useDashboardStore();
 const alertsStore    = useAlertsStore();
 const productStore   = useProductStore();
-const salesStore     = useSalesStore();
 const iamStore       = useIamStore();
 
 const {
-  liveMetrics,
+  kpis,
+  kpisLoaded,
+  dashboardForbidden,
   salesByDay,
+  topStockProducts,
+  topStockLoaded,
   errors
 } = toRefs(dashboardStore);
 
-const { alerts, alertsLoaded, expirationActiveCount } = toRefs(alertsStore);
+const { alerts, alertsLoaded } = toRefs(alertsStore);
 
-const { salesError } = toRefs(salesStore);
-
-const { fetchSalesByDay, refreshMetrics } = dashboardStore;
+const { fetchKpis, fetchSalesByDay, fetchTopStockProducts } = dashboardStore;
 
 const { fetchAlerts } = alertsStore;
 
@@ -59,22 +59,22 @@ onMounted(() => {
     productStore.fetchWarehousesForBusiness().then(fetched => {
       warehouses.value = fetched;
     });
-    if (!salesByDay.value.length)       fetchSalesByDay();
-    if (!productStore.productsLoaded)   productStore.fetchProducts();
-    if (!productStore.inventoryLoaded)  productStore.fetchInventory();
-    if (!salesStore.salesLoaded)        salesStore.fetchSales();
+    fetchKpis();
+    fetchSalesByDay();
+    fetchTopStockProducts();
   }
 });
 
 /**
- * Re-fetches everything the Panel shows from the server: products/inventory/
- * sales (liveMetrics + Mayor stock), the weekly chart and the alerts.
+ * Re-fetches everything the Panel shows from the server: the 6 KPIs, the
+ * weekly chart, "Mayor stock" and the alerts.
  */
 function handleRefresh() {
   const businessId = iamStore.currentUser?.businessId ?? null;
   if (!businessId) return;
-  refreshMetrics();
+  fetchKpis();
   fetchSalesByDay();
+  fetchTopStockProducts();
   fetchAlerts();
 }
 
@@ -96,47 +96,26 @@ const activeAlerts = computed(() =>
     alerts.value.filter(alert => alert.status === 'ACTIVE')
 );
 
-/**
- * Count of active EXPIRATION/EXPIRED alerts (used in the "Por Vencer" KPI).
- * Reuses alerts.store.js's own expirationActiveCount so both KPIs (here and
- * on the Alertas screen) always agree on the same number.
- * @type {import('vue').ComputedRef<number>}
- */
-const expiringCount = computed(() =>
-    alertsLoaded.value
-        ? expirationActiveCount.value
-        : null
-);
-
 // ─── KPI card definitions ──────────────────────────────────────────────────
 
 /**
- * Whether the real data liveMetrics is computed from has loaded at least
- * once — used to show a loading state instead of a misleading "0" flash.
+ * Whether kpis has loaded at least once — used to show a loading state
+ * instead of a misleading "0" flash.
  * @type {import('vue').ComputedRef<boolean>}
  */
-const metricsReady = computed(() =>
-    productStore.productsLoaded && productStore.inventoryLoaded && salesStore.salesLoaded
-);
+const metricsReady = computed(() => kpisLoaded.value && kpis.value !== null);
 
 /**
- * Whether the current role was denied read access to Sales (e.g. WAREHOUSE,
- * per the backend's permission matrix) — surfaced explicitly instead of
- * leaving the sales-derived KPI cards silently stuck at 0 with no
- * explanation.
- * @type {import('vue').ComputedRef<boolean>}
- */
-const salesForbidden = computed(() => salesError.value?.response?.status === 403);
-
-/**
- * The six KPI cards rendered in the top grid.
- * Each card reads from the loaded metrics / alerts state.
+ * The six KPI cards rendered in the top grid, sourced from the real
+ * GET /dashboard/kpis response — the single source of truth for all six,
+ * including "Por vencer" (previously a separate client-side count derived
+ * from the Alerts store, which could disagree with the server's own figure).
  * @type {import('vue').ComputedRef<Array>}
  */
 const kpiCards = computed(() => [
   {
     labelKey:   'dashboard.total-products',
-    value:      metricsReady.value ? liveMetrics.value.totalProducts : null,
+    value:      metricsReady.value ? kpis.value.totalProducts : null,
     icon:       'pi pi-box',
     iconColor:  'var(--brand)',
     iconBg:     'var(--brand-soft)',
@@ -144,7 +123,7 @@ const kpiCards = computed(() => [
   },
   {
     labelKey:   'dashboard.low-stock',
-    value:      metricsReady.value ? liveMetrics.value.lowStockProducts : null,
+    value:      metricsReady.value ? kpis.value.lowStockCount : null,
     icon:       'pi pi-exclamation-triangle',
     iconColor:  'var(--status-warning-fg)',
     iconBg:     'var(--status-warning-bg)',
@@ -152,7 +131,7 @@ const kpiCards = computed(() => [
   },
   {
     labelKey:   'dashboard.expiring-soon',
-    value:      expiringCount.value,
+    value:      metricsReady.value ? kpis.value.expiringSoonCount : null,
     icon:       'pi pi-calendar-times',
     iconColor:  'var(--status-critical-fg)',
     iconBg:     'var(--status-critical-bg)',
@@ -160,7 +139,7 @@ const kpiCards = computed(() => [
   },
   {
     labelKey:    'dashboard.inventory-value',
-    value:       metricsReady.value ? formatCurrency(liveMetrics.value.inventoryValue) : null,
+    value:       metricsReady.value ? formatCurrency(kpis.value.inventoryValue) : null,
     icon:        'pi pi-warehouse',
     iconColor:   'var(--status-ok-fg)',
     iconBg:      'var(--status-ok-bg)',
@@ -168,7 +147,7 @@ const kpiCards = computed(() => [
   },
   {
     labelKey:   'dashboard.total-sales',
-    value:      metricsReady.value ? formatCurrency(liveMetrics.value.totalSales) : null,
+    value:      metricsReady.value ? formatCurrency(kpis.value.totalSales) : null,
     icon:       'pi pi-shopping-cart',
     iconColor:  '#6366F1',
     iconBg:     '#EEF2FF',
@@ -176,7 +155,7 @@ const kpiCards = computed(() => [
   },
   {
     labelKey:   'dashboard.stock-health',
-    value:      metricsReady.value ? (liveMetrics.value.stockHealthPercentage + '%') : null,
+    value:      metricsReady.value ? (Math.round(kpis.value.stockHealthPercentage) + '%') : null,
     icon:       'pi pi-heart',
     iconColor:  'var(--brand)',
     iconBg:     '#CFFAFE',
@@ -273,30 +252,20 @@ const currentUserFirstName = computed(() => {
 });
 
 /**
- * Top 5 products sorted descending by REAL current inventory stock, for the
- * "Mayor stock" panel. This used to be wired to sales quantity (how much of
- * each product had been SOLD), which produced numbers that didn't match
- * Inventario at all and even ranked out-of-stock products highly if they'd
- * sold well in the past — it's now sourced from the same InventoryItem data
- * Inventario itself uses, so the numbers always agree.
- * stockPercent is each product's stock relative to the highest-stocked item.
+ * Top 5 products by real current stock for the "Mayor stock" panel, fetched
+ * from GET /dashboard/top-stock-products (see topStockProducts above) —
+ * mapped to the shape the template already expects (currentStock instead of
+ * the resource's totalStock, plus a client-computed stockPercent relative to
+ * the highest-stocked item in the response).
  * @type {import('vue').ComputedRef<Array>}
  */
-const topStockProducts = computed(() => {
-  const ranked = productStore.products
-      .map(product => ({
-        productId:    product.id,
-        productName:  product.name,
-        currentStock: productStore.getTotalInventoryForProduct(product.id)?.currentStock ?? 0
-      }))
-      .filter(product => product.currentStock > 0)
-      .sort((a, b) => b.currentStock - a.currentStock)
-      .slice(0, 5);
-
-  const maxStock = ranked[0]?.currentStock ?? 0;
-  return ranked.map(product => ({
-    ...product,
-    stockPercent: maxStock > 0 ? Math.round((product.currentStock / maxStock) * 100) : 0
+const topStockDisplay = computed(() => {
+  const maxStock = topStockProducts.value[0]?.totalStock ?? 0;
+  return topStockProducts.value.map(product => ({
+    productId:    product.productId,
+    productName:  product.productName,
+    currentStock: product.totalStock,
+    stockPercent: maxStock > 0 ? Math.round((product.totalStock / maxStock) * 100) : 0
   }));
 });
 
@@ -387,11 +356,13 @@ const quickActions = computed(() => [
       </div>
     </div>
 
-    <!-- ── Sales access notice ─────────────────────────────────────────────── -->
-    <div v-if="salesForbidden" class="sales-forbidden-notice mb-3">
+    <!-- ── Dashboard access notice ──────────────────────────────────────────── -->
+    <div v-if="dashboardForbidden" class="dashboard-forbidden-notice">
       <i class="pi pi-lock"/>
-      {{ t('dashboard.sales-forbidden-notice') }}
+      {{ t('dashboard.dashboard-forbidden-notice') }}
     </div>
+
+    <template v-else>
 
     <!-- ── 6 KPI Cards ─────────────────────────────────────────────────────── -->
     <div class="kpi-grid mb-2">
@@ -552,9 +523,9 @@ const quickActions = computed(() => [
             </button>
           </div>
 
-          <div v-if="topStockProducts.length" class="flex flex-column gap-3">
+          <div v-if="topStockDisplay.length" class="flex flex-column gap-3">
             <div
-                v-for="stockItem in topStockProducts"
+                v-for="stockItem in topStockDisplay"
                 :key="stockItem.productId"
                 class="stock-row"
             >
@@ -568,7 +539,7 @@ const quickActions = computed(() => [
             </div>
           </div>
 
-          <div v-else-if="!productStore.productsLoaded || !productStore.inventoryLoaded" class="panel__loading">
+          <div v-else-if="!topStockLoaded" class="panel__loading">
             <i class="pi pi-spin pi-spinner"/>
           </div>
 
@@ -580,11 +551,12 @@ const quickActions = computed(() => [
     </div>
 
     <!-- ── Errors ──────────────────────────────────────────────────────────── -->
-    <div v-if="errors.length && !salesForbidden" class="error-banner mt-3">
+    <div v-if="errors.length" class="error-banner mt-3">
       <i class="pi pi-exclamation-triangle"/>
       {{ t('errors.occurred') }}: {{ errors.map(error => error.message).join(', ') }}
     </div>
 
+    </template>
   </div>
 </template>
 
@@ -1014,16 +986,18 @@ const quickActions = computed(() => [
 }
 
 /* ── Sales access notice ────────────────────────────────────────────── */
-.sales-forbidden-notice {
+.dashboard-forbidden-notice {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border-radius: 0.625rem;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 2.5rem 1.5rem;
+  border-radius: 0.875rem;
   background: var(--status-warning-bg);
   border: 1px solid color-mix(in srgb, var(--status-warning-fg) 35%, transparent);
   color: var(--status-warning-fg);
-  font-size: 0.85rem;
+  font-size: 0.95rem;
+  text-align: center;
 }
 
 /* ── Error banner ───────────────────────────────────────────────────── */
