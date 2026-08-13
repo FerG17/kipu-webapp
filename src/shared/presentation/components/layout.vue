@@ -6,6 +6,7 @@ import LanguageSwitcher from './language-switcher.vue';
 import useIamStore from '../../../iam/application/iam.store.js';
 import useAlertsStore from '../../../alerts/application/alerts.store.js';
 import { roleLabelKey } from '../../../iam/presentation/role-labels.js';
+import { canAccessDashboard, canAccessSales, canAccessSuppliers } from '../../../iam/application/permissions.js';
 
 const { t }      = useI18n();
 const router     = useRouter();
@@ -62,18 +63,31 @@ function closeSidebar() {
 }
 
 /**
- * Navigation items for the sidebar menu.
+ * All navigation items for the sidebar menu.
  * Each entry maps a translation key, a PrimeIcons class and a route name.
- * The activeAlertCount badge is shown only for the alerts item.
+ * The activeAlertCount badge is shown only for the alerts item. `access`
+ * mirrors the route's own `meta.requiredPermission` guard (see
+ * authentication.guard.js) — a role that can't reach a route shouldn't see
+ * it in the menu either, so both stay in sync against the same predicate.
  */
-const menuItems = [
-  { labelKey: 'option.dashboard',  icon: 'pi pi-th-large',      routeName: 'dashboard'       },
-  { labelKey: 'option.inventory',  icon: 'pi pi-box',           routeName: 'products'        },
-  { labelKey: 'option.sales',      icon: 'pi pi-shopping-cart', routeName: 'pos-screen'      },
-  { labelKey: 'option.suppliers',  icon: 'pi pi-truck',         routeName: 'suppliers'       },
-  { labelKey: 'option.alerts',     icon: 'pi pi-bell',          routeName: 'alerts',         showBadge: true },
-  { labelKey: 'option.settings',   icon: 'pi pi-cog',           routeName: 'settings'        },
+const allMenuItems = [
+  { labelKey: 'option.dashboard',  icon: 'pi pi-th-large',      routeName: 'dashboard',  access: canAccessDashboard },
+  { labelKey: 'option.inventory',  icon: 'pi pi-box',           routeName: 'products'  },
+  { labelKey: 'option.sales',      icon: 'pi pi-shopping-cart', routeName: 'pos-screen', access: canAccessSales     },
+  { labelKey: 'option.suppliers',  icon: 'pi pi-truck',         routeName: 'suppliers',  access: canAccessSuppliers },
+  { labelKey: 'option.alerts',     icon: 'pi pi-bell',          routeName: 'alerts',     showBadge: true },
+  { labelKey: 'option.settings',   icon: 'pi pi-cog',           routeName: 'settings'  },
 ];
+
+/**
+ * Sidebar items visible to the current role — every item without an
+ * `access` predicate is open to any role (Inventory/Alerts/Settings all
+ * have read access for everyone, per Fase B4's matrix).
+ * @type {import('vue').ComputedRef<Array>}
+ */
+const menuItems = computed(() =>
+    allMenuItems.filter(item => !item.access || item.access(iamStore.currentUserPosition))
+);
 
 /**
  * Number of active (non-resolved) alerts for the sidebar badge.

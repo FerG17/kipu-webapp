@@ -115,6 +115,7 @@
     "profile-title": "Perfil del negocio",
     "field-business-name": "Nombre del negocio",
     "field-address": "Dirección",
+    "field-admin-only": "Solo el administrador puede editar los datos del negocio",
     "field-phone": "Teléfono",
     "field-first-name": "Nombre",
     "field-last-name": "Apellido",
