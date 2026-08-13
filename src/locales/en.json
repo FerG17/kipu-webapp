@@ -389,6 +389,7 @@
     "intake-field-qty": "Received quantity *",
     "intake-field-cost": "Cost price (S/)",
     "intake-field-expiration": "Expiration date",
+    "intake-field-sale-price": "Sale price (S/)",
     "intake-field-supplier": "Supplier *",
     "intake-field-supplier-placeholder": "e.g. Alicorp SAC",
     "intake-field-note": "Notes",

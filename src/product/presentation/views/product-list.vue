@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, toRefs, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, toRefs, watch } from 'vue';
 import { useI18n }        from 'vue-i18n';
 import { useToast }       from 'primevue/usetoast';
 import { useConfirm }     from 'primevue';
@@ -36,6 +36,7 @@ const showIntakeModal      = ref(false);
 const intakeTargetProduct  = ref(null);
 const showScanModal        = ref(false);
 const scanInput            = ref('');
+const scanInputEl          = ref(null);
 
 /**
  * Filter dropdown options: only the categories actually in use by this
@@ -337,10 +338,17 @@ function openCreateProductModal(prefillBarcode = '') {
  * no re-registration); unknown → opens manual product creation with the
  * code pre-filled, so it gets remembered from now on (progressive
  * learning, per the owner's 2026-08-12 request).
+ *
+ * The scan input is focused programmatically via nextTick + a template ref,
+ * not just the `autofocus` HTML attribute: the modal is toggled by a click
+ * handler, and Vue patches the DOM asynchronously, so the browser's native
+ * autofocus-on-insert heuristic unreliably misses that window — the owner
+ * had to click into the box by hand before the scanner's keystrokes landed.
  */
 function openScanModal() {
   scanInput.value = '';
   showScanModal.value = true;
+  nextTick(() => scanInputEl.value?.focus());
 }
 
 function handleScanSubmit() {
@@ -571,7 +579,7 @@ function handleDeleteProduct(product) {
 
 // ── Intake modal ───────────────────────────────────────────────────────────────
 
-const intakeForm = ref({ productId: '', quantity: '', cost: '', expirationDate: '', supplier: '', note: '', warehouseId: '' });
+const intakeForm = ref({ productId: '', quantity: '', cost: '', expirationDate: '', supplier: '', note: '', warehouseId: '', basePrice: '' });
 
 /**
  * Defaults the intake warehouse to where a product's stock already lives,
@@ -587,30 +595,54 @@ function resolveWarehouseIdForProduct(productId) {
   return warehouses.value[0] ? String(warehouses.value[0].id) : '';
 }
 
+/**
+ * Pre-fills the intake form from what's already known about a product —
+ * its last purchase cost/expiration (its active batch), its distributor
+ * (Product.description) and its current sale price — so re-stocking a
+ * known product (typically via the barcode scanner) only requires typing
+ * the quantity instead of retyping everything by hand. Every field stays
+ * a normal editable input, this is only the starting value.
+ * @param {number|string} productId
+ * @returns {{warehouseId: string, cost: string, expirationDate: string, supplier: string, basePrice: string}}
+ */
+function resolveIntakeDefaultsForProduct(productId) {
+  const product = products.value.find(p => p.id === parseInt(productId));
+  const activeBatch = productStore.batches.find(
+      batch => batch.productId === parseInt(productId) && batch.status === 'ACTIVE'
+  );
+  return {
+    warehouseId:    resolveWarehouseIdForProduct(productId),
+    cost:           activeBatch ? String(activeBatch.purchasePrice) : '',
+    expirationDate: activeBatch ? activeBatch.expiration : '',
+    supplier:       product?.description ?? '',
+    basePrice:      product ? String(product.basePrice) : ''
+  };
+}
+
 function openIntakeModal(product) {
   intakeTargetProduct.value = product;
   const initialProductId = product ? String(product.id) : (products.value[0] ? String(products.value[0].id) : '');
   intakeForm.value = {
-    productId:      initialProductId,
-    quantity:       '',
-    cost:           '',
-    expirationDate: '',
-    supplier:       '',
-    note:           '',
-    warehouseId:    resolveWarehouseIdForProduct(initialProductId)
+    productId: initialProductId,
+    quantity:  '',
+    note:      '',
+    ...(initialProductId
+        ? resolveIntakeDefaultsForProduct(initialProductId)
+        : { warehouseId: '', cost: '', expirationDate: '', supplier: '', basePrice: '' })
   };
   showIntakeModal.value = true;
 }
 
 /**
- * Keeps the warehouse selector in sync when the admin picks a different
- * product from the dropdown (the generic "Registrar ingreso" entry point,
- * not tied to one product's row), so it still defaults to that product's
- * real current warehouse instead of staying on whatever was selected before.
+ * Keeps cost/expiration/supplier/sale-price/warehouse in sync when the
+ * admin picks a different product from the dropdown (the generic
+ * "Registrar ingreso" entry point, not tied to one product's row), so they
+ * still default to that product's own known data instead of staying on
+ * whatever the previously selected product had.
  */
 watch(() => intakeForm.value.productId, (newProductId) => {
   if (!showIntakeModal.value || !newProductId) return;
-  intakeForm.value.warehouseId = resolveWarehouseIdForProduct(newProductId);
+  Object.assign(intakeForm.value, resolveIntakeDefaultsForProduct(newProductId));
 });
 
 function saveIntake() {
@@ -625,6 +657,14 @@ function saveIntake() {
     return;
   }
 
+  // The sale price field is pre-filled from the product's current basePrice
+  // (see resolveIntakeDefaultsForProduct) purely to save re-typing when it
+  // hasn't changed — only persisted as a real product update when the admin
+  // actually edited it, so an untouched intake never triggers an extra call.
+  const targetProduct  = products.value.find(p => p.id === parseInt(intakeForm.value.productId));
+  const newBasePrice   = parseFloat(intakeForm.value.basePrice);
+  const basePriceEdited = targetProduct && !isNaN(newBasePrice) && newBasePrice !== targetProduct.basePrice;
+
   savingIntake.value = true;
   registerStockIntake({
     productId:     parseInt(intakeForm.value.productId),
@@ -635,6 +675,9 @@ function saveIntake() {
     supplier:      intakeForm.value.supplier,
     note:          intakeForm.value.note
   })
+      .then(() => basePriceEdited
+          ? updateProduct(new Product({ ...targetProduct, basePrice: newBasePrice }))
+          : null)
       .then(() => {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-intake-success'), life: 3500 });
         showIntakeModal.value = false;
@@ -1534,8 +1577,8 @@ function saveWarehouse() {
         <div class="px-5 py-5">
           <label class="modal-label">{{ t('inventory.scan-modal-hint') }}</label>
           <input
+              ref="scanInputEl"
               v-model="scanInput"
-              autofocus
               :placeholder="t('inventory.scan-modal-placeholder')"
               class="modal-input"
               @keyup.enter="handleScanSubmit"
@@ -1605,6 +1648,11 @@ function saveWarehouse() {
               <label class="modal-label">{{ t('inventory.intake-field-expiration') }}</label>
               <input v-model="intakeForm.expirationDate" type="date" class="modal-input"/>
             </div>
+          </div>
+          <!-- Sale price -->
+          <div>
+            <label class="modal-label">{{ t('inventory.intake-field-sale-price') }}</label>
+            <input v-model="intakeForm.basePrice" type="number" min="0" step="0.01" placeholder="0.00" class="modal-input"/>
           </div>
           <!-- Warehouse -->
           <div>
