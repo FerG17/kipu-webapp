@@ -121,8 +121,11 @@ function isActiveRoute(routeName) {
  * a different business — would see stale data until a manual hard refresh.
  * A full reload guarantees every store starts clean, every time.
  */
-function handleSignOut() {
-  iamStore.signOut();
+async function handleSignOut() {
+  // Awaited so the backend sign-out call (clears the httpOnly cookie,
+  // revokes the token) completes before the full-page navigation below can
+  // cut it short.
+  await iamStore.signOut();
   window.location.href = router.resolve({ name: 'sign-in' }).href;
 }
 </script>
