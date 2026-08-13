@@ -52,7 +52,8 @@ const supplierModalForm = ref({
 const supplierModalErrors = ref({
   name:  '',
   ruc:   '',
-  phone: ''
+  phone: '',
+  email: ''
 });
 
 // ─── Category options ──────────────────────────────────────────────────────────
@@ -159,7 +160,7 @@ const filteredSuppliers = computed(() => {
  */
 function openCreateSupplierModal() {
   editingSupplier.value    = null;
-  supplierModalErrors.value = { name: '', ruc: '', phone: '' };
+  supplierModalErrors.value = { name: '', ruc: '', phone: '', email: '' };
   supplierModalForm.value   = {
     name:           '',
     lastName:       '',
@@ -183,7 +184,7 @@ function openCreateSupplierModal() {
  */
 function openEditSupplierModal(supplier) {
   editingSupplier.value    = supplier;
-  supplierModalErrors.value = { name: '', ruc: '', phone: '' };
+  supplierModalErrors.value = { name: '', ruc: '', phone: '', email: '' };
   supplierModalForm.value   = {
     name:           supplier.name,
     lastName:       supplier.lastName,
@@ -204,7 +205,7 @@ function openEditSupplierModal(supplier) {
  * @returns {boolean} True when all required fields are valid.
  */
 function validateSupplierForm() {
-  const formErrors = { name: '', ruc: '', phone: '' };
+  const formErrors = { name: '', ruc: '', phone: '', email: '' };
   let isValid      = true;
 
   if (!supplierModalForm.value.name.trim()) {
@@ -217,8 +218,22 @@ function validateSupplierForm() {
     isValid        = false;
   }
 
-  if (!supplierModalForm.value.phone.trim()) {
+  const phone = supplierModalForm.value.phone.trim();
+  if (!phone) {
     formErrors.phone = t('suppliers.error-phone');
+    isValid          = false;
+  } else {
+    const digitsOnly = phone.replace(/\D/g, '');
+    if (digitsOnly.length < 6 || digitsOnly.length > 9) {
+      formErrors.phone = t('suppliers.error-phone-invalid');
+      isValid          = false;
+    }
+  }
+
+  // Optional field — only validated when the user actually typed something.
+  const email = supplierModalForm.value.email.trim();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    formErrors.email = t('suppliers.error-email');
     isValid          = false;
   }
 
@@ -661,8 +676,12 @@ function formatCurrency(amount) {
                   v-model="supplierModalForm.email"
                   class="supplier-modal-input"
                   type="email"
+                  :class="{ 'supplier-modal-input-error': supplierModalErrors.email }"
                   :placeholder="t('suppliers.modal-field-email-placeholder')"
               />
+              <p v-if="supplierModalErrors.email" class="supplier-modal-error-msg">
+                {{ supplierModalErrors.email }}
+              </p>
             </div>
 
             <!-- Address -->
