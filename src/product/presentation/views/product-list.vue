@@ -349,6 +349,30 @@ function openEditProductModal(product) {
   showProductModal.value = true;
 }
 
+/**
+ * Finds an already-registered ACTIVE product whose defining fields (name,
+ * category, base price, distributor) match the create-modal form exactly —
+ * the case where the admin meant to restock an existing product but went to
+ * "Nuevo producto" instead. Stock/expiration are deliberately excluded from
+ * the comparison: those are exactly what a real reingreso is for, so they
+ * differing (or not) says nothing about whether this is a duplicate.
+ * @param {string} resolvedCategory
+ * @returns {import('../../domain/model/product.entity.js').Product|null}
+ */
+function findDuplicateProduct(resolvedCategory) {
+  const name        = productModalForm.value.name.trim().toLowerCase();
+  const basePrice    = parseFloat(productModalForm.value.basePrice) || 0;
+  const distributor  = productModalForm.value.supplier.trim().toLowerCase();
+
+  return products.value.find(product =>
+      product.isActive
+      && product.name.trim().toLowerCase() === name
+      && product.category === resolvedCategory
+      && product.basePrice === basePrice
+      && (product.description ?? '').trim().toLowerCase() === distributor
+  ) ?? null;
+}
+
 function saveProductFromModal() {
   if (!productModalForm.value.name.trim()) return;
 
@@ -363,8 +387,6 @@ function saveProductFromModal() {
     return;
   }
 
-  const businessId = iamStore.currentUser?.businessId ?? null;
-
   // When "Otros" is picked and the admin actually typed a custom label
   // (e.g. "Frutas"), that label becomes the real category instead of the
   // generic OTHER — effectively letting admins create new categories on
@@ -373,6 +395,38 @@ function saveProductFromModal() {
   const resolvedCategory = productModalForm.value.category === ProductCategory.OTHER && customCategory
       ? customCategory
       : productModalForm.value.category;
+
+  if (!editingProduct.value) {
+    const duplicate = findDuplicateProduct(resolvedCategory);
+    if (duplicate) {
+      confirm.require({
+        message:     t('inventory.confirm-duplicate-body', { name: duplicate.name }),
+        header:      t('inventory.confirm-duplicate-header'),
+        icon:        'pi pi-info-circle',
+        acceptLabel: t('inventory.confirm-duplicate-accept'),
+        rejectLabel: t('inventory.confirm-duplicate-reject'),
+        accept: () => {
+          showProductModal.value = false;
+          openIntakeModal(duplicate);
+        },
+        reject: () => persistProductFromModal(resolvedCategory)
+      });
+      return;
+    }
+  }
+
+  persistProductFromModal(resolvedCategory);
+}
+
+/**
+ * Actually creates/updates the product — split out from saveProductFromModal
+ * so the duplicate-product confirm dialog can call it directly on "no,
+ * create it anyway" without re-running the check that just fired.
+ * @param {string} resolvedCategory
+ */
+function persistProductFromModal(resolvedCategory) {
+  const businessId = iamStore.currentUser?.businessId ?? null;
+  const initialStock = parseInt(productModalForm.value.currentStock) || 0;
 
   const productEntity = new Product({
     id:          editingProduct.value ? editingProduct.value.id : null,
