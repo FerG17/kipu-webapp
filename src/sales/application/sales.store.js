@@ -47,6 +47,15 @@ const useSalesStore = defineStore('sales', () => {
     /** @type {import('vue').Ref<boolean>} */
     const salesLoaded = ref(false);
 
+    /**
+     * Set when the last fetchSales call failed (e.g. a WAREHOUSE role, which
+     * the backend denies read access to Sales) — lets callers like the
+     * Dashboard tell a permissions error apart from "still loading" instead
+     * of hanging in a loading state forever.
+     * @type {import('vue').Ref<Error|null>}
+     */
+    const salesError = ref(null);
+
     /** @type {import('vue').Ref<boolean>} */
     const customersLoaded = ref(false);
 
@@ -124,6 +133,7 @@ const useSalesStore = defineStore('sales', () => {
      * @returns {void}
      */
     function fetchSales() {
+        salesError.value = null;
         salesApi.getSales()
             .then(response => {
                 sales.value        = SaleAssembler.toEntitiesFromResponse(response);
@@ -131,6 +141,8 @@ const useSalesStore = defineStore('sales', () => {
             })
             .catch(error => {
                 errors.value.push(error);
+                salesError.value = error;
+                salesLoaded.value = true;
             });
     }
 
@@ -519,6 +531,7 @@ const useSalesStore = defineStore('sales', () => {
         customers,
         currentSale,
         salesLoaded,
+        salesError,
         customersLoaded,
         paymentPlans,
         paymentPlansLoaded,
