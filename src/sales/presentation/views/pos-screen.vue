@@ -8,6 +8,7 @@ import SaleSuccessModal   from '../components/sale-success-modal.vue';
 import useSalesStore      from '../../application/sales.store.js';
 import useProductStore    from '../../../product/application/product.store.js';
 import useIamStore        from '../../../iam/application/iam.store.js';
+import useAlertsStore     from '../../../alerts/application/alerts.store.js';
 import { PaymentMethod }  from '../../domain/model/sale.entity.js';
 import { isCustomCategory, filterableCategoryOptions } from '../../../product/presentation/category-options.js';
 
@@ -34,6 +35,7 @@ const toast        = useToast();
 const salesStore   = useSalesStore();
 const productStore = useProductStore();
 const iamStore     = useIamStore();
+const alertsStore  = useAlertsStore();
 
 // ─── UI state ──────────────────────────────────────────────────────────────
 
@@ -282,6 +284,10 @@ async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, t
     try {
       await productStore.fetchInventory();
       productStore.invalidateStockMovements();
+      // A sale can push a product below its minimum stock (LOW_STOCK /
+      // OUT_OF_STOCK) — refresh so the sidebar badge reflects it right away
+      // instead of only after the user happens to open Alertas.
+      alertsStore.fetchAlerts();
     } catch (error) {
       showStockError(t('pos.error-stock-deduction-failed'));
     }

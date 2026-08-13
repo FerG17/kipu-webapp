@@ -5,6 +5,7 @@ import { useToast }       from 'primevue/usetoast';
 import { useConfirm }     from 'primevue';
 import useProductStore, { parseLocalDate } from '../../application/product.store.js';
 import useIamStore        from '../../../iam/application/iam.store.js';
+import useAlertsStore     from '../../../alerts/application/alerts.store.js';
 import { Product, ProductCategory, ProductStatus } from '../../domain/model/product.entity.js';
 import { toDateLocale }   from '../../../shared/presentation/date-locale.js';
 import { isCustomCategory, orderedCategoryOptions, filterableCategoryOptions } from '../category-options.js';
@@ -14,6 +15,7 @@ const toast        = useToast();
 const confirm      = useConfirm();
 const productStore = useProductStore();
 const iamStore     = useIamStore();
+const alertsStore  = useAlertsStore();
 
 const { products, productsLoaded, inventory, stockMovements, stockMovementsLoaded, stockMovementsError, errors } = toRefs(productStore);
 const { fetchProducts, fetchInventory, fetchBatches, fetchAllStockMovements,
@@ -421,6 +423,10 @@ function saveProductFromModal() {
         // server-side (see registerStockIntake) — refresh so "Movimientos"
         // reflects it without requiring a full page reload.
         if (!editingProduct.value) fetchAllStockMovements();
+        // A low/zero initial stock, or a near expiration date, may have
+        // created an alert server-side — refresh so the sidebar badge picks
+        // it up right away instead of only after visiting Alertas.
+        alertsStore.fetchAlerts();
       })
       .catch(() => {
         toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-save-error'), life: 4500 });
@@ -539,6 +545,10 @@ function saveIntake() {
         // product's active batch server-side (see registerStockIntake) —
         // refresh so the expiration column reflects it immediately.
         if (intakeForm.value.cost || intakeForm.value.expirationDate) fetchBatches();
+        // The intake may have resolved a LOW_STOCK/OUT_OF_STOCK alert, or
+        // its expiration may have created a new EXPIRATION one — refresh so
+        // the sidebar badge picks it up right away.
+        alertsStore.fetchAlerts();
       })
       .catch(() => {
         toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-intake-error'), life: 4500 });
