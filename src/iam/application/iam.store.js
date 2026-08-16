@@ -145,11 +145,17 @@ const useIamStore = defineStore('iam', () => {
 
     restoreSession();
 
-    // When BaseApi sees a 401 (session cookie missing/expired/revoked), it
-    // dispatches this event. Wired here (not in BaseApi) so the
-    // shared/infrastructure layer never depends on IAM. Fire-and-forget is
-    // fine — nothing here needs to wait on the backend sign-out call.
-    window.addEventListener(SESSION_EXPIRED_EVENT, () => signOut());
+    // When BaseApi sees a 401 on a non-auth endpoint (session cookie
+    // missing/expired/revoked), it dispatches this event. Wired here (not in
+    // BaseApi) so the shared/infrastructure layer never depends on IAM.
+    // Fire-and-forget is fine — nothing here needs to wait on the backend
+    // sign-out call. Guarded on isAuthenticated so a stray event can never
+    // trigger a real /sign-out call (and its own possible 401) when there
+    // was no session to begin with — belt-and-suspenders alongside BaseApi's
+    // own exclusion of the authentication endpoints.
+    window.addEventListener(SESSION_EXPIRED_EVENT, () => {
+        if (isAuthenticated.value) signOut();
+    });
 
     /**
      * Number of loaded user accounts.
