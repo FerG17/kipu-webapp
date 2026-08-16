@@ -1,6 +1,8 @@
 <script setup>
-import { useI18n }  from 'vue-i18n';
-import { useToast } from 'primevue/usetoast';
+import { onMounted } from 'vue';
+import { useI18n }   from 'vue-i18n';
+import { useToast }  from 'primevue/usetoast';
+import useIamStore   from '../../../iam/application/iam.store.js';
 
 /**
  * SaleSuccessModal component for the Sales & POS Management bounded context.
@@ -36,8 +38,19 @@ const emit = defineEmits([
   'new-sale'
 ]);
 
-const { t } = useI18n();
-const toast = useToast();
+const { t }    = useI18n();
+const toast    = useToast();
+const iamStore = useIamStore();
+
+// The receipt header needs the business's own name/RUC/address — settings.vue
+// is the only other place that loads it today, and this modal can be the
+// very first screen a session ever hits (a cashier's first sale of the day),
+// so it can't assume it's already in the store.
+onMounted(() => {
+  if (!iamStore.businessLoaded && iamStore.currentUser?.businessId) {
+    iamStore.fetchBusiness(iamStore.currentUser.businessId);
+  }
+});
 
 /**
  * Formats a number as a Peruvian sol currency string.
@@ -59,7 +72,18 @@ function formatPaymentMethod(method) {
   return t(key);
 }
 
-/** Opens the browser's print dialog; `@media print` below trims the modal down to just the receipt. */
+/**
+ * Formats the sale's ISO timestamp for display, falling back to "now" when
+ * the backend didn't send one (defensive — Sale.date defaults to '').
+ * @returns {string}
+ */
+function formatReceiptDate() {
+  const parsed = props.sale.date ? new Date(props.sale.date) : new Date();
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+/** Opens the browser's print dialog; `@media print` below shows only the plain-text receipt block. */
 function printReceipt() {
   window.print();
 }
@@ -68,25 +92,36 @@ function printReceipt() {
  * Shares a plain-text summary of the sale via the Web Share API when
  * available (mobile/POS tablets); falls back to copying it to the clipboard
  * with a confirmation toast on desktop browsers that don't support sharing.
+ *
+ * Bug fixed here: this used to reference the bare `sale`/`props` fields as if
+ * they were script-setup locals (works in the template, which auto-exposes
+ * props, but not inside a plain function body) — every call threw a
+ * ReferenceError before it could even reach the share/clipboard logic, which
+ * is why the button silently did nothing.
  */
 async function shareReceipt() {
   const summaryText = t('pos.success-share-text', {
-    id:     sale.id ? `#${sale.id}` : '—',
-    total:  formatCurrency(sale.totalAmount || 0),
-    method: formatPaymentMethod(sale.paymentMethod)
+    id:     props.sale.id ? `#${props.sale.id}` : '—',
+    total:  formatCurrency(props.sale.totalAmount || 0),
+    method: formatPaymentMethod(props.sale.paymentMethod)
   });
 
   if (navigator.share) {
     try {
       await navigator.share({ text: summaryText });
-    } catch {
-      // User cancelled the native share sheet — nothing to do.
+      return;
+    } catch (error) {
+      if (error?.name === 'AbortError') return; // user dismissed the native share sheet
+      // Anything else (unsupported, permission denied, etc.) falls through to the clipboard below.
     }
-    return;
   }
 
-  await navigator.clipboard.writeText(summaryText);
-  toast.add({ severity: 'success', summary: t('pos.success-share'), detail: t('pos.success-share-copied'), life: 3000 });
+  try {
+    await navigator.clipboard.writeText(summaryText);
+    toast.add({ severity: 'success', summary: t('pos.success-share'), detail: t('pos.success-share-copied'), life: 3000 });
+  } catch {
+    toast.add({ severity: 'error', summary: t('pos.success-share'), detail: t('pos.success-share-failed'), life: 3500 });
+  }
 }
 </script>
 
@@ -178,15 +213,91 @@ async function shareReceipt() {
       >
         {{ t('pos.success-new-sale') }}
       </button>
+
+      <!-- Print-only receipt: hidden on screen, the only thing visible via
+           @media print below. Plain black-on-white, market-ticket layout —
+           deliberately NOT labeled "Boleta" (that's a specific SUNAT
+           electronic tax document requiring an authorized series/correlativo
+           and digital submission, none of which this app implements), so it
+           carries an explicit disclaimer instead of implying compliance. -->
+      <div class="print-receipt">
+        <p class="print-receipt-business">{{ iamStore.currentBusiness ? iamStore.currentBusiness.name : 'Bodega Platform' }}</p>
+        <p v-if="iamStore.currentBusiness?.ruc" class="print-receipt-line">RUC: {{ iamStore.currentBusiness.ruc }}</p>
+        <p v-if="iamStore.currentBusiness?.address" class="print-receipt-line">{{ iamStore.currentBusiness.address }}</p>
+        <p class="print-receipt-divider">------------------------------</p>
+        <p class="print-receipt-title">{{ t('pos.receipt-title') }}</p>
+        <p class="print-receipt-line">{{ t('pos.receipt-number') }}: {{ sale.id ? String(sale.id).padStart(6, '0') : '—' }}</p>
+        <p class="print-receipt-line">{{ t('pos.receipt-date') }}: {{ formatReceiptDate() }}</p>
+        <p class="print-receipt-divider">------------------------------</p>
+        <table class="print-receipt-table">
+          <thead>
+          <tr>
+            <th>{{ t('pos.receipt-col-qty') }}</th>
+            <th>{{ t('pos.receipt-col-product') }}</th>
+            <th>{{ t('pos.receipt-col-price') }}</th>
+            <th>{{ t('pos.receipt-col-subtotal') }}</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr v-for="(item, index) in saleItems" :key="index">
+            <td>{{ item.quantity }}</td>
+            <td>{{ item.productName }}</td>
+            <td>{{ Number(item.unitPrice).toFixed(2) }}</td>
+            <td>{{ Number(item.lineTotal).toFixed(2) }}</td>
+          </tr>
+          </tbody>
+        </table>
+        <p class="print-receipt-divider">------------------------------</p>
+        <p class="print-receipt-total">TOTAL: {{ formatCurrency(sale.totalAmount || 0) }}</p>
+        <p class="print-receipt-line">{{ t('pos.receipt-payment-method') }}: {{ formatPaymentMethod(sale.paymentMethod) }}</p>
+        <p class="print-receipt-divider">------------------------------</p>
+        <p class="print-receipt-line print-receipt-thanks">{{ t('pos.receipt-thanks') }}</p>
+        <p class="print-receipt-disclaimer">{{ t('pos.receipt-disclaimer') }}</p>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* Printing the receipt: hide the backdrop dimming and any action buttons —
-   only the sale/items breakdown above should end up on paper. */
+.print-receipt { display: none; }
+
+/* Printing: hide everything on the page except the plain-text receipt block
+   above, regardless of where it sits in the DOM (it's nested inside the
+   colored modal on screen) — visibility (not display) is used so the hidden
+   ancestors keep their layout while painting nothing, and the receipt is
+   pulled out with position:fixed so it isn't clipped by the modal's own
+   sizing/overflow. */
 @media print {
-  .receipt-actions { display: none !important; }
-  .receipt-backdrop { position: static !important; background: none !important; }
+  body * { visibility: hidden; }
+  .print-receipt, .print-receipt * { visibility: visible; }
+  .print-receipt {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 12px;
+    margin: 0;
+    background: #fff;
+    color: #000;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+    text-align: left;
+  }
+  .print-receipt-business { margin: 0 0 2px; font-size: 14px; font-weight: 700; text-align: center; }
+  .print-receipt-title { margin: 6px 0; font-size: 13px; font-weight: 700; text-align: center; }
+  .print-receipt-line { margin: 2px 0; }
+  .print-receipt-divider { margin: 4px 0; white-space: pre; }
+  .print-receipt-total { margin: 4px 0; font-size: 13px; font-weight: 700; }
+  .print-receipt-thanks { text-align: center; margin-top: 6px; }
+  .print-receipt-disclaimer { margin-top: 6px; font-size: 9px; text-align: center; }
+  .print-receipt-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .print-receipt-table th { text-align: left; border-bottom: 1px solid #000; padding: 2px 3px; }
+  .print-receipt-table td { padding: 2px 3px; vertical-align: top; }
+  .print-receipt-table th:first-child, .print-receipt-table td:first-child { text-align: center; }
+  .print-receipt-table th:nth-child(3), .print-receipt-table td:nth-child(3),
+  .print-receipt-table th:nth-child(4), .print-receipt-table td:nth-child(4) { text-align: right; }
+
+  @page { margin: 10mm; }
 }
 </style>

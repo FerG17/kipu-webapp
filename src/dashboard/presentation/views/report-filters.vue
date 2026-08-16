@@ -1,19 +1,33 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, toRefs } from 'vue';
 import { useRouter }     from 'vue-router';
 import { useI18n }       from 'vue-i18n';
 import useDashboardStore from '../../application/dashboard.store.js';
 import useProductStore   from '../../../product/application/product.store.js';
 import useIamStore       from '../../../iam/application/iam.store.js';
 import { ReportType }    from '../../domain/model/report.entity.js';
+import { toDateLocale }  from '../../../shared/presentation/date-locale.js';
 
-const { t }          = useI18n();
+/**
+ * Combined report generation + result + history view — merges what used to
+ * be two separately-routed screens (report-filters / report-result) into one,
+ * matching the Claude Design mockup's single two-column "Reportes" layout.
+ * All figures here are real: type/date-range/generated-at come straight from
+ * the persisted Report the backend returns, and CSV/PDF export re-runs the
+ * live query server-side — there is no client-side stat preview (e.g. a
+ * "126 movimientos / +312 ingresos" breakdown) because the backend has no
+ * endpoint that computes one; showing fabricated numbers here would be worse
+ * than not showing them.
+ */
+
+const { t, locale } = useI18n();
 const router         = useRouter();
 const dashboardStore = useDashboardStore();
 const productStore   = useProductStore();
 const iamStore       = useIamStore();
 
-const { errors, generateReport } = dashboardStore;
+const { reports, reportsLoaded, errors } = toRefs(dashboardStore);
+const { fetchReports, generateReport, downloadReportCsv, downloadReportPdf } = dashboardStore;
 
 /**
  * Products/suppliers are only needed for the STOCK_MOVEMENTS filter
@@ -25,6 +39,7 @@ const suppliers = ref([]);
 
 onMounted(() => {
   const businessId = iamStore.currentUser?.businessId ?? null;
+  fetchReports();
   if (!businessId) return;
   if (!productStore.productsLoaded) productStore.fetchProducts();
   productStore.fetchSuppliersForBusiness().then(fetched => { suppliers.value = fetched; });
@@ -49,24 +64,17 @@ const form = ref({
 });
 
 /**
- * Available report types for the dropdown — the 3 the backend actually
- * supports. "Stock bajo"/"Reposición" were frontend-only inventions with no
+ * Report type cards for the selector — the 3 the backend actually supports.
+ * "Stock bajo"/"Reposición" were frontend-only inventions with no
  * server-side persistence or export; that data is already covered live by
  * Inventario/Alertas.
- * @type {Array<{label: string, value: string}>}
+ * @type {Array<{ value: string, labelKey: string, descKey: string, icon: string }>}
  */
-const reportTypeOptions = [
-  { label: t('reports.type-sales'),           value: ReportType.SALES           },
-  { label: t('reports.type-inventory'),       value: ReportType.INVENTORY       },
-  { label: t('reports.type-stock-movements'), value: ReportType.STOCK_MOVEMENTS }
+const reportTypeCards = [
+  { value: ReportType.SALES,           labelKey: 'reports.type-sales',           descKey: 'reports.type-desc-sales',           icon: 'pi pi-shopping-cart' },
+  { value: ReportType.INVENTORY,       labelKey: 'reports.type-inventory',       descKey: 'reports.type-desc-inventory',       icon: 'pi pi-box' },
+  { value: ReportType.STOCK_MOVEMENTS, labelKey: 'reports.type-stock-movements', descKey: 'reports.type-desc-stock-movements', icon: 'pi pi-arrow-right-arrow-left' }
 ];
-
-/** @type {Record<string, string>} Icon per report type value */
-const reportTypeIcons = {
-  [ReportType.SALES]:           'pi pi-shopping-cart',
-  [ReportType.INVENTORY]:       'pi pi-box',
-  [ReportType.STOCK_MOVEMENTS]: 'pi pi-arrow-right-arrow-left'
-};
 
 /** @type {import('vue').ComputedRef<boolean>} */
 const isStockMovements = computed(() => form.value.type === ReportType.STOCK_MOVEMENTS);
@@ -90,13 +98,12 @@ const supplierOptions = computed(() => [
 ]);
 
 /**
- * Validates inputs, delegates to the store, and navigates to the result
- * view on success. The backend accepts null dates for every type (INVENTORY
- * ignores them entirely) — the only client-side rule left is date order,
- * and only when both are actually filled in, mirroring the backend's own
- * GenerateReportCommandValidator.
+ * Validates inputs, delegates to the store. The backend accepts null dates
+ * for every type (INVENTORY ignores them entirely) — the only client-side
+ * rule left is date order, and only when both are actually filled in,
+ * mirroring the backend's own GenerateReportCommandValidator.
  */
-function applyFilters() {
+function submitGenerateReport() {
   validationError.value = '';
 
   if (form.value.startDate && form.value.endDate && new Date(form.value.startDate) > new Date(form.value.endDate)) {
@@ -112,7 +119,6 @@ function applyFilters() {
     productId:  isStockMovements.value && form.value.productId  ? parseInt(form.value.productId)  : null,
     supplierId: isStockMovements.value && form.value.supplierId ? parseInt(form.value.supplierId) : null
   })
-      .then(() => router.push({ name: 'dashboard-report-result' }))
       .catch(error => {
         validationError.value = error.response?.status === 400
             ? (error.response.data?.detail ?? t('reports.error-date-range'))
@@ -124,6 +130,79 @@ function applyFilters() {
 /** Navigates back to the main dashboard. */
 function navigateBack() {
   router.push({ name: 'dashboard' });
+}
+
+// ─── Result + history (previously report-result.vue) ────────────────────────
+
+/**
+ * The most recently generated report (last element of the history array —
+ * the store appends new reports to the end), shown as a "reporte listo"
+ * card. Persists across visits (not just right after generating) since it's
+ * simply "the most recent report on file", same as before.
+ * @type {import('vue').ComputedRef<import('../../domain/model/report.entity.js').Report|null>}
+ */
+const latestReport = computed(() => reports.value.length ? reports.value[reports.value.length - 1] : null);
+
+/**
+ * History rows excluding the just-generated one, newest first — it already
+ * has its own card above, showing it twice would be redundant.
+ * @type {import('vue').ComputedRef<Array>}
+ */
+const historyReports = computed(() => {
+  const rest = latestReport.value ? reports.value.slice(0, -1) : reports.value.slice();
+  return rest.slice().reverse();
+});
+
+/** @type {import('vue').Ref<Set<number>>} */
+const downloadingIds = ref(new Set());
+
+/**
+ * @param {number} reportId
+ * @param {'csv'|'pdf'} format
+ */
+function handleDownload(reportId, format) {
+  downloadingIds.value = new Set(downloadingIds.value).add(reportId);
+  const download = format === 'pdf' ? downloadReportPdf(reportId) : downloadReportCsv(reportId);
+  download.catch(() => {}).finally(() => {
+    const next = new Set(downloadingIds.value);
+    next.delete(reportId);
+    downloadingIds.value = next;
+  });
+}
+
+/**
+ * Translated label for a report type.
+ * @param {string} type - A ReportType value.
+ * @returns {string}
+ */
+function reportTypeLabel(type) {
+  const found = reportTypeCards.find(card => card.value === type);
+  return found ? t(found.labelKey) : type;
+}
+
+/**
+ * Formats a report's date range for display, or a dash when neither bound
+ * was set (valid — INVENTORY ignores dates entirely, and SALES/
+ * STOCK_MOVEMENTS accept open-ended ranges).
+ * @param {import('../../domain/model/report.entity.js').Report} report
+ * @returns {string}
+ */
+function formatRange(report) {
+  if (!report.dateFrom && !report.dateTo) return t('reports.no-date-range');
+  const from = report.dateFrom ? new Date(report.dateFrom).toLocaleDateString(toDateLocale(locale.value)) : '…';
+  const to   = report.dateTo   ? new Date(report.dateTo).toLocaleDateString(toDateLocale(locale.value))   : '…';
+  return `${from} – ${to}`;
+}
+
+/**
+ * @param {string} isoDate
+ * @returns {string}
+ */
+function formatGeneratedAt(isoDate) {
+  if (!isoDate) return '—';
+  return new Date(isoDate).toLocaleString(toDateLocale(locale.value), {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
 }
 </script>
 
@@ -141,114 +220,180 @@ function navigateBack() {
       </div>
     </div>
 
-    <!-- ── Form card ─────────────────────────────────────────────────────────── -->
-    <div class="form-card">
+    <div class="reports-layout">
 
-      <!-- Report type -->
-      <div class="form-field">
-        <label for="report-type" class="form-label">
-          <i :class="reportTypeIcons[form.type]" class="form-label__icon"/>
-          {{ t('reports.type') }}
-        </label>
-        <pv-select
-            id="report-type"
-            v-model="form.type"
-            :options="reportTypeOptions"
-            option-label="label"
-            option-value="value"
-            class="w-full"
-        />
-      </div>
+      <!-- ── Left: generate form ─────────────────────────────────────────────── -->
+      <div class="form-card">
+        <h2 class="form-card__title">{{ t('reports.generate-card-title') }}</h2>
 
-      <!-- Date range -->
-      <div class="date-range">
+        <!-- Report type cards -->
         <div class="form-field">
-          <label for="start-date" class="form-label">
-            <i class="pi pi-calendar form-label__icon"/>
-            {{ t('reports.start-date') }}
-          </label>
-          <input
-              id="start-date"
-              v-model="form.startDate"
-              type="date"
-              class="date-input"
-              :class="{ 'date-input--error': validationError }"
-          />
+          <label class="form-label">{{ t('reports.type') }}</label>
+          <div class="type-cards">
+            <button
+                v-for="card in reportTypeCards"
+                :key="card.value"
+                type="button"
+                class="type-card"
+                :class="{ 'type-card--active': form.type === card.value }"
+                @click="form.type = card.value"
+            >
+              <span class="type-card__icon" :class="{ 'type-card__icon--active': form.type === card.value }">
+                <i :class="card.icon"/>
+              </span>
+              <span class="type-card__text">
+                <span class="type-card__label">{{ t(card.labelKey) }}</span>
+                <span class="type-card__desc">{{ t(card.descKey) }}</span>
+              </span>
+              <span class="type-card__radio" :class="{ 'type-card__radio--active': form.type === card.value }">
+                <span v-if="form.type === card.value" class="type-card__radio-dot"/>
+              </span>
+            </button>
+          </div>
         </div>
 
-        <div class="date-range__separator">
-          <span>—</span>
-        </div>
-
+        <!-- Date range -->
         <div class="form-field">
-          <label for="end-date" class="form-label">
-            <i class="pi pi-calendar form-label__icon"/>
-            {{ t('reports.end-date') }}
-          </label>
-          <input
-              id="end-date"
-              v-model="form.endDate"
-              type="date"
-              class="date-input"
-              :class="{ 'date-input--error': validationError }"
-          />
+          <div class="flex align-items-baseline justify-content-between">
+            <label class="form-label" style="margin-bottom: 0;">{{ t('reports.filters') }}</label>
+            <span class="date-range-hint">{{ t('reports.date-range-hint') }}</span>
+          </div>
+          <div class="date-range">
+            <div class="form-field">
+              <label for="start-date" class="form-label form-label--sub">{{ t('reports.start-date') }}</label>
+              <input
+                  id="start-date"
+                  v-model="form.startDate"
+                  type="date"
+                  class="date-input"
+                  :class="{ 'date-input--error': validationError }"
+              />
+            </div>
+            <div class="date-range__separator">
+              <span>—</span>
+            </div>
+            <div class="form-field">
+              <label for="end-date" class="form-label form-label--sub">{{ t('reports.end-date') }}</label>
+              <input
+                  id="end-date"
+                  v-model="form.endDate"
+                  type="date"
+                  class="date-input"
+                  :class="{ 'date-input--error': validationError }"
+              />
+            </div>
+          </div>
         </div>
-      </div>
 
-      <!-- Product/Supplier (only meaningful for STOCK_MOVEMENTS) -->
-      <template v-if="isStockMovements">
-        <div class="form-field">
-          <label for="filter-product" class="form-label">
-            <i class="pi pi-box form-label__icon"/>
-            {{ t('reports.field-product') }}
-          </label>
-          <pv-select
-              id="filter-product"
-              v-model="form.productId"
-              :options="productOptions"
-              option-label="label"
-              option-value="value"
-              class="w-full"
-          />
+        <!-- Product/Supplier (only meaningful for STOCK_MOVEMENTS) -->
+        <div v-if="isStockMovements" class="stock-movements-panel">
+          <p class="stock-movements-panel__label">{{ t('reports.type-stock-movements') }}</p>
+          <div class="form-field">
+            <label for="filter-product" class="form-label form-label--sub">{{ t('reports.field-product') }}</label>
+            <pv-select
+                id="filter-product"
+                v-model="form.productId"
+                :options="productOptions"
+                option-label="label"
+                option-value="value"
+                class="w-full"
+            />
+          </div>
+          <div class="form-field">
+            <label for="filter-supplier" class="form-label form-label--sub">{{ t('reports.field-supplier') }}</label>
+            <pv-select
+                id="filter-supplier"
+                v-model="form.supplierId"
+                :options="supplierOptions"
+                option-label="label"
+                option-value="value"
+                class="w-full"
+            />
+          </div>
         </div>
 
-        <div class="form-field">
-          <label for="filter-supplier" class="form-label">
-            <i class="pi pi-truck form-label__icon"/>
-            {{ t('reports.field-supplier') }}
-          </label>
-          <pv-select
-              id="filter-supplier"
-              v-model="form.supplierId"
-              :options="supplierOptions"
-              option-label="label"
-              option-value="value"
-              class="w-full"
-          />
+        <!-- Validation error -->
+        <div v-if="validationError" class="validation-error">
+          <i class="pi pi-exclamation-circle"/>
+          {{ validationError }}
         </div>
-      </template>
 
-      <!-- Validation error -->
-      <div v-if="validationError" class="validation-error">
-        <i class="pi pi-exclamation-circle"/>
-        {{ validationError }}
-      </div>
-
-      <!-- Actions -->
-      <div class="form-actions">
-        <button class="btn-secondary" :disabled="generating" @click="navigateBack">
-          {{ t('reports.cancel') }}
-        </button>
-        <button class="btn-primary" :disabled="generating" @click="applyFilters">
+        <button class="btn-primary btn-generate" :disabled="generating" @click="submitGenerateReport">
           <i :class="generating ? 'pi pi-spin pi-spinner' : 'pi pi-chart-bar'"/>
-          {{ t('reports.apply') }}
+          {{ generating ? t('reports.apply') + '…' : t('reports.apply') }}
         </button>
+
+        <!-- Store-level errors -->
+        <div v-if="errors.length" class="store-errors">
+          <i class="pi pi-exclamation-triangle"/>
+          {{ t('errors.occurred') }}: {{ errors.map(error => error.message).join(', ') }}
+        </div>
       </div>
 
-      <!-- Store-level errors -->
-      <div v-if="errors.length" class="store-errors">
-        <i class="pi pi-exclamation-triangle"/>
-        {{ t('errors.occurred') }}: {{ errors.map(error => error.message).join(', ') }}
+      <!-- ── Right: result + history ─────────────────────────────────────────── -->
+      <div class="result-column">
+
+        <!-- Latest report -->
+        <div v-if="latestReport" class="result-card">
+          <div class="result-card__header">
+            <span class="result-card__icon"><i class="pi pi-check-circle"/></span>
+            <div>
+              <p class="result-card__title">{{ t('reports.generated-confirmation-title') }}</p>
+              <p class="result-card__subtitle">{{ formatGeneratedAt(latestReport.generatedAt) }}</p>
+            </div>
+          </div>
+          <div class="result-card__summary">
+            <p class="result-card__summary-title">{{ reportTypeLabel(latestReport.type) }}</p>
+            <p class="result-card__summary-range">{{ formatRange(latestReport) }}</p>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn-primary result-card__download-btn" :disabled="downloadingIds.has(latestReport.id)" @click="handleDownload(latestReport.id, 'csv')">
+              <i :class="downloadingIds.has(latestReport.id) ? 'pi pi-spin pi-spinner' : 'pi pi-download'"/>
+              {{ t('reports.download-csv') }}
+            </button>
+            <button
+                v-if="latestReport.type === 'STOCK_MOVEMENTS'"
+                class="btn-secondary result-card__download-btn"
+                :disabled="downloadingIds.has(latestReport.id)"
+                @click="handleDownload(latestReport.id, 'pdf')"
+            >
+              <i :class="downloadingIds.has(latestReport.id) ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'"/>
+              {{ t('reports.download-pdf') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- History -->
+        <div class="history-card">
+          <div class="flex align-items-baseline justify-content-between mb-3">
+            <p class="history-card__title">{{ t('reports.history-title') }}</p>
+            <span class="history-card__subtitle">{{ t('reports.history-subtitle') }}</span>
+          </div>
+
+          <div v-if="!reportsLoaded" class="flex justify-content-center py-5">
+            <i class="pi pi-spin pi-spinner" style="color: var(--brand); font-size: 1.3rem;"/>
+          </div>
+          <p v-else-if="!historyReports.length" class="history-empty">
+            {{ t('reports.no-reports') }}
+          </p>
+          <div v-else class="history-list">
+            <div v-for="report in historyReports" :key="report.id" class="history-row">
+              <span class="history-row__icon"><i :class="reportTypeCards.find(c => c.value === report.type)?.icon ?? 'pi pi-file'"/></span>
+              <div class="history-row__text">
+                <p class="history-row__title">{{ reportTypeLabel(report.type) }}</p>
+                <p class="history-row__meta">{{ formatGeneratedAt(report.generatedAt) }} · {{ formatRange(report) }}</p>
+              </div>
+              <div class="flex gap-2 flex-shrink-0">
+                <button class="history-row__chip" :disabled="downloadingIds.has(report.id)" @click="handleDownload(report.id, 'csv')">
+                  <i :class="downloadingIds.has(report.id) ? 'pi pi-spin pi-spinner' : 'pi pi-download'"/> {{ t('reports.download-csv') }}
+                </button>
+                <button v-if="report.type === 'STOCK_MOVEMENTS'" class="history-row__chip" :disabled="downloadingIds.has(report.id)" @click="handleDownload(report.id, 'pdf')">
+                  <i :class="downloadingIds.has(report.id) ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'"/> {{ t('reports.download-pdf') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -259,7 +404,6 @@ function navigateBack() {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-width: 560px;
   padding: 1.5rem;
 }
 
@@ -297,15 +441,32 @@ function navigateBack() {
 }
 .back-btn:hover { background-color: var(--surface-alt); color: var(--brand); }
 
+/* ── Two-column layout ──────────────────────────────────────────────── */
+.reports-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (min-width: 960px) {
+  .reports-layout { grid-template-columns: 1.15fr 1fr; }
+}
+
 /* ── Form card ───────────────────────────────────────────────────────── */
 .form-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 0.875rem;
-  padding: 1.75rem;
+  border-radius: 1rem;
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.1rem;
+}
+.form-card__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--text);
 }
 
 /* ── Fields ──────────────────────────────────────────────────────────── */
@@ -315,19 +476,55 @@ function navigateBack() {
   gap: 0.45rem;
 }
 .form-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.form-label--sub { font-size: 0.7rem; }
+.date-range-hint { font-size: 0.72rem; color: var(--text-faint); }
+
+/* ── Type cards ──────────────────────────────────────────────────────── */
+.type-cards { display: flex; flex-direction: column; gap: 0.5rem; }
+.type-card {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text);
-  text-transform: uppercase;
-  letter-spacing: 0.035em;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1.5px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--bg);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background-color 0.15s;
 }
-.form-label__icon {
-  font-size: 0.75rem;
-  color: var(--brand);
+.type-card--active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
 }
+.type-card__icon {
+  flex-shrink: 0;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-alt);
+  color: var(--text-faint);
+  font-size: 0.9rem;
+}
+.type-card__icon--active { background: var(--brand); color: var(--brand-ink); }
+.type-card__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.type-card__label { font-size: 0.85rem; font-weight: 700; color: var(--text); }
+.type-card__desc { font-size: 0.72rem; color: var(--text-muted); }
+.type-card__radio {
+  flex-shrink: 0;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center;
+}
+.type-card__radio--active { border-color: var(--brand); }
+.type-card__radio-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); }
 
 /* ── Date range layout ───────────────────────────────────────────────── */
 .date-range {
@@ -347,21 +544,39 @@ function navigateBack() {
 .date-input {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--text-faint);
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
   font-size: 0.9rem;
   color: var(--text);
-  background: var(--surface);
+  background: var(--bg);
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
   box-sizing: border-box;
 }
 .date-input:focus {
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 15%, transparent);
 }
 .date-input--error {
   border-color: var(--status-critical-fg);
+}
+
+/* ── Stock movements sub-panel ───────────────────────────────────────── */
+.stock-movements-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border-radius: 0.9rem;
+  background: var(--brand-soft);
+}
+.stock-movements-panel__label {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--brand);
 }
 
 /* ── Validation error ────────────────────────────────────────────────── */
@@ -378,22 +593,17 @@ function navigateBack() {
   font-weight: 500;
 }
 
-/* ── Actions ─────────────────────────────────────────────────────────── */
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-}
+/* ── Buttons ─────────────────────────────────────────────────────────── */
 .btn-primary,
 .btn-secondary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
-  padding: 0.55rem 1.25rem;
-  border-radius: 0.5rem;
-  font-size: 0.88rem;
-  font-weight: 600;
+  padding: 0.6rem 1.25rem;
+  border-radius: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 700;
   cursor: pointer;
   transition: filter 0.15s, transform 0.1s;
   border: none;
@@ -402,16 +612,17 @@ function navigateBack() {
   background: var(--brand);
   color: var(--brand-ink);
 }
-.btn-primary:hover  { filter: brightness(1.1); }
-.btn-primary:active { transform: scale(0.98); }
+.btn-primary:hover:not(:disabled)  { filter: brightness(1.08); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-secondary {
-  background: var(--surface-alt);
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
 }
-.btn-secondary:hover { background: var(--border); }
+.btn-secondary:hover:not(:disabled) { background: var(--surface-alt); }
 .btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-generate { width: 100%; padding: 0.85rem; font-size: 0.92rem; }
+.result-card__download-btn { flex: 1; }
 
 /* ── Store errors ────────────────────────────────────────────────────── */
 .store-errors {
@@ -424,5 +635,88 @@ function navigateBack() {
   border-radius: 0.5rem;
   color: var(--status-critical-fg);
   font-size: 0.82rem;
+}
+
+/* ── Result column ───────────────────────────────────────────────────── */
+.result-column { display: flex; flex-direction: column; gap: 1.25rem; }
+
+.result-card {
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.result-card__header { display: flex; align-items: center; gap: 0.75rem; }
+.result-card__icon {
+  flex-shrink: 0;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: var(--accent-ink);
+  font-size: 1.05rem;
+}
+.result-card__title { margin: 0; font-family: var(--font-display); font-size: 1.05rem; color: var(--text); }
+.result-card__subtitle { margin: 0.15rem 0 0; font-size: 0.75rem; color: var(--text-muted); }
+.result-card__summary {
+  padding: 0.9rem;
+  border-radius: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.result-card__summary-title { margin: 0; font-size: 0.9rem; font-weight: 700; color: var(--text); }
+.result-card__summary-range { margin: 0.3rem 0 0; font-size: 0.78rem; color: var(--text-muted); }
+
+/* ── History card ────────────────────────────────────────────────────── */
+.history-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 1.5rem;
+}
+.history-card__title { margin: 0; font-family: var(--font-display); font-size: 1.05rem; color: var(--text); }
+.history-card__subtitle { font-size: 0.75rem; color: var(--text-muted); }
+.history-empty { margin: 0; padding: 1rem 0; color: var(--text-faint); font-size: 0.85rem; }
+
+.history-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--bg);
+}
+.history-row__icon {
+  flex-shrink: 0;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-alt); color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.history-row__text { flex: 1; min-width: 0; }
+.history-row__title { margin: 0; font-size: 0.83rem; font-weight: 600; color: var(--text); }
+.history-row__meta { margin: 0.15rem 0 0; font-size: 0.7rem; color: var(--text-faint); }
+.history-row__chip {
+  display: flex; align-items: center; gap: 0.3rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.history-row__chip:hover:not(:disabled) { background: var(--surface-alt); }
+.history-row__chip:disabled { opacity: 0.6; cursor: not-allowed; }
+
+@media (max-width: 640px) {
+  .history-row { flex-wrap: wrap; }
 }
 </style>

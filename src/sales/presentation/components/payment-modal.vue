@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useI18n }       from 'vue-i18n';
+import { useConfirm }    from 'primevue';
 import { PaymentMethod } from '../../domain/model/sale.entity.js';
 
 /**
@@ -49,6 +50,21 @@ const emit = defineEmits([
 ]);
 
 const { t } = useI18n();
+const confirm = useConfirm();
+
+/**
+ * Asks for confirmation before cancelling the in-progress sale — a stray tap
+ * on this button used to close the modal instantly with no way back short of
+ * re-adding every cart line by hand.
+ */
+function handleCancelClick() {
+  confirm.require({
+    message: t('pos.payment-cancel-confirm-message'),
+    header:  t('pos.payment-cancel-confirm-header'),
+    icon:    'pi pi-exclamation-triangle',
+    accept:  () => emit('cancel')
+  });
+}
 
 /**
  * Currently selected payment method.
@@ -345,7 +361,7 @@ function handleConfirm() {
         <button
             class="flex-1 border-round-xl py-3"
             style="border: 1px solid var(--border); color: var(--text-muted); font-size: 0.88rem; font-weight: 600; background: var(--surface); cursor: pointer;"
-            @click="emit('cancel')"
+            @click="handleCancelClick"
         >
           {{ t('pos.payment-cancel-sale') }}
         </button>

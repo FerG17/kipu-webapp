@@ -326,12 +326,12 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
         </span>
         <button
             class="flex align-items-center gap-2 px-5 py-2 border-round-xl border-none cursor-pointer"
-            style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.9rem; font-weight: 700; box-shadow: 0 2px 10px rgba(14,116,144,0.3); transition: all 0.18s;"
+            style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.9rem; font-weight: 700; box-shadow: 0 2px 10px rgba(198,113,57,0.3); transition: all 0.18s;"
             :style="{ opacity: savingProfile ? 0.7 : 1, cursor: savingProfile ? 'not-allowed' : 'pointer' }"
             :disabled="savingProfile"
             @click="saveProfile"
-            @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(14,116,144,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
-            @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(14,116,144,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
+            @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(198,113,57,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
+            @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(198,113,57,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
         >
           <i v-if="savingProfile" class="pi pi-spin pi-spinner"/>
           <i v-else class="pi pi-check"/>
@@ -353,10 +353,10 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
         </div>
         <button
             class="flex align-items-center gap-2 px-4 py-2 border-round-xl border-none cursor-pointer"
-            style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.82rem; font-weight: 700; box-shadow: 0 2px 8px rgba(14,116,144,0.3); transition: all 0.18s;"
+            style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.82rem; font-weight: 700; box-shadow: 0 2px 8px rgba(198,113,57,0.3); transition: all 0.18s;"
             @click="showInviteModal = true"
-            @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(14,116,144,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
-            @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(14,116,144,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
+            @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(198,113,57,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
+            @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(198,113,57,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
         >
           <i class="pi pi-user-plus" style="font-size: 0.82rem;"/>
           {{ t('settings.invite-user') }}
@@ -637,11 +637,11 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
           <button
               type="submit"
               class="flex align-items-center gap-2 px-5 py-2 border-round-xl border-none cursor-pointer"
-              style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.9rem; font-weight: 700; width: fit-content; box-shadow: 0 2px 10px rgba(14,116,144,0.3); transition: all 0.18s;"
+              style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.9rem; font-weight: 700; width: fit-content; box-shadow: 0 2px 10px rgba(198,113,57,0.3); transition: all 0.18s;"
               :style="{ opacity: securitySubmitting ? 0.7 : 1, cursor: securitySubmitting ? 'not-allowed' : 'pointer' }"
               :disabled="securitySubmitting"
-              @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(14,116,144,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
-              @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(14,116,144,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
+              @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(198,113,57,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
+              @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(198,113,57,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
           >
             <i v-if="securitySubmitting" class="pi pi-spin pi-spinner"/>
             <i v-else class="pi pi-lock"/>
@@ -678,7 +678,7 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
   padding: 10px 14px;
   background-color: var(--surface-alt);
   border: 1.5px solid var(--border);
-  color: var(--brand); font-size: 0.9rem;
+  color: var(--text); font-size: 0.9rem;
   outline: none; transition: all 0.18s;
   box-sizing: border-box; font-family: inherit;
 }
@@ -689,7 +689,7 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
 .settings-input:focus {
   border-color: var(--brand);
   background-color: var(--surface);
-  box-shadow: 0 0 0 3px rgba(14,116,144,0.12);
+  box-shadow: 0 0 0 3px rgba(198,113,57,0.12);
 }
 
 .settings-error {

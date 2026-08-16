@@ -1806,11 +1806,11 @@ function saveWarehouse() {
   color: var(--brand-ink);
   font-size: 0.82rem;
   font-weight: 600;
-  box-shadow: 0 2px 10px rgba(14, 116, 144, 0.35);
+  box-shadow: 0 2px 10px rgba(198, 113, 57, 0.35);
   transition: all 0.18s;
 }
 .btn-primary:hover {
-  box-shadow: 0 6px 20px rgba(14, 116, 144, 0.45);
+  box-shadow: 0 6px 20px rgba(198, 113, 57, 0.45);
   transform: translateY(-1px);
 }
 
@@ -1879,7 +1879,7 @@ function saveWarehouse() {
 }
 .search-input:focus {
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.12);
+  box-shadow: 0 0 0 3px rgba(198, 113, 57, 0.12);
   background-color: var(--surface);
 }
 
@@ -1976,7 +1976,7 @@ function saveWarehouse() {
 
 .warehouse-card-btn-active {
   border-color: var(--brand);
-  box-shadow:   0 0 0 2px rgba(14, 116, 144, 0.25);
+  box-shadow:   0 0 0 2px rgba(198, 113, 57, 0.25);
 }
 
 .table-head {
@@ -2169,7 +2169,7 @@ function saveWarehouse() {
   color: var(--brand-ink);
   font-size: 0.8rem;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(14, 116, 144, 0.3);
+  box-shadow: 0 2px 8px rgba(198, 113, 57, 0.3);
 }
 
 .btn-mobile-edit {
@@ -2207,7 +2207,7 @@ function saveWarehouse() {
   height: 54px;
   background: linear-gradient(135deg, var(--brand), var(--brand));
   color: var(--brand-ink);
-  box-shadow: 0 4px 18px rgba(14, 116, 144, 0.5);
+  box-shadow: 0 4px 18px rgba(198, 113, 57, 0.5);
   z-index: 20;
   transition: transform 0.18s;
 }
@@ -2374,11 +2374,11 @@ function saveWarehouse() {
   color: var(--brand-ink);
   font-size: 0.88rem;
   font-weight: 700;
-  box-shadow: 0 2px 10px rgba(14, 116, 144, 0.3);
+  box-shadow: 0 2px 10px rgba(198, 113, 57, 0.3);
   transition: all 0.18s;
 }
 .btn-modal-primary:hover {
-  box-shadow: 0 4px 16px rgba(14, 116, 144, 0.45);
+  box-shadow: 0 4px 16px rgba(198, 113, 57, 0.45);
   transform: translateY(-1px);
 }
 
@@ -2411,7 +2411,7 @@ function saveWarehouse() {
 }
 .modal-input:focus {
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.12);
+  box-shadow: 0 0 0 3px rgba(198, 113, 57, 0.12);
   background-color: var(--surface);
 }
 .modal-input:disabled {
