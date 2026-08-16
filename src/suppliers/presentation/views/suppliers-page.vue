@@ -131,7 +131,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.suppliers-page { background-color: var(--surface-alt); min-height: 100%; }
+.suppliers-page { min-height: 100%; }
 .suppliers-page-title { font-size: 1.3rem; font-weight: 700; color: var(--brand); margin: 0; }
 .suppliers-page-subtitle { font-size: 0.78rem; color: var(--text-muted); margin: 0.2rem 0 0; }
 .suppliers-page {

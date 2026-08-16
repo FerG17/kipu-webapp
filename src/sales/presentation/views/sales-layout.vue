@@ -66,7 +66,7 @@ function navigateToTab(routeName) {
 </script>
 
 <template>
-  <div class="flex flex-column h-full overflow-hidden" style="background-color: var(--surface-alt);">
+  <div class="flex flex-column h-full overflow-hidden">
 
     <!-- Header -->
     <div class="flex align-items-center justify-content-between px-4 sm:px-6 pt-5 pb-3">
