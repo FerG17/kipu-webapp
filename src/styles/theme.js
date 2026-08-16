@@ -23,7 +23,7 @@ import Aura from '@primeuix/themes/aura';
  * prefers-color-scheme the same way tokens.css does — no separate wiring
  * needed to keep the two in sync.
  */
-const BodegaPreset = definePreset(Aura, {
+const KipuPreset = definePreset(Aura, {
     semantic: {
         primary: {
             50: '#fff8f4',
@@ -41,4 +41,4 @@ const BodegaPreset = definePreset(Aura, {
     }
 });
 
-export default BodegaPreset;
+export default KipuPreset;

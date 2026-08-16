@@ -13,11 +13,11 @@
     "author": "by {brand} Developer Team"
   },
   "about": {
-    "title": "About Bodega Platform",
-    "content": "Bodega Platform is your business's inventory, sales and supplier management system."
+    "title": "About Kipu",
+    "content": "Kipu is your business's inventory, sales and supplier management system."
   },
   "home": {
-    "title": "Welcome to Bodega Platform",
+    "title": "Welcome to Kipu",
     "content": "Manage your inventory, sales and suppliers all in one place.",
     "content-personalized": "Hi {name}, manage your inventory, sales and suppliers all in one place.",
     "go-dashboard": "Go to Dashboard"

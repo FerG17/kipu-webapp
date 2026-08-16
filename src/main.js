@@ -4,7 +4,7 @@ import App from './app.vue';
 import i18n from './i18n.js';
 import 'primeflex/primeflex.css';
 import 'primeicons/primeicons.css';
-import BodegaPreset from './styles/theme.js';
+import KipuPreset from './styles/theme.js';
 import PrimeVue from 'primevue/config';
 import {
     Button,
@@ -46,7 +46,7 @@ createApp(App)
     // darkModeSelector matches the `data-theme` attribute the theme store
     // stamps on <html>, so PrimeVue's own dark tokens follow the same manual
     // toggle instead of running their own prefers-color-scheme check.
-    .use(PrimeVue, { theme: { preset: BodegaPreset, options: { darkModeSelector: '[data-theme="dark"]' } }, ripple: true })
+    .use(PrimeVue, { theme: { preset: KipuPreset, options: { darkModeSelector: '[data-theme="dark"]' } }, ripple: true })
     .use(ConfirmationService)
     .use(DialogService)
     .use(ToastService)

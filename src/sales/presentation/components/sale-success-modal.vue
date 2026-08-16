@@ -229,7 +229,7 @@ async function shareReceipt() {
        explicit disclaimer instead of implying compliance. -->
   <Teleport to="body">
     <div class="print-receipt">
-      <p class="print-receipt-business">{{ iamStore.currentBusiness ? iamStore.currentBusiness.name : 'Bodega Platform' }}</p>
+      <p class="print-receipt-business">{{ iamStore.currentBusiness ? iamStore.currentBusiness.name : 'Kipu' }}</p>
       <p v-if="iamStore.currentBusiness?.ruc" class="print-receipt-line">RUC: {{ iamStore.currentBusiness.ruc }}</p>
       <p v-if="iamStore.currentBusiness?.address" class="print-receipt-line">{{ iamStore.currentBusiness.address }}</p>
       <p class="print-receipt-divider">------------------------------</p>

@@ -8,7 +8,7 @@ const platformApiUrl = import.meta.env.VITE_BODEGA_API_BASE_URL;
  * having to depend on IAM directly.
  * @type {string}
  */
-export const SESSION_EXPIRED_EVENT = 'bodega:session-expired';
+export const SESSION_EXPIRED_EVENT = 'kipu:session-expired';
 
 /**
  * Same env var iam.api.js reads for the authentication endpoints — read

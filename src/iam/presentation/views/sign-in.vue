@@ -53,8 +53,8 @@ function navigateToForgotPassword() { router.push({ name: 'forgot-password' }); 
 
       <!-- Brand -->
       <div class="relative flex align-items-center gap-3">
-        <span class="auth-brand-mark" aria-hidden="true">B</span>
-        <span class="auth-brand-name">Bodega Platform</span>
+        <span class="auth-brand-mark" aria-hidden="true">K</span>
+        <span class="auth-brand-name">Kipu</span>
       </div>
 
       <!-- Center content -->
@@ -86,7 +86,7 @@ function navigateToForgotPassword() { router.push({ name: 'forgot-password' }); 
         </div>
       </div>
 
-      <p class="relative m-0 auth-hero-footer">© 2026 Bodega Platform</p>
+      <p class="relative m-0 auth-hero-footer">© 2026 Kipu</p>
     </div>
 
     <!-- ── Right panel ─────────────────────────────────────────────── -->
@@ -94,8 +94,8 @@ function navigateToForgotPassword() { router.push({ name: 'forgot-password' }); 
 
       <!-- Mobile brand -->
       <div class="flex lg:hidden align-items-center gap-3 mb-8">
-        <span class="auth-brand-mark auth-brand-mark--dark" aria-hidden="true">B</span>
-        <span class="auth-brand-name auth-brand-name--dark">Bodega Platform</span>
+        <span class="auth-brand-mark auth-brand-mark--dark" aria-hidden="true">K</span>
+        <span class="auth-brand-name auth-brand-name--dark">Kipu</span>
       </div>
 
       <div style="width: 100%; max-width: 420px;">
@@ -185,7 +185,7 @@ function navigateToForgotPassword() { router.push({ name: 'forgot-password' }); 
 
       </div>
 
-      <p class="mt-8 auth-copyright">© 2026 Bodega Platform</p>
+      <p class="mt-8 auth-copyright">© 2026 Kipu</p>
     </div>
   </div>
 </template>

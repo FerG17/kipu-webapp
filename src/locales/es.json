@@ -13,11 +13,11 @@
     "author": "por el Equipo de Desarrollo de {brand}"
   },
   "about": {
-    "title": "Acerca de Bodega Platform",
-    "content": "Bodega Platform es el sistema de gestión de inventario, ventas y proveedores de tu negocio."
+    "title": "Acerca de Kipu",
+    "content": "Kipu es el sistema de gestión de inventario, ventas y proveedores de tu negocio."
   },
   "home": {
-    "title": "Bienvenido a Bodega Platform",
+    "title": "Bienvenido a Kipu",
     "content": "Gestiona tu inventario, ventas y proveedores desde un solo lugar.",
     "content-personalized": "Hola {name}, gestiona tu inventario, ventas y proveedores desde un solo lugar.",
     "go-dashboard": "Ir al Panel"

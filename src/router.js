@@ -65,7 +65,7 @@ const router = createRouter({
  * @returns {void}
  */
 router.beforeEach((to, from, next) => {
-    const baseTitle = 'Bodega Platform';
+    const baseTitle = 'Kipu';
     document.title  = `${baseTitle} - ${to.meta['title'] ?? ''}`;
     return authenticationGuard(to, from, next);
 });
