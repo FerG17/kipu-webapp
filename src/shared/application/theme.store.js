@@ -13,7 +13,7 @@
 import { defineStore }   from 'pinia';
 import { computed, ref } from 'vue';
 
-const STORAGE_KEY = 'bodega-theme-mode';
+const STORAGE_KEY = 'kipu-theme-mode';
 
 const useThemeStore = defineStore('theme', () => {
     const mode = ref(localStorage.getItem(STORAGE_KEY) || 'system');

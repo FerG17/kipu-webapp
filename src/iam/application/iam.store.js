@@ -89,7 +89,7 @@ const useIamStore = defineStore('iam', () => {
      * authenticated user (and its businessId) survives a page reload.
      * @type {string}
      */
-    const SESSION_STORAGE_KEY = 'bodega.session';
+    const SESSION_STORAGE_KEY = 'kipu.session';
 
     /**
      * Serialises a UserAccount entity into a plain resource (password excluded)

@@ -162,8 +162,8 @@ async function handleSignOut() {
           <i :class="sidebarOpen ? 'pi pi-times' : 'pi pi-bars'" style="font-size: 1.1rem;"/>
         </button>
         <div class="bodega-brand">
-          <span class="bodega-brand-mark" aria-hidden="true">B</span>
-          <span class="bodega-brand-name">Bodega Platform</span>
+          <span class="bodega-brand-mark" aria-hidden="true">K</span>
+          <span class="bodega-brand-name">Kipu</span>
         </div>
       </div>
       <div class="flex align-items-center gap-2">
@@ -191,8 +191,8 @@ async function handleSignOut() {
     >
       <!-- Brand mark (desktop only) -->
       <div class="hidden lg:flex flex-column align-items-center pt-5 pb-4 px-3 bodega-sidebar-brand">
-        <span class="bodega-brand-mark bodega-brand-mark--lg" aria-hidden="true">B</span>
-        <p class="m-0 mt-2 bodega-sidebar-title">Bodega Platform</p>
+        <span class="bodega-brand-mark bodega-brand-mark--lg" aria-hidden="true">K</span>
+        <p class="m-0 mt-2 bodega-sidebar-title">Kipu</p>
         <p class="m-0 bodega-sidebar-subtitle">{{ t('sidebar.tagline') }}</p>
       </div>
 
@@ -232,7 +232,7 @@ async function handleSignOut() {
           </div>
           <div style="min-width: 0; flex: 1;">
             <p class="m-0 bodega-sidebar-username">
-              {{ iamStore.currentUser ? iamStore.currentUser.fullName : 'Bodega Platform' }}
+              {{ iamStore.currentUser ? iamStore.currentUser.fullName : 'Kipu' }}
             </p>
             <p class="m-0 bodega-sidebar-userrole">
               {{ currentUserRoleLabel }}

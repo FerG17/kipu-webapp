@@ -18,8 +18,8 @@ function navigateToSignIn() { router.push({ name: 'sign-in' }); }
 
       <!-- Brand -->
       <div class="relative flex align-items-center gap-3">
-        <span class="auth-brand-mark" aria-hidden="true">B</span>
-        <span class="auth-brand-name">Bodega Platform</span>
+        <span class="auth-brand-mark" aria-hidden="true">K</span>
+        <span class="auth-brand-name">Kipu</span>
       </div>
 
       <div class="relative flex flex-column gap-6">
@@ -33,7 +33,7 @@ function navigateToSignIn() { router.push({ name: 'sign-in' }); }
         </div>
       </div>
 
-      <p class="relative m-0 auth-hero-footer">© 2026 Bodega Platform</p>
+      <p class="relative m-0 auth-hero-footer">© 2026 Kipu</p>
     </div>
 
     <!-- ── Right panel ─────────────────────────────────────────────── -->
@@ -41,8 +41,8 @@ function navigateToSignIn() { router.push({ name: 'sign-in' }); }
 
       <!-- Mobile brand -->
       <div class="flex lg:hidden align-items-center gap-3 mb-6">
-        <span class="auth-brand-mark auth-brand-mark--dark" aria-hidden="true">B</span>
-        <span class="auth-brand-name auth-brand-name--dark">Bodega Platform</span>
+        <span class="auth-brand-mark auth-brand-mark--dark" aria-hidden="true">K</span>
+        <span class="auth-brand-name auth-brand-name--dark">Kipu</span>
       </div>
 
       <div style="width: 100%; max-width: 420px;">
