@@ -46,6 +46,15 @@ const loadingDetailsSaleId = ref(null);
 /** @type {import('vue').Ref<number|null>} The id of the sale currently being cancelled, to block double-submit. */
 const cancellingSaleId = ref(null);
 
+/**
+ * The sale pending the "cancel this sale?" confirmation overlay, or null
+ * when it's closed. Cancelling a PAID sale restocks inventory and can't be
+ * undone, so this always goes through the overlay first — the cancel
+ * buttons below only set this, they never call handleCancelSale directly.
+ * @type {import('vue').Ref<import('../../domain/model/sale.entity.js').Sale|null>}
+ */
+const saleToCancel = ref(null);
+
 // ─── Computed ──────────────────────────────────────────────────────────────
 
 /**
@@ -215,6 +224,13 @@ async function handleCancelSale(sale) {
   }
 }
 
+/** Confirms and runs the pending cancellation, then closes the overlay. */
+async function confirmCancelSale() {
+  const sale = saleToCancel.value;
+  saleToCancel.value = null;
+  if (sale) await handleCancelSale(sale);
+}
+
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
 onMounted(() => {
@@ -351,7 +367,7 @@ onMounted(() => {
                       class="border-round-lg px-2 py-1"
                       :disabled="cancellingSaleId === sale.id"
                       style="background-color: var(--status-critical-bg); color: var(--status-critical-fg); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
-                      @click.stop="handleCancelSale(sale)"
+                      @click.stop="saleToCancel = sale"
                   >
                     {{ t('sales.cancel-action') }}
                   </button>
@@ -514,7 +530,7 @@ onMounted(() => {
               class="w-full mt-3 border-round-lg py-2"
               :disabled="cancellingSaleId === sale.id"
               style="background-color: var(--status-critical-bg); color: var(--status-critical-fg); font-size: 0.78rem; font-weight: 600; border: none; cursor: pointer;"
-              @click="handleCancelSale(sale)"
+              @click="saleToCancel = sale"
           >
             {{ t('sales.cancel-action') }}
           </button>
@@ -530,6 +546,52 @@ onMounted(() => {
         <p class="m-0" style="color: var(--text-faint); font-size: 0.88rem;">
           {{ t('sales.no-results') }}
         </p>
+      </div>
+    </div>
+
+    <!-- Cancel confirmation overlay -->
+    <div
+        v-if="saleToCancel"
+        class="fixed inset-0 flex align-items-center justify-content-center px-4"
+        style="background-color: rgba(0,0,0,0.35); z-index: 60;"
+        @click.self="saleToCancel = null"
+    >
+      <div
+          class="w-full border-round-2xl p-4 text-center shadow-8"
+          style="max-width: 340px; background-color: var(--surface); border: 1px solid var(--border);"
+      >
+        <div
+            class="flex align-items-center justify-content-center border-round-3xl mx-auto mb-3"
+            style="width: 48px; height: 48px; background-color: var(--status-warning-bg);"
+        >
+          <i class="pi pi-exclamation-triangle" style="font-size: 1.4rem; color: var(--status-warning-fg);" />
+        </div>
+        <p class="m-0 mb-1" style="font-size: 1rem; font-weight: 700; color: var(--text);">
+          {{ t('sales.cancel-confirm-header') }}
+        </p>
+        <p class="m-0 mb-4" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;">
+          {{ t('sales.cancel-confirm-message', {
+            id: saleToCancel.id,
+            customer: getCustomerName(saleToCancel.customerId),
+            total: formatCurrency(saleToCancel.subtotal)
+          }) }}
+        </p>
+        <div class="flex gap-2">
+          <button
+              class="flex-1 border-round-xl py-2"
+              style="border: 1px solid var(--border); color: var(--text-muted); font-size: 0.85rem; font-weight: 600; background: var(--surface); cursor: pointer;"
+              @click="saleToCancel = null"
+          >
+            {{ t('sales.cancel-confirm-back') }}
+          </button>
+          <button
+              class="flex-1 border-round-xl py-2"
+              style="border: none; color: #fff; font-size: 0.85rem; font-weight: 700; background: var(--status-critical-fg); cursor: pointer;"
+              @click="confirmCancelSale"
+          >
+            {{ t('sales.cancel-confirm-accept') }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
