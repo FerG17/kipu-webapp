@@ -44,6 +44,7 @@ export class Product {
      * @param {number}      [params.basePrice=0]
      * @param {string}      [params.status=ProductStatus.ACTIVE]
      * @param {string|null} [params.barcode=null]
+     * @param {number[]}    [params.supplierIds=[]] - The suppliers this product can be sourced from (zero or more).
      */
     constructor({
                     id          = null,
@@ -53,7 +54,8 @@ export class Product {
                     category    = ProductCategory.OTHER,
                     basePrice   = 0,
                     status      = ProductStatus.ACTIVE,
-                    barcode     = null
+                    barcode     = null,
+                    supplierIds = []
                 }) {
         this.id          = id;
         this.businessId  = businessId;
@@ -63,6 +65,7 @@ export class Product {
         this.basePrice   = basePrice;
         this.status      = status;
         this.barcode     = barcode;
+        this.supplierIds = supplierIds;
     }
 
     /**
