@@ -60,8 +60,8 @@ const { t, locale, availableLocales } = useI18n();
 /* Active segment */
 .lang-switch :deep(.p-togglebutton.p-togglebutton-checked) {
   color: #FFFFFF;
-  background: #0E7490;
-  box-shadow: 0 1px 3px rgba(14, 116, 144, 0.35);
+  background: #C67139;
+  box-shadow: 0 1px 3px rgba(198, 113, 57, 0.35);
 }
 
 /* Remove PrimeVue's default active indicator bar */
@@ -77,7 +77,7 @@ const { t, locale, availableLocales } = useI18n();
 }
 
 .lang-switch :deep(.p-togglebutton:focus-visible) {
-  outline: 2px solid #0E7490;
+  outline: 2px solid #C67139;
   outline-offset: 2px;
 }
 </style>

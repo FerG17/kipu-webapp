@@ -51,6 +51,23 @@ const emit = defineEmits([
 const { t } = useI18n();
 
 /**
+ * Whether the inline "cancel this sale?" confirmation panel is showing.
+ * Built as a small overlay local to this component, rather than PrimeVue's
+ * global ConfirmDialog (which this app also uses in Settings) — that global
+ * dialog's default z-index sits below this modal's own backdrop (z-50, see
+ * style.css's z-index scale), so it rendered invisibly behind the payment
+ * modal instead of on top of it. A local overlay sidesteps that entirely.
+ * @type {import('vue').Ref<boolean>}
+ */
+const showCancelConfirm = ref(false);
+
+/** Confirms cancelling the in-progress sale and closes the payment modal. */
+function confirmCancel() {
+  showCancelConfirm.value = false;
+  emit('cancel');
+}
+
+/**
  * Currently selected payment method.
  * Defaults to CASH as the most common method in Peruvian bodegas.
  * @type {import('vue').Ref<string>}
@@ -121,6 +138,26 @@ const canConfirm = computed(() => {
   if (!sellOnCredit.value) return paymentOk;
   return paymentOk && !!selectedCustomerId.value && (parseInt(installmentsInput.value) || 0) >= 2;
 });
+
+/**
+ * Quick cash-amount shortcuts: the exact total (rounded up to the sol) plus
+ * the common Peruvian bill denominations that are at least the total, so a
+ * cashier can just tap the bill they were handed instead of typing it.
+ * @type {import('vue').ComputedRef<number[]>}
+ */
+const quickCashAmounts = computed(() => {
+  const exact = Math.ceil(props.total);
+  const bills = [10, 20, 50, 100].filter(bill => bill >= props.total && bill !== exact);
+  return [exact, ...bills].slice(0, 4);
+});
+
+/**
+ * Sets the cash input to the given quick amount.
+ * @param {number} amount
+ */
+function selectQuickAmount(amount) {
+  cashInput.value = String(amount);
+}
 
 /**
  * Configuration for each payment method button.
@@ -276,6 +313,26 @@ function handleConfirm() {
         <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
           {{ t('pos.payment-cash-received') }}
         </label>
+        <!-- Quick amount shortcuts -->
+        <div class="flex gap-2 mb-2">
+          <button
+              v-for="(amount, amountIndex) in quickCashAmounts"
+              :key="amount"
+              type="button"
+              class="flex-1 border-round-lg py-2"
+              :style="{
+                            border: `1.5px solid ${cashGiven === amount ? 'var(--status-ok-fg)' : 'var(--border)'}`,
+                            backgroundColor: cashGiven === amount ? 'var(--status-ok-bg)' : 'var(--surface)',
+                            color: cashGiven === amount ? 'var(--status-ok-fg)' : 'var(--text-muted)',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                        }"
+              @click="selectQuickAmount(amount)"
+          >
+            {{ amountIndex === 0 ? t('pos.payment-quick-exact') : formatCurrency(amount) }}
+          </button>
+        </div>
         <input
             v-model="cashInput"
             type="number"
@@ -305,7 +362,7 @@ function handleConfirm() {
         <button
             class="flex-1 border-round-xl py-3"
             style="border: 1px solid var(--border); color: var(--text-muted); font-size: 0.88rem; font-weight: 600; background: var(--surface); cursor: pointer;"
-            @click="emit('cancel')"
+            @click="showCancelConfirm = true"
         >
           {{ t('pos.payment-cancel-sale') }}
         </button>
@@ -324,6 +381,49 @@ function handleConfirm() {
         >
           {{ t('pos.payment-confirm') }}
         </button>
+      </div>
+
+      <!-- Cancel confirmation overlay — local to this component, always on
+           top of the modal above (see the note on showCancelConfirm). -->
+      <div
+          v-if="showCancelConfirm"
+          class="fixed inset-0 flex align-items-center justify-content-center px-4"
+          style="background-color: rgba(0,0,0,0.35); z-index: 60;"
+          @click.self="showCancelConfirm = false"
+      >
+        <div
+            class="w-full border-round-2xl p-4 text-center shadow-8"
+            style="max-width: 320px; background-color: var(--surface); border: 1px solid var(--border);"
+        >
+          <div
+              class="flex align-items-center justify-content-center border-round-3xl mx-auto mb-3"
+              style="width: 48px; height: 48px; background-color: var(--status-warning-bg);"
+          >
+            <i class="pi pi-exclamation-triangle" style="font-size: 1.4rem; color: var(--status-warning-fg);" />
+          </div>
+          <p class="m-0 mb-1" style="font-size: 1rem; font-weight: 700; color: var(--text);">
+            {{ t('pos.payment-cancel-confirm-header') }}
+          </p>
+          <p class="m-0 mb-4" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;">
+            {{ t('pos.payment-cancel-confirm-message') }}
+          </p>
+          <div class="flex gap-2">
+            <button
+                class="flex-1 border-round-xl py-2"
+                style="border: 1px solid var(--border); color: var(--text-muted); font-size: 0.85rem; font-weight: 600; background: var(--surface); cursor: pointer;"
+                @click="showCancelConfirm = false"
+            >
+              {{ t('pos.payment-cancel-confirm-back') }}
+            </button>
+            <button
+                class="flex-1 border-round-xl py-2"
+                style="border: none; color: var(--brand-ink); font-size: 0.85rem; font-weight: 700; background: var(--status-critical-fg); cursor: pointer;"
+                @click="confirmCancel"
+            >
+              {{ t('pos.payment-cancel-confirm-accept') }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

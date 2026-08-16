@@ -3,14 +3,26 @@ import { computed, onMounted, ref, toRefs, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirm } from 'primevue';
 import useIamStore from '../../application/iam.store.js';
+import useThemeStore from '../../../shared/application/theme.store.js';
 import LanguageSwitcher from '../../../shared/presentation/components/language-switcher.vue';
 import InviteUserModal from '../components/invite-user-modal.vue';
 import { roleLabelKey, roleStyleByPosition } from '../role-labels.js';
 import { canManageTeam, canEditBusinessProfile } from '../../application/permissions.js';
 
-const { t }    = useI18n();
-const confirm  = useConfirm();
-const iamStore = useIamStore();
+const { t }     = useI18n();
+const confirm   = useConfirm();
+const iamStore  = useIamStore();
+const themeStore = useThemeStore();
+
+/**
+ * Options for the theme segmented control, in the same shape the tab bar
+ * above already uses (key/labelKey/icon).
+ */
+const themeOptions = [
+  { key: 'light',  labelKey: 'settings.theme-light',  icon: 'pi pi-sun'     },
+  { key: 'dark',   labelKey: 'settings.theme-dark',   icon: 'pi pi-moon'    },
+  { key: 'system', labelKey: 'settings.theme-system', icon: 'pi pi-desktop' }
+];
 
 const { users, usersLoaded, rolesLoaded, currentBusiness, businessLoaded } = toRefs(iamStore);
 const { fetchUsers, fetchRoles, fetchBusiness, getRolePosition, deleteUser } = iamStore;
@@ -314,12 +326,12 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
         </span>
         <button
             class="flex align-items-center gap-2 px-5 py-2 border-round-xl border-none cursor-pointer"
-            style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.9rem; font-weight: 700; box-shadow: 0 2px 10px rgba(14,116,144,0.3); transition: all 0.18s;"
+            style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.9rem; font-weight: 700; box-shadow: 0 2px 10px rgba(198,113,57,0.3); transition: all 0.18s;"
             :style="{ opacity: savingProfile ? 0.7 : 1, cursor: savingProfile ? 'not-allowed' : 'pointer' }"
             :disabled="savingProfile"
             @click="saveProfile"
-            @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(14,116,144,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
-            @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(14,116,144,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
+            @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(198,113,57,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
+            @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(198,113,57,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
         >
           <i v-if="savingProfile" class="pi pi-spin pi-spinner"/>
           <i v-else class="pi pi-check"/>
@@ -341,10 +353,10 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
         </div>
         <button
             class="flex align-items-center gap-2 px-4 py-2 border-round-xl border-none cursor-pointer"
-            style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.82rem; font-weight: 700; box-shadow: 0 2px 8px rgba(14,116,144,0.3); transition: all 0.18s;"
+            style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.82rem; font-weight: 700; box-shadow: 0 2px 8px rgba(198,113,57,0.3); transition: all 0.18s;"
             @click="showInviteModal = true"
-            @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(14,116,144,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
-            @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(14,116,144,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
+            @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(198,113,57,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
+            @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(198,113,57,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
         >
           <i class="pi pi-user-plus" style="font-size: 0.82rem;"/>
           {{ t('settings.invite-user') }}
@@ -488,6 +500,38 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
       </div>
       <div class="px-5 py-4" style="display: flex; flex-direction: column; gap: 0;">
 
+        <!-- Theme row -->
+        <div class="flex align-items-center justify-content-between py-4 flex-wrap gap-3" style="border-bottom: 1px solid var(--surface-alt);">
+          <div class="flex align-items-center gap-3">
+            <div class="flex align-items-center justify-content-center border-round-lg flex-shrink-0" style="width: 40px; height: 40px; background-color: var(--brand-soft);">
+              <i class="pi pi-sun" style="color: var(--brand); font-size: 1rem;"/>
+            </div>
+            <div>
+              <p class="m-0" style="color: var(--text); font-weight: 600; font-size: 0.9rem;">{{ t('settings.theme-label') }}</p>
+              <p class="m-0 mt-1" style="color: var(--text-muted); font-size: 0.78rem;">{{ t('settings.theme-desc') }}</p>
+            </div>
+          </div>
+          <div class="flex" style="gap: 2px; background-color: var(--surface-alt); border-radius: 10px; padding: 3px;">
+            <button
+                v-for="option in themeOptions"
+                :key="option.key"
+                type="button"
+                class="flex align-items-center gap-2 px-3 py-2 border-round-lg border-none cursor-pointer"
+                style="white-space: nowrap; font-size: 0.82rem; transition: all 0.18s;"
+                :style="{
+                  backgroundColor: themeStore.mode === option.key ? 'var(--surface)' : 'transparent',
+                  color:           themeStore.mode === option.key ? 'var(--brand)' : 'var(--text-muted)',
+                  fontWeight:      themeStore.mode === option.key ? 700 : 400,
+                  boxShadow:       themeStore.mode === option.key ? '0 1px 6px rgba(0,0,0,0.10)' : 'none'
+                }"
+                @click="themeStore.setMode(option.key)"
+            >
+              <i :class="option.icon" style="font-size: 0.85rem;"/>
+              <span class="hidden sm:inline">{{ t(option.labelKey) }}</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Language row -->
         <div class="flex align-items-center justify-content-between py-4" style="border-bottom: 1px solid var(--surface-alt);">
           <div class="flex align-items-center gap-3">
@@ -593,11 +637,11 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
           <button
               type="submit"
               class="flex align-items-center gap-2 px-5 py-2 border-round-xl border-none cursor-pointer"
-              style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.9rem; font-weight: 700; width: fit-content; box-shadow: 0 2px 10px rgba(14,116,144,0.3); transition: all 0.18s;"
+              style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.9rem; font-weight: 700; width: fit-content; box-shadow: 0 2px 10px rgba(198,113,57,0.3); transition: all 0.18s;"
               :style="{ opacity: securitySubmitting ? 0.7 : 1, cursor: securitySubmitting ? 'not-allowed' : 'pointer' }"
               :disabled="securitySubmitting"
-              @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(14,116,144,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
-              @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(14,116,144,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
+              @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(198,113,57,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
+              @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(198,113,57,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
           >
             <i v-if="securitySubmitting" class="pi pi-spin pi-spinner"/>
             <i v-else class="pi pi-lock"/>
@@ -634,7 +678,7 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
   padding: 10px 14px;
   background-color: var(--surface-alt);
   border: 1.5px solid var(--border);
-  color: var(--brand); font-size: 0.9rem;
+  color: var(--text); font-size: 0.9rem;
   outline: none; transition: all 0.18s;
   box-sizing: border-box; font-family: inherit;
 }
@@ -645,7 +689,7 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
 .settings-input:focus {
   border-color: var(--brand);
   background-color: var(--surface);
-  box-shadow: 0 0 0 3px rgba(14,116,144,0.12);
+  box-shadow: 0 0 0 3px rgba(198,113,57,0.12);
 }
 
 .settings-error {

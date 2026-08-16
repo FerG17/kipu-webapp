@@ -335,6 +335,37 @@ function formatCurrency(amount) {
 }
 
 /**
+ * Builds the status timeline steps for the currently selected order's detail
+ * modal. Only reflects real domain statuses (PENDING/RECEIVED/DELAYED/
+ * CANCELLED) — there is no "shipped" status in the backend, so the timeline
+ * doesn't invent one.
+ * @type {import('vue').ComputedRef<Array<{ labelKey: string, state: 'done'|'pending'|'delayed'|'cancelled' }>>}
+ */
+const orderTimelineSteps = computed(() => {
+  if (!selectedOrder.value) return [];
+  const status = selectedOrder.value.status;
+
+  if (status === PurchaseOrderStatus.CANCELLED) {
+    return [
+      { labelKey: 'suppliers.order-timeline-created',   state: 'done' },
+      { labelKey: 'suppliers.order-timeline-cancelled', state: 'cancelled' }
+    ];
+  }
+
+  return [
+    { labelKey: 'suppliers.order-timeline-created',  state: 'done' },
+    {
+      labelKey: 'suppliers.order-timeline-received',
+      state: status === PurchaseOrderStatus.RECEIVED
+          ? 'done'
+          : status === PurchaseOrderStatus.DELAYED
+              ? 'delayed'
+              : 'pending'
+    }
+  ];
+});
+
+/**
  * Resolves a purchase order detail line's product name. Orders created in the
  * current session already carry a denormalized productName; preexisting
  * orders loaded from the mock don't, so fall back to looking it up in the
@@ -815,6 +846,34 @@ function resolveProductName(detail) {
                 </tfoot>
               </table>
             </div>
+          </div>
+
+          <!-- Status timeline -->
+          <div class="orders-detail-timeline-section">
+            <p class="orders-detail-section-label">{{ t('suppliers.order-timeline-title') }}</p>
+            <div class="orders-timeline">
+              <template v-for="(step, stepIndex) in orderTimelineSteps" :key="step.labelKey">
+                <div class="orders-timeline-step">
+                  <span class="orders-timeline-dot" :class="`orders-timeline-dot--${step.state}`">
+                    <i v-if="step.state === 'done'" class="pi pi-check" style="font-size: 0.6rem;" />
+                    <i v-else-if="step.state === 'delayed'" class="pi pi-exclamation-triangle" style="font-size: 0.6rem;" />
+                    <i v-else-if="step.state === 'cancelled'" class="pi pi-times" style="font-size: 0.6rem;" />
+                  </span>
+                  <span class="orders-timeline-label" :class="`orders-timeline-label--${step.state}`">
+                    {{ t(step.labelKey) }}
+                  </span>
+                </div>
+                <div
+                    v-if="stepIndex < orderTimelineSteps.length - 1"
+                    class="orders-timeline-connector"
+                    :class="{ 'orders-timeline-connector--done': step.state === 'done' }"
+                />
+              </template>
+            </div>
+            <p v-if="selectedOrder.status === PurchaseOrderStatus.DELAYED" class="orders-timeline-delayed-note">
+              <i class="pi pi-exclamation-triangle" style="font-size: 0.72rem; margin-right: 0.3rem;" />
+              {{ t('suppliers.order-timeline-delayed-note') }}
+            </p>
           </div>
 
           <!-- Notes -->
@@ -1599,6 +1658,73 @@ function resolveProductName(detail) {
   font-size:   0.95rem;
   font-weight: 800;
   color:       var(--brand);
+}
+
+/* ─── Status timeline ───────────────────────────────────────────────────────── */
+.orders-detail-timeline-section {
+  margin-bottom: 0.75rem;
+}
+
+.orders-timeline {
+  display:     flex;
+  align-items: center;
+  padding:     0.75rem;
+  background-color: var(--surface-alt);
+  border:      1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.orders-timeline-step {
+  display:        flex;
+  flex-direction: column;
+  align-items:    center;
+  gap:            0.35rem;
+  flex-shrink:    0;
+}
+
+.orders-timeline-dot {
+  width:           1.6rem;
+  height:          1.6rem;
+  border-radius:   50%;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  border:          2px solid var(--border-strong);
+  color:           var(--text-faint);
+  background-color: var(--surface);
+  flex-shrink:     0;
+}
+.orders-timeline-dot--done      { background-color: var(--status-ok-fg); border-color: var(--status-ok-fg); color: var(--surface); }
+.orders-timeline-dot--pending   { background-color: var(--surface); border-color: var(--border-strong); }
+.orders-timeline-dot--delayed   { background-color: var(--status-warning-fg); border-color: var(--status-warning-fg); color: var(--surface); }
+.orders-timeline-dot--cancelled { background-color: var(--status-critical-fg); border-color: var(--status-critical-fg); color: var(--surface); }
+
+.orders-timeline-label {
+  font-size:   0.7rem;
+  font-weight: 600;
+  color:       var(--text-muted);
+  white-space: nowrap;
+}
+.orders-timeline-label--done      { color: var(--status-ok-fg); }
+.orders-timeline-label--delayed   { color: var(--status-warning-fg); }
+.orders-timeline-label--cancelled { color: var(--status-critical-fg); }
+
+.orders-timeline-connector {
+  flex:           1;
+  height:         2px;
+  min-width:      1.5rem;
+  margin:         0 0.4rem 1.3rem;
+  background-color: var(--border-strong);
+}
+.orders-timeline-connector--done { background-color: var(--status-ok-fg); }
+
+.orders-timeline-delayed-note {
+  display:          flex;
+  align-items:      center;
+  margin:           0.5rem 0 0;
+  font-size:        0.74rem;
+  font-weight:      600;
+  color:            var(--status-warning-fg);
 }
 
 /* ─── Notes ─────────────────────────────────────────────────────────────────── */
