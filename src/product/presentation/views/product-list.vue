@@ -107,7 +107,7 @@ function getProductInitial(name) {
 const statusConfig = {
   normal:   { color: 'var(--status-ok-fg)', background: 'var(--status-ok-bg)', icon: 'pi pi-box'                 },
   low:      { color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', icon: 'pi pi-exclamation-triangle' },
-  expiring: { color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', icon: 'pi pi-clock'                },
+  expiring: { color: 'var(--status-expiring-fg)', background: 'var(--status-expiring-bg)', icon: 'pi pi-clock'                },
   critical: { color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)', icon: 'pi pi-exclamation-circle'   },
   expired:  { color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)', icon: 'pi pi-ban'                  },
   out:      { color: 'var(--text-muted)', background: 'var(--surface-alt)', icon: 'pi pi-times-circle'         }
@@ -855,7 +855,7 @@ function saveWarehouse() {
             v-for="stat in [
               { label: t('inventory.stat-total'),    value: summaryCounts.total,    color: 'var(--brand)', bg: '#EFF6FF', iconBg: '#DBEAFE', icon: 'pi pi-box'                  },
               { label: t('inventory.stat-low'),      value: summaryCounts.low,      color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', iconBg: 'var(--status-warning-bg)', icon: 'pi pi-exclamation-triangle'  },
-              { label: t('inventory.stat-expiring'), value: summaryCounts.expiring, color: 'var(--status-warning-fg)', bg: 'var(--status-warning-bg)', iconBg: 'var(--status-warning-bg)', icon: 'pi pi-clock'                 },
+              { label: t('inventory.stat-expiring'), value: summaryCounts.expiring, color: 'var(--status-expiring-fg)', bg: 'var(--status-expiring-bg)', iconBg: 'var(--status-expiring-bg)', icon: 'pi pi-clock'                 },
               { label: t('inventory.stat-out'),      value: summaryCounts.out,      color: 'var(--text-muted)', bg: 'var(--surface-alt)', iconBg: 'var(--border)', icon: 'pi pi-times-circle'           }
             ]"
             :key="stat.label"

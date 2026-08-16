@@ -587,7 +587,7 @@ function formatDateTime(isoDate) {
 </template>
 
 <style scoped>
-.alerts-page { background-color: var(--surface-alt); min-height: 100%; }
+.alerts-page { min-height: 100%; }
 
 .alerts-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1rem; }
 .alerts-title { font-size: 1.3rem; font-weight: 700; color: var(--brand); margin: 0; line-height: 1.2; }

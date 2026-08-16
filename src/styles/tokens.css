@@ -1,20 +1,22 @@
 /**
  * Design tokens for the bodega's own chrome — layout, cards, chips, product
  * rows, KPI numbers. PrimeVue components take their colors from the preset
- * in styles/theme.js instead (same brand teal, kept in sync manually since
- * the two systems don't share a token format).
+ * in styles/theme.js instead (same brand terracotta, kept in sync manually
+ * since the two systems don't share a token format).
  *
- * Palette and scale match the approved design-system review
- * (bodega-design-system artifact): a deep teal ("Tinta") for brand/nav, a
- * warm amber ("Caléndula") reserved for the one action that matters on a
- * screen, and status colors kept separate from both so a chip never reads
- * as a button. Follows the OS light/dark preference automatically — no
- * manual toggle yet, nothing in the UI offers one.
+ * Fase F7.1 palette: a warm cream ground with a terracotta primary ("Kipu"
+ * redesign, approved by the owner via Claude Design mockups) and a sage
+ * secondary accent for the few spots that need a second voice (auth screens'
+ * highlight detail). Dark mode is its own considered palette, not an
+ * inversion of light — a warm brown ground, accents raised one step of
+ * luminance to keep the same perceptual weight. Follows the OS light/dark
+ * preference automatically — no manual toggle yet, nothing in the UI offers
+ * one.
  */
 
 :root {
-  --font-display: 'Zilla Slab', Georgia, serif;
-  --font-body: 'Work Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Caprasimo', Georgia, serif;
+  --font-body: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --text-xs: 0.8125rem;
   --text-sm: 0.875rem;
@@ -37,62 +39,66 @@
   --radius-md: 10px;
   --radius-pill: 999px;
 
-  --shadow-float: 0 2px 14px -4px rgba(18, 32, 31, 0.22);
+  --shadow-float: 0 2px 14px -4px rgba(34, 31, 27, 0.22);
 
   /* ---- Light palette (default) ---- */
-  --brand: #1B4B4C;
-  --brand-ink: #ffffff;
-  --brand-soft: #E3ECEB;
-  --accent: #B36A16;
-  --accent-ink: #ffffff;
+  --brand: #C67139;
+  --brand-ink: #FFFAF1;
+  --brand-soft: #F8E5D5;
+  --accent: #6F8055;
+  --accent-ink: #FFFAF1;
 
-  --bg: #F4F5F2;
-  --surface: #FFFFFF;
-  --surface-alt: #EAEDE8;
-  --border: #DBE0DA;
-  --border-strong: #C3CBC3;
+  --bg: #F7EEE0;
+  --surface: #FFFAF1;
+  --surface-alt: #F0E5D4;
+  --border: #E4D8C4;
+  --border-strong: #BBB09E;
 
-  --text: #17221F;
-  --text-muted: #5C6862;
-  --text-faint: #8A948E;
+  --text: #221F1B;
+  --text-muted: #7D7466;
+  --text-faint: #B1A695;
 
-  --status-ok-bg: #E4EFE4;
-  --status-ok-fg: #2E5C3A;
-  --status-warning-bg: #F4E7D2;
-  --status-warning-fg: #8A5A0A;
-  --status-critical-bg: #F5E0DD;
-  --status-critical-fg: #8C2E27;
+  --status-ok-bg: #E4EEDB;
+  --status-ok-fg: #5F7F4F;
+  --status-warning-bg: #F9E9CD;
+  --status-warning-fg: #A97527;
+  --status-critical-bg: #F8E1DA;
+  --status-critical-fg: #A94E3E;
+  --status-expiring-bg: #F8E5D5;
+  --status-expiring-fg: #C67139;
 
-  --focus-ring: #B36A16;
+  --focus-ring: #C67139;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --brand: #5FB3AF;
-    --brand-ink: #0D1917;
-    --brand-soft: #1C3230;
-    --accent: #E3A052;
-    --accent-ink: #241605;
+    --brand: #E2954F;
+    --brand-ink: #211D18;
+    --brand-soft: #3B2D1F;
+    --accent: #A3B283;
+    --accent-ink: #211D18;
 
-    --bg: #12201F;
-    --surface: #182826;
-    --surface-alt: #1E302D;
-    --border: #2B3E3B;
-    --border-strong: #3A5350;
+    --bg: #211D18;
+    --surface: #2B2620;
+    --surface-alt: #353029;
+    --border: #3F3930;
+    --border-strong: #6C6355;
 
-    --text: #EDF1EE;
-    --text-muted: #9FB0AA;
-    --text-faint: #71827C;
+    --text: #F1E7D7;
+    --text-muted: #A89D8D;
+    --text-faint: #746B5C;
 
-    --status-ok-bg: #1E3327;
-    --status-ok-fg: #8FCB9B;
-    --status-warning-bg: #3A2C13;
-    --status-warning-fg: #E3B15E;
-    --status-critical-bg: #3A211D;
-    --status-critical-fg: #E38F85;
+    --status-ok-bg: #28301F;
+    --status-ok-fg: #9CB87E;
+    --status-warning-bg: #332A1A;
+    --status-warning-fg: #DDA44F;
+    --status-critical-bg: #38251F;
+    --status-critical-fg: #DD8877;
+    --status-expiring-bg: #3B2D1F;
+    --status-expiring-fg: #E2954F;
 
     --shadow-float: 0 2px 18px -4px rgba(0, 0, 0, 0.55);
-    --focus-ring: #E3A052;
+    --focus-ring: #E2954F;
   }
 }
 
@@ -121,5 +127,6 @@
 .bodega-chip--ok { background: var(--status-ok-bg); color: var(--status-ok-fg); }
 .bodega-chip--warning { background: var(--status-warning-bg); color: var(--status-warning-fg); }
 .bodega-chip--critical { background: var(--status-critical-bg); color: var(--status-critical-fg); }
+.bodega-chip--expiring { background: var(--status-expiring-bg); color: var(--status-expiring-fg); }
 .bodega-chip--neutral { background: var(--surface-alt); color: var(--text-muted); }
 .bodega-chip--neutral::before { display: none; }
