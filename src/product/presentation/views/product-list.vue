@@ -1559,6 +1559,7 @@ function saveWarehouse() {
                     option-label="label"
                     option-value="value"
                     display="chip"
+                    append-to="body"
                     :placeholder="t('inventory.modal-field-supplier-placeholder')"
                     class="w-full modal-multiselect"
                 />
