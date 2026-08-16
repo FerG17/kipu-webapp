@@ -5,7 +5,7 @@ import { canAccessDashboard, canAccessSales, canAccessSuppliers } from '../appli
  * Route names that are reachable without an authenticated session.
  * @type {string[]}
  */
-const publicRouteNames = ['sign-in', 'sign-up', 'forgot-password'];
+const publicRouteNames = ['sign-in', 'forgot-password'];
 
 /**
  * Maps a route's `meta.requiredPermission` value to the permissions.js

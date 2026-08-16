@@ -17,7 +17,7 @@ const pageNotFound = () => import('./shared/presentation/views/page-not-found.vu
  * Route definitions.
  *
  * Public routes (no layout/sidebar):
- *   /sign-in, /sign-up
+ *   /sign-in, /forgot-password
  *
  * Authenticated routes (wrapped by Layout):
  *   /home, /about, and future bounded context paths.
