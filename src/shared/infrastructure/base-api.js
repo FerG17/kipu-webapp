@@ -11,6 +11,15 @@ const platformApiUrl = import.meta.env.VITE_BODEGA_API_BASE_URL;
 export const SESSION_EXPIRED_EVENT = 'bodega:session-expired';
 
 /**
+ * Same env var iam.api.js reads for the authentication endpoints — read
+ * directly here (not imported from iam.api.js) so this shared/infrastructure
+ * class still never depends on the IAM bounded context, only on the same
+ * config value it needs for the guard below.
+ * @type {string}
+ */
+const authenticationEndpointPath = import.meta.env.VITE_AUTHENTICATION_ENDPOINT_PATH ?? '/authentication';
+
+/**
  * Shared infrastructure base class that configures the Axios HTTP client.
  * All bounded-context API classes extend this class to inherit the HTTP client.
  *
@@ -47,7 +56,17 @@ export class BaseApi {
         this.#http.interceptors.response.use(
             response => response,
             error => {
-                if (error.response?.status === 401) {
+                // A 401 from the authentication endpoints themselves is not a
+                // session expiring — it's sign-in rejecting bad credentials,
+                // or sign-out finding no session to end (nothing to revoke
+                // when the caller was never authenticated). Dispatching the
+                // event there used to call signOut(), whose own /sign-out
+                // request 401'd for the same reason and dispatched the event
+                // again — an unbounded loop of requests that, sharing the
+                // same per-IP auth rate-limit budget as sign-in, exhausted it
+                // in well under a second on a single wrong password.
+                const isAuthEndpointRequest = error.config?.url?.includes(authenticationEndpointPath);
+                if (error.response?.status === 401 && !isAuthEndpointRequest) {
                     window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
                 }
                 return Promise.reject(error);
