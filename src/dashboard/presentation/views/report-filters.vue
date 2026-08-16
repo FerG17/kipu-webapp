@@ -27,7 +27,7 @@ const productStore   = useProductStore();
 const iamStore       = useIamStore();
 
 const { reports, reportsLoaded, errors } = toRefs(dashboardStore);
-const { fetchReports, generateReport, downloadReportCsv, downloadReportPdf } = dashboardStore;
+const { fetchReports, generateReport, downloadReportExcel, downloadReportPdf } = dashboardStore;
 
 /**
  * Products/suppliers are only needed for the STOCK_MOVEMENTS filter
@@ -158,11 +158,11 @@ const downloadingIds = ref(new Set());
 
 /**
  * @param {number} reportId
- * @param {'csv'|'pdf'} format
+ * @param {'excel'|'pdf'} format
  */
 function handleDownload(reportId, format) {
   downloadingIds.value = new Set(downloadingIds.value).add(reportId);
-  const download = format === 'pdf' ? downloadReportPdf(reportId) : downloadReportCsv(reportId);
+  const download = format === 'pdf' ? downloadReportPdf(reportId) : downloadReportExcel(reportId);
   download.catch(() => {}).finally(() => {
     const next = new Set(downloadingIds.value);
     next.delete(reportId);
@@ -347,9 +347,9 @@ function formatGeneratedAt(isoDate) {
             <p class="result-card__summary-range">{{ formatRange(latestReport) }}</p>
           </div>
           <div class="flex gap-2">
-            <button class="btn-primary result-card__download-btn" :disabled="downloadingIds.has(latestReport.id)" @click="handleDownload(latestReport.id, 'csv')">
-              <i :class="downloadingIds.has(latestReport.id) ? 'pi pi-spin pi-spinner' : 'pi pi-download'"/>
-              {{ t('reports.download-csv') }}
+            <button class="btn-primary result-card__download-btn" :disabled="downloadingIds.has(latestReport.id)" @click="handleDownload(latestReport.id, 'excel')">
+              <i :class="downloadingIds.has(latestReport.id) ? 'pi pi-spin pi-spinner' : 'pi pi-file-excel'"/>
+              {{ t('reports.download-excel') }}
             </button>
             <button
                 v-if="latestReport.type === 'STOCK_MOVEMENTS'"
@@ -384,8 +384,8 @@ function formatGeneratedAt(isoDate) {
                 <p class="history-row__meta">{{ formatGeneratedAt(report.generatedAt) }} · {{ formatRange(report) }}</p>
               </div>
               <div class="flex gap-2 flex-shrink-0">
-                <button class="history-row__chip" :disabled="downloadingIds.has(report.id)" @click="handleDownload(report.id, 'csv')">
-                  <i :class="downloadingIds.has(report.id) ? 'pi pi-spin pi-spinner' : 'pi pi-download'"/> {{ t('reports.download-csv') }}
+                <button class="history-row__chip" :disabled="downloadingIds.has(report.id)" @click="handleDownload(report.id, 'excel')">
+                  <i :class="downloadingIds.has(report.id) ? 'pi pi-spin pi-spinner' : 'pi pi-file-excel'"/> {{ t('reports.download-excel') }}
                 </button>
                 <button v-if="report.type === 'STOCK_MOVEMENTS'" class="history-row__chip" :disabled="downloadingIds.has(report.id)" @click="handleDownload(report.id, 'pdf')">
                   <i :class="downloadingIds.has(report.id) ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'"/> {{ t('reports.download-pdf') }}

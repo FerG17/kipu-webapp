@@ -63,14 +63,14 @@ export class DashboardApi extends BaseApi {
     }
 
     /**
-     * Downloads a report as CSV, re-running its live query server-side.
-     * `responseType: 'blob'` is required so Axios hands back the raw file
-     * instead of trying to parse it as JSON.
+     * Downloads a report as a formatted .xlsx workbook, re-running its live
+     * query server-side. `responseType: 'blob'` is required so Axios hands
+     * back the raw file instead of trying to parse it as JSON.
      * @param {number|string} id
      * @returns {Promise<import('axios').AxiosResponse<Blob>>}
      */
-    exportReportCsv(id) {
-        return this.http.get(`${reportsEndpointPath}/${id}/export`, { responseType: 'blob' });
+    exportReportExcel(id) {
+        return this.http.get(`${reportsEndpointPath}/${id}/export/excel`, { responseType: 'blob' });
     }
 
     /**
