@@ -24,6 +24,7 @@ import {
     InputNumber,
     InputText,
     Menu,
+    MultiSelect,
     Rating,
     Row,
     Select,
@@ -64,6 +65,7 @@ createApp(App)
     .component('pv-input-number', InputNumber)
     .component('pv-input-text', InputText)
     .component('pv-menu', Menu)
+    .component('pv-multiselect', MultiSelect)
     .component('pv-rating', Rating)
     .component('pv-row', Row)
     .component('pv-select', Select)

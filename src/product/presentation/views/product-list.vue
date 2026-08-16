@@ -6,6 +6,8 @@ import { useConfirm }     from 'primevue';
 import useProductStore, { parseLocalDate } from '../../application/product.store.js';
 import useIamStore        from '../../../iam/application/iam.store.js';
 import useAlertsStore     from '../../../alerts/application/alerts.store.js';
+import useSupplierStore   from '../../../suppliers/application/supplier.store.js';
+import { Supplier }       from '../../../suppliers/domain/model/supplier.entity.js';
 import { Product, ProductCategory, ProductStatus } from '../../domain/model/product.entity.js';
 import { toDateLocale }   from '../../../shared/presentation/date-locale.js';
 import { isCustomCategory, orderedCategoryOptions, filterableCategoryOptions } from '../category-options.js';
@@ -14,18 +16,25 @@ import { canWriteInventory } from '../../../iam/application/permissions.js';
 const { t, locale } = useI18n();
 const toast        = useToast();
 const confirm      = useConfirm();
-const productStore = useProductStore();
-const iamStore     = useIamStore();
-const alertsStore  = useAlertsStore();
+const productStore  = useProductStore();
+const iamStore      = useIamStore();
+const alertsStore   = useAlertsStore();
+const supplierStore = useSupplierStore();
 
 const { products, productsLoaded, inventory, stockMovements, stockMovementsLoaded, stockMovementsError, errors } = toRefs(productStore);
 const { fetchProducts, fetchInventory, fetchBatches, fetchAllStockMovements,
   addProduct, updateProduct, deleteProduct, registerStockIntake, updateMinimumStock,
   createBatchForProduct, isProductExpiringSoon, isProductExpired } = productStore;
 
+const { suppliers: allSuppliers, suppliersLoaded: suppliersLoadedRef } = toRefs(supplierStore);
+const { addSupplier } = supplierStore;
+
 const savingProduct  = ref(false);
 const savingIntake   = ref(false);
 const deletingProductId = ref(null);
+const addingSupplier = ref(false);
+const showAddSupplierInline = ref(false);
+const newSupplierName = ref('');
 
 const activeTab            = ref('products');
 const searchQuery          = ref('');
@@ -155,7 +164,62 @@ onMounted(() => {
     });
   }
   if (!productStore.batchesLoaded) fetchBatches();
+  if (!suppliersLoadedRef.value) supplierStore.fetchSuppliers();
 });
+
+/**
+ * Active suppliers, resolved to option labels — the pool the product form's
+ * multiselect (and the "Otros" quick-add) draws from.
+ * @type {import('vue').ComputedRef<Array<{label: string, value: number}>>}
+ */
+const activeSupplierOptions = computed(() =>
+    allSuppliers.value.filter(supplier => supplier.isActive)
+        .map(supplier => ({ label: supplier.fullName, value: supplier.id }))
+);
+
+/**
+ * Resolves a product's tagged supplier ids to display names, in whatever
+ * order they were tagged.
+ * @param {import('../../domain/model/product.entity.js').Product} product
+ * @returns {string[]}
+ */
+function resolveProductSupplierNames(product) {
+  return (product?.supplierIds ?? [])
+      .map(supplierId => allSuppliers.value.find(supplier => supplier.id === supplierId)?.fullName)
+      .filter(Boolean);
+}
+
+/** Resets and toggles the inline "add a new supplier" mini-form under the multiselect. */
+function toggleAddSupplierInline() {
+  showAddSupplierInline.value = !showAddSupplierInline.value;
+  newSupplierName.value = '';
+}
+
+/**
+ * Quick-creates a supplier from just a name (category defaults to OTHER,
+ * same "Otros" vocabulary Product uses) and tags it onto the product being
+ * edited — the owner's requested flow: pick from existing suppliers, or
+ * start from "Otros" and type the new one in on the spot, instead of having
+ * to leave the product form to register it first.
+ */
+function confirmAddSupplierInline() {
+  const name = newSupplierName.value.trim();
+  if (!name) return;
+
+  addingSupplier.value = true;
+  addSupplier(new Supplier({ name, category: ProductCategory.OTHER }))
+      .then(created => {
+        productModalForm.value.supplierIds = [...productModalForm.value.supplierIds, created.id];
+        showAddSupplierInline.value = false;
+        newSupplierName.value = '';
+      })
+      .catch(() => {
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-supplier-add-error'), life: 4500 });
+      })
+      .finally(() => {
+        addingSupplier.value = false;
+      });
+}
 
 /**
  * Lazily loads the real stock-movement history the first time the user
@@ -315,7 +379,7 @@ const productModalForm = ref({
   name:           '',
   category:       ProductCategory.OTHER,
   customCategory: '',
-  supplier:       '',
+  supplierIds:    [],
   currentStock:   '',
   minimumStock:   '',
   basePrice:      '',
@@ -333,10 +397,11 @@ const productModalForm = ref({
 function openCreateProductModal(prefillBarcode = '') {
   editingProduct.value   = null;
   productModalForm.value = {
-    name: '', category: ProductCategory.OTHER, customCategory: '', supplier: '', currentStock: '', minimumStock: '', basePrice: '', cost: '', expirationDate: '',
+    name: '', category: ProductCategory.OTHER, customCategory: '', supplierIds: [], currentStock: '', minimumStock: '', basePrice: '', cost: '', expirationDate: '',
     warehouseId: warehouses.value[0] ? String(warehouses.value[0].id) : '',
     barcode: prefillBarcode
   };
+  showAddSupplierInline.value = false;
   showProductModal.value = true;
 }
 
@@ -393,7 +458,7 @@ function openEditProductModal(product) {
     name:           product.name,
     category:       product.category,
     customCategory: '',
-    supplier:       product.description ?? '',
+    supplierIds:    [...(product.supplierIds ?? [])],
     currentStock:   String(resolveCurrentStock(product.id)),
     minimumStock:   String(resolveMinimumStock(product.id)),
     basePrice:      String(product.basePrice),
@@ -402,30 +467,34 @@ function openEditProductModal(product) {
     warehouseId:    '',
     barcode:        product.barcode ?? ''
   };
+  showAddSupplierInline.value = false;
   showProductModal.value = true;
 }
 
 /**
  * Finds an already-registered ACTIVE product whose defining fields (name,
- * category, base price, distributor) match the create-modal form exactly —
- * the case where the admin meant to restock an existing product but went to
- * "Nuevo producto" instead. Stock/expiration are deliberately excluded from
- * the comparison: those are exactly what a real reingreso is for, so they
+ * category, base price) match the create-modal form exactly — the case
+ * where the admin meant to restock an existing product but went to "Nuevo
+ * producto" instead. Stock/expiration are deliberately excluded from the
+ * comparison: those are exactly what a real reingreso is for, so they
  * differing (or not) says nothing about whether this is a duplicate.
+ *
+ * Supplier tags are no longer part of this comparison — a product can now
+ * have several, so "the same set" isn't the single, unambiguous identity
+ * check a free-text distributor string used to be, and name+category+price
+ * already identifies a restock case on its own.
  * @param {string} resolvedCategory
  * @returns {import('../../domain/model/product.entity.js').Product|null}
  */
 function findDuplicateProduct(resolvedCategory) {
-  const name        = productModalForm.value.name.trim().toLowerCase();
-  const basePrice    = parseFloat(productModalForm.value.basePrice) || 0;
-  const distributor  = productModalForm.value.supplier.trim().toLowerCase();
+  const name      = productModalForm.value.name.trim().toLowerCase();
+  const basePrice = parseFloat(productModalForm.value.basePrice) || 0;
 
   return products.value.find(product =>
       product.isActive
       && product.name.trim().toLowerCase() === name
       && product.category === resolvedCategory
       && product.basePrice === basePrice
-      && (product.description ?? '').trim().toLowerCase() === distributor
   ) ?? null;
 }
 
@@ -489,10 +558,14 @@ function persistProductFromModal(resolvedCategory) {
     businessId:  businessId,
     name:        productModalForm.value.name.trim(),
     category:    resolvedCategory,
-    description: productModalForm.value.supplier,
+    // Description no longer doubles as "distributor" (see supplierIds) —
+    // there's no dedicated description field in this form, so a new product
+    // starts blank and an edit leaves whatever was already there untouched.
+    description: editingProduct.value ? editingProduct.value.description : '',
     basePrice:   parseFloat(productModalForm.value.basePrice) || 0,
     status:      ProductStatus.ACTIVE,
-    barcode:     productModalForm.value.barcode.trim() || null
+    barcode:     productModalForm.value.barcode.trim() || null,
+    supplierIds: productModalForm.value.supplierIds
   });
 
   const minimumStock   = parseInt(productModalForm.value.minimumStock) || 0;
@@ -606,11 +679,13 @@ function resolveWarehouseIdForProduct(productId) {
 
 /**
  * Pre-fills the intake form from what's already known about a product —
- * its last purchase cost/expiration (its active batch), its distributor
- * (Product.description) and its current sale price — so re-stocking a
- * known product (typically via the barcode scanner) only requires typing
- * the quantity instead of retyping everything by hand. Every field stays
- * a normal editable input, this is only the starting value.
+ * its last purchase cost/expiration (its active batch), its first tagged
+ * supplier's name (see Product.supplierIds — the intake form's own supplier
+ * field stays free text, a per-movement snapshot, same as before) and its
+ * current sale price — so re-stocking a known product (typically via the
+ * barcode scanner) only requires typing the quantity instead of retyping
+ * everything by hand. Every field stays a normal editable input, this is
+ * only the starting value.
  * @param {number|string} productId
  * @returns {{warehouseId: string, cost: string, expirationDate: string, supplier: string, basePrice: string}}
  */
@@ -623,7 +698,7 @@ function resolveIntakeDefaultsForProduct(productId) {
     warehouseId:    resolveWarehouseIdForProduct(productId),
     cost:           activeBatch ? String(activeBatch.purchasePrice) : '',
     expirationDate: activeBatch ? activeBatch.expiration : '',
-    supplier:       product?.description ?? '',
+    supplier:       resolveProductSupplierNames(product)[0] ?? '',
     basePrice:      product ? String(product.basePrice) : ''
   };
 }
@@ -1011,7 +1086,7 @@ function saveWarehouse() {
                   </div>
                   <div>
                     <p class="m-0 product-name">{{ product.name }}</p>
-                    <p class="m-0 mt-1 product-desc">{{ product.description || '—' }}</p>
+                    <p class="m-0 mt-1 product-desc">{{ resolveProductSupplierNames(product).join(', ') || '—' }}</p>
                   </div>
                 </div>
               </td>
@@ -1478,7 +1553,36 @@ function saveWarehouse() {
               </div>
               <div style="flex: 1;">
                 <label class="modal-label">{{ t('inventory.modal-field-supplier') }}</label>
-                <input v-model="productModalForm.supplier" :placeholder="t('inventory.modal-field-supplier-placeholder')" class="modal-input"/>
+                <pv-multiselect
+                    v-model="productModalForm.supplierIds"
+                    :options="activeSupplierOptions"
+                    option-label="label"
+                    option-value="value"
+                    display="chip"
+                    :placeholder="t('inventory.modal-field-supplier-placeholder')"
+                    class="w-full modal-multiselect"
+                />
+                <button type="button" class="modal-link-btn mt-1" @click="toggleAddSupplierInline">
+                  <i class="pi pi-plus" style="font-size: 0.65rem;"/> {{ t('inventory.modal-field-supplier-add-new') }}
+                </button>
+                <div v-if="showAddSupplierInline" class="flex gap-2 mt-2">
+                  <input
+                      v-model="newSupplierName"
+                      :placeholder="t('inventory.modal-field-supplier-new-placeholder')"
+                      class="modal-input"
+                      style="flex: 1;"
+                      @keyup.enter="confirmAddSupplierInline"
+                  />
+                  <button
+                      type="button"
+                      class="border-round-lg border-none cursor-pointer btn-modal-primary"
+                      style="padding: 0 0.9rem;"
+                      :disabled="addingSupplier || !newSupplierName.trim()"
+                      @click="confirmAddSupplierInline"
+                  >
+                    <i :class="addingSupplier ? 'pi pi-spin pi-spinner' : 'pi pi-check'"/>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2435,6 +2539,30 @@ function saveWarehouse() {
 .modal-select {
   appearance: none;
   cursor: pointer;
+}
+
+.modal-multiselect {
+  border-radius: 10px;
+}
+.modal-multiselect :deep(.p-multiselect-label) {
+  padding: 8px 14px;
+  font-size: 0.88rem;
+}
+
+.modal-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--brand);
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.modal-link-btn:hover {
+  color: var(--accent);
 }
 
 /* ── Responsive: hidden/visible helpers ──────────────────────── */
