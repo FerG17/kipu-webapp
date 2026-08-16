@@ -123,6 +123,26 @@ const canConfirm = computed(() => {
 });
 
 /**
+ * Quick cash-amount shortcuts: the exact total (rounded up to the sol) plus
+ * the common Peruvian bill denominations that are at least the total, so a
+ * cashier can just tap the bill they were handed instead of typing it.
+ * @type {import('vue').ComputedRef<number[]>}
+ */
+const quickCashAmounts = computed(() => {
+  const exact = Math.ceil(props.total);
+  const bills = [10, 20, 50, 100].filter(bill => bill >= props.total && bill !== exact);
+  return [exact, ...bills].slice(0, 4);
+});
+
+/**
+ * Sets the cash input to the given quick amount.
+ * @param {number} amount
+ */
+function selectQuickAmount(amount) {
+  cashInput.value = String(amount);
+}
+
+/**
  * Configuration for each payment method button.
  * @type {Array<{value: string, labelKey: string, icon: string, color: string, background: string}>}
  */
@@ -276,6 +296,26 @@ function handleConfirm() {
         <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
           {{ t('pos.payment-cash-received') }}
         </label>
+        <!-- Quick amount shortcuts -->
+        <div class="flex gap-2 mb-2">
+          <button
+              v-for="(amount, amountIndex) in quickCashAmounts"
+              :key="amount"
+              type="button"
+              class="flex-1 border-round-lg py-2"
+              :style="{
+                            border: `1.5px solid ${cashGiven === amount ? 'var(--status-ok-fg)' : 'var(--border)'}`,
+                            backgroundColor: cashGiven === amount ? 'var(--status-ok-bg)' : 'var(--surface)',
+                            color: cashGiven === amount ? 'var(--status-ok-fg)' : 'var(--text-muted)',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                        }"
+              @click="selectQuickAmount(amount)"
+          >
+            {{ amountIndex === 0 ? t('pos.payment-quick-exact') : formatCurrency(amount) }}
+          </button>
+        </div>
         <input
             v-model="cashInput"
             type="number"

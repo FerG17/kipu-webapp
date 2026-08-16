@@ -1,5 +1,6 @@
 <script setup>
-import { useI18n } from 'vue-i18n';
+import { useI18n }  from 'vue-i18n';
+import { useToast } from 'primevue/usetoast';
 
 /**
  * SaleSuccessModal component for the Sales & POS Management bounded context.
@@ -36,6 +37,7 @@ const emit = defineEmits([
 ]);
 
 const { t } = useI18n();
+const toast = useToast();
 
 /**
  * Formats a number as a Peruvian sol currency string.
@@ -56,12 +58,42 @@ function formatPaymentMethod(method) {
   const key = `pos.payment-${method.toLowerCase()}`;
   return t(key);
 }
+
+/** Opens the browser's print dialog; `@media print` below trims the modal down to just the receipt. */
+function printReceipt() {
+  window.print();
+}
+
+/**
+ * Shares a plain-text summary of the sale via the Web Share API when
+ * available (mobile/POS tablets); falls back to copying it to the clipboard
+ * with a confirmation toast on desktop browsers that don't support sharing.
+ */
+async function shareReceipt() {
+  const summaryText = t('pos.success-share-text', {
+    id:     sale.id ? `#${sale.id}` : '—',
+    total:  formatCurrency(sale.totalAmount || 0),
+    method: formatPaymentMethod(sale.paymentMethod)
+  });
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ text: summaryText });
+    } catch {
+      // User cancelled the native share sheet — nothing to do.
+    }
+    return;
+  }
+
+  await navigator.clipboard.writeText(summaryText);
+  toast.add({ severity: 'success', summary: t('pos.success-share'), detail: t('pos.success-share-copied'), life: 3000 });
+}
 </script>
 
 <template>
   <!-- Backdrop -->
   <div
-      class="fixed inset-0 z-50 flex align-items-end sm:align-items-center justify-content-center"
+      class="fixed inset-0 z-50 flex align-items-end sm:align-items-center justify-content-center receipt-backdrop"
       style="background-color: rgba(0,0,0,0.5);"
   >
     <!-- Modal panel -->
@@ -118,9 +150,29 @@ function formatPaymentMethod(method) {
         </div>
       </div>
 
+      <!-- Print / share actions -->
+      <div class="flex gap-2 mb-3 receipt-actions">
+        <button
+            class="flex-1 flex align-items-center justify-content-center gap-2 border-round-xl"
+            style="border: 1px solid var(--border); color: var(--text-muted); font-size: 0.82rem; font-weight: 600; background: var(--surface); padding: 9px; cursor: pointer;"
+            @click="printReceipt"
+        >
+          <i class="pi pi-print" style="font-size: 0.85rem;" />
+          {{ t('pos.success-print') }}
+        </button>
+        <button
+            class="flex-1 flex align-items-center justify-content-center gap-2 border-round-xl"
+            style="border: 1px solid var(--border); color: var(--text-muted); font-size: 0.82rem; font-weight: 600; background: var(--surface); padding: 9px; cursor: pointer;"
+            @click="shareReceipt"
+        >
+          <i class="pi pi-share-alt" style="font-size: 0.85rem;" />
+          {{ t('pos.success-share') }}
+        </button>
+      </div>
+
       <!-- New sale button -->
       <button
-          class="w-full border-round-xl"
+          class="w-full border-round-xl receipt-actions"
           style="background-color: var(--brand); color: var(--surface); font-size: 0.9rem; font-weight: 600; padding: 10px; border: none; cursor: pointer;"
           @click="emit('new-sale')"
       >
@@ -129,3 +181,12 @@ function formatPaymentMethod(method) {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Printing the receipt: hide the backdrop dimming and any action buttons —
+   only the sale/items breakdown above should end up on paper. */
+@media print {
+  .receipt-actions { display: none !important; }
+  .receipt-backdrop { position: static !important; background: none !important; }
+}
+</style>

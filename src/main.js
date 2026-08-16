@@ -37,11 +37,15 @@ import {
 } from 'primevue';
 import router from './router.js';
 import pinia from './pinia.js';
+import useThemeStore from './shared/application/theme.store.js';
 
 // noinspection JSCheckFunctionSignatures
 createApp(App)
     .use(i18n)
-    .use(PrimeVue, { theme: { preset: BodegaPreset }, ripple: true })
+    // darkModeSelector matches the `data-theme` attribute the theme store
+    // stamps on <html>, so PrimeVue's own dark tokens follow the same manual
+    // toggle instead of running their own prefers-color-scheme check.
+    .use(PrimeVue, { theme: { preset: BodegaPreset, options: { darkModeSelector: '[data-theme="dark"]' } }, ripple: true })
     .use(ConfirmationService)
     .use(DialogService)
     .use(ToastService)
@@ -72,3 +76,5 @@ createApp(App)
     .use(pinia)
     .use(router)
     .mount('#app');
+
+useThemeStore(pinia).initialize();

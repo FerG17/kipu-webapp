@@ -3,14 +3,26 @@ import { computed, onMounted, ref, toRefs, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirm } from 'primevue';
 import useIamStore from '../../application/iam.store.js';
+import useThemeStore from '../../../shared/application/theme.store.js';
 import LanguageSwitcher from '../../../shared/presentation/components/language-switcher.vue';
 import InviteUserModal from '../components/invite-user-modal.vue';
 import { roleLabelKey, roleStyleByPosition } from '../role-labels.js';
 import { canManageTeam, canEditBusinessProfile } from '../../application/permissions.js';
 
-const { t }    = useI18n();
-const confirm  = useConfirm();
-const iamStore = useIamStore();
+const { t }     = useI18n();
+const confirm   = useConfirm();
+const iamStore  = useIamStore();
+const themeStore = useThemeStore();
+
+/**
+ * Options for the theme segmented control, in the same shape the tab bar
+ * above already uses (key/labelKey/icon).
+ */
+const themeOptions = [
+  { key: 'light',  labelKey: 'settings.theme-light',  icon: 'pi pi-sun'     },
+  { key: 'dark',   labelKey: 'settings.theme-dark',   icon: 'pi pi-moon'    },
+  { key: 'system', labelKey: 'settings.theme-system', icon: 'pi pi-desktop' }
+];
 
 const { users, usersLoaded, rolesLoaded, currentBusiness, businessLoaded } = toRefs(iamStore);
 const { fetchUsers, fetchRoles, fetchBusiness, getRolePosition, deleteUser } = iamStore;
@@ -487,6 +499,38 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
         <h3 class="m-0" style="color: var(--brand); font-size: 0.92rem; font-weight: 700;">{{ t('settings.preferences-title') }}</h3>
       </div>
       <div class="px-5 py-4" style="display: flex; flex-direction: column; gap: 0;">
+
+        <!-- Theme row -->
+        <div class="flex align-items-center justify-content-between py-4 flex-wrap gap-3" style="border-bottom: 1px solid var(--surface-alt);">
+          <div class="flex align-items-center gap-3">
+            <div class="flex align-items-center justify-content-center border-round-lg flex-shrink-0" style="width: 40px; height: 40px; background-color: var(--brand-soft);">
+              <i class="pi pi-sun" style="color: var(--brand); font-size: 1rem;"/>
+            </div>
+            <div>
+              <p class="m-0" style="color: var(--text); font-weight: 600; font-size: 0.9rem;">{{ t('settings.theme-label') }}</p>
+              <p class="m-0 mt-1" style="color: var(--text-muted); font-size: 0.78rem;">{{ t('settings.theme-desc') }}</p>
+            </div>
+          </div>
+          <div class="flex" style="gap: 2px; background-color: var(--surface-alt); border-radius: 10px; padding: 3px;">
+            <button
+                v-for="option in themeOptions"
+                :key="option.key"
+                type="button"
+                class="flex align-items-center gap-2 px-3 py-2 border-round-lg border-none cursor-pointer"
+                style="white-space: nowrap; font-size: 0.82rem; transition: all 0.18s;"
+                :style="{
+                  backgroundColor: themeStore.mode === option.key ? 'var(--surface)' : 'transparent',
+                  color:           themeStore.mode === option.key ? 'var(--brand)' : 'var(--text-muted)',
+                  fontWeight:      themeStore.mode === option.key ? 700 : 400,
+                  boxShadow:       themeStore.mode === option.key ? '0 1px 6px rgba(0,0,0,0.10)' : 'none'
+                }"
+                @click="themeStore.setMode(option.key)"
+            >
+              <i :class="option.icon" style="font-size: 0.85rem;"/>
+              <span class="hidden sm:inline">{{ t(option.labelKey) }}</span>
+            </button>
+          </div>
+        </div>
 
         <!-- Language row -->
         <div class="flex align-items-center justify-content-between py-4" style="border-bottom: 1px solid var(--surface-alt);">

@@ -9,9 +9,11 @@
  * secondary accent for the few spots that need a second voice (auth screens'
  * highlight detail). Dark mode is its own considered palette, not an
  * inversion of light — a warm brown ground, accents raised one step of
- * luminance to keep the same perceptual weight. Follows the OS light/dark
- * preference automatically — no manual toggle yet, nothing in the UI offers
- * one.
+ * luminance to keep the same perceptual weight. Applied via `data-theme` on
+ * <html>, driven by the theme store (shared/application/theme.store.js) —
+ * "system" mode resolves to a concrete light/dark value in JS instead of
+ * leaning on `prefers-color-scheme` here, so this file and PrimeVue's own
+ * preset react to the exact same attribute.
  */
 
 :root {
@@ -70,36 +72,34 @@
   --focus-ring: #C67139;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --brand: #E2954F;
-    --brand-ink: #211D18;
-    --brand-soft: #3B2D1F;
-    --accent: #A3B283;
-    --accent-ink: #211D18;
+:root[data-theme="dark"] {
+  --brand: #E2954F;
+  --brand-ink: #211D18;
+  --brand-soft: #3B2D1F;
+  --accent: #A3B283;
+  --accent-ink: #211D18;
 
-    --bg: #211D18;
-    --surface: #2B2620;
-    --surface-alt: #353029;
-    --border: #3F3930;
-    --border-strong: #6C6355;
+  --bg: #211D18;
+  --surface: #2B2620;
+  --surface-alt: #353029;
+  --border: #3F3930;
+  --border-strong: #6C6355;
 
-    --text: #F1E7D7;
-    --text-muted: #A89D8D;
-    --text-faint: #746B5C;
+  --text: #F1E7D7;
+  --text-muted: #A89D8D;
+  --text-faint: #746B5C;
 
-    --status-ok-bg: #28301F;
-    --status-ok-fg: #9CB87E;
-    --status-warning-bg: #332A1A;
-    --status-warning-fg: #DDA44F;
-    --status-critical-bg: #38251F;
-    --status-critical-fg: #DD8877;
-    --status-expiring-bg: #3B2D1F;
-    --status-expiring-fg: #E2954F;
+  --status-ok-bg: #28301F;
+  --status-ok-fg: #9CB87E;
+  --status-warning-bg: #332A1A;
+  --status-warning-fg: #DDA44F;
+  --status-critical-bg: #38251F;
+  --status-critical-fg: #DD8877;
+  --status-expiring-bg: #3B2D1F;
+  --status-expiring-fg: #E2954F;
 
-    --shadow-float: 0 2px 18px -4px rgba(0, 0, 0, 0.55);
-    --focus-ring: #E2954F;
-  }
+  --shadow-float: 0 2px 18px -4px rgba(0, 0, 0, 0.55);
+  --focus-ring: #E2954F;
 }
 
 /* ---- Shared component classes: status chips, used across Alerts, Sales, Suppliers ---- */
