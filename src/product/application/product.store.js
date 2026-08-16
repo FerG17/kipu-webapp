@@ -487,6 +487,7 @@ const useProductStore = defineStore('product', () => {
      * @param {number} [resource.purchasePrice]
      * @param {string} [resource.expiration]
      * @param {string} [resource.supplier]
+     * @param {number} [resource.supplierId]
      * @param {string} [resource.note]
      * @returns {Promise<import('../domain/model/inventory-item.entity.js').InventoryItem|null>}
      */
@@ -505,6 +506,7 @@ const useProductStore = defineStore('product', () => {
             purchasePrice: resource.purchasePrice ?? null,
             expiration:    resource.expiration ?? null,
             supplier:      resource.supplier ?? '',
+            supplierId:    resource.supplierId ?? null,
             note:          resource.note ?? '',
             minimumStock:  resource.minimumStock != null ? parseInt(resource.minimumStock) || 0 : null
         };

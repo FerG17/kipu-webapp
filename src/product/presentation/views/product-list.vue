@@ -676,7 +676,7 @@ function handleDeleteProduct(product) {
 
 // ── Intake modal ───────────────────────────────────────────────────────────────
 
-const intakeForm = ref({ productId: '', quantity: '', cost: '', expirationDate: '', supplier: '', note: '', warehouseId: '', basePrice: '' });
+const intakeForm = ref({ productId: '', quantity: '', cost: '', expirationDate: '', supplierId: '', note: '', warehouseId: '', basePrice: '' });
 
 /**
  * Defaults the intake warehouse to where a product's stock already lives,
@@ -695,14 +695,14 @@ function resolveWarehouseIdForProduct(productId) {
 /**
  * Pre-fills the intake form from what's already known about a product —
  * its last purchase cost/expiration (its active batch), its first tagged
- * supplier's name (see Product.supplierIds — the intake form's own supplier
- * field stays free text, a per-movement snapshot, same as before) and its
- * current sale price — so re-stocking a known product (typically via the
- * barcode scanner) only requires typing the quantity instead of retyping
- * everything by hand. Every field stays a normal editable input, this is
- * only the starting value.
+ * supplier (see Product.supplierIds — same pool the product form's
+ * multiselect draws from, now a real linked SupplierId here too instead of
+ * free text) and its current sale price — so re-stocking a known product
+ * (typically via the barcode scanner) only requires typing the quantity
+ * instead of retyping everything by hand. Every field stays a normal
+ * editable input, this is only the starting value.
  * @param {number|string} productId
- * @returns {{warehouseId: string, cost: string, expirationDate: string, supplier: string, basePrice: string}}
+ * @returns {{warehouseId: string, cost: string, expirationDate: string, supplierId: string|number, basePrice: string}}
  */
 function resolveIntakeDefaultsForProduct(productId) {
   const product = products.value.find(p => p.id === parseInt(productId));
@@ -713,7 +713,7 @@ function resolveIntakeDefaultsForProduct(productId) {
     warehouseId:    resolveWarehouseIdForProduct(productId),
     cost:           activeBatch ? String(activeBatch.purchasePrice) : '',
     expirationDate: activeBatch ? activeBatch.expiration : '',
-    supplier:       resolveProductSupplierNames(product)[0] ?? '',
+    supplierId:     product?.supplierIds?.[0] ?? '',
     basePrice:      product ? String(product.basePrice) : ''
   };
 }
@@ -727,7 +727,7 @@ function openIntakeModal(product) {
     note:      '',
     ...(initialProductId
         ? resolveIntakeDefaultsForProduct(initialProductId)
-        : { warehouseId: '', cost: '', expirationDate: '', supplier: '', basePrice: '' })
+        : { warehouseId: '', cost: '', expirationDate: '', supplierId: '', basePrice: '' })
   };
   showIntakeModal.value = true;
 }
@@ -764,6 +764,14 @@ function saveIntake() {
   const newBasePrice   = parseFloat(intakeForm.value.basePrice);
   const basePriceEdited = targetProduct && !isNaN(newBasePrice) && newBasePrice !== targetProduct.basePrice;
 
+  // The picked supplier is a real link (supplierId) now instead of free
+  // text — still resolving its name here too so the "Movimientos" table
+  // (which only ever displayed a plain string) keeps showing one.
+  const pickedSupplierId = intakeForm.value.supplierId ? parseInt(intakeForm.value.supplierId) : null;
+  const pickedSupplierName = pickedSupplierId
+      ? allSuppliers.value.find(supplier => supplier.id === pickedSupplierId)?.fullName ?? ''
+      : '';
+
   savingIntake.value = true;
   registerStockIntake({
     productId:     parseInt(intakeForm.value.productId),
@@ -771,7 +779,8 @@ function saveIntake() {
     warehouseId:   parseInt(intakeForm.value.warehouseId),
     purchasePrice: parseFloat(intakeForm.value.cost) || null,
     expiration:    intakeForm.value.expirationDate || null,
-    supplier:      intakeForm.value.supplier,
+    supplierId:    pickedSupplierId,
+    supplier:      pickedSupplierName,
     note:          intakeForm.value.note
   })
       .then(() => basePriceEdited
@@ -1803,7 +1812,12 @@ function saveWarehouse() {
           <!-- Supplier -->
           <div>
             <label class="modal-label">{{ t('inventory.intake-field-supplier') }}</label>
-            <input v-model="intakeForm.supplier" :placeholder="t('inventory.intake-field-supplier-placeholder')" class="modal-input"/>
+            <select v-model="intakeForm.supplierId" class="modal-input modal-select">
+              <option value="">{{ t('inventory.intake-field-supplier-placeholder') }}</option>
+              <option v-for="supplier in activeSupplierOptions" :key="supplier.value" :value="supplier.value">
+                {{ supplier.label }}
+              </option>
+            </select>
           </div>
           <!-- Note -->
           <div>
