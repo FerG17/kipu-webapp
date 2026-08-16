@@ -195,12 +195,13 @@ const useDashboardStore = defineStore('dashboard', () => {
     }
 
     /**
-     * Downloads a report as CSV, re-running its live query server-side.
+     * Downloads a report as a formatted .xlsx workbook, re-running its live
+     * query server-side.
      * @param {number|string} reportId
      */
-    function downloadReportCsv(reportId) {
-        return dashboardApi.exportReportCsv(reportId)
-            .then(response => downloadBlob(response.data, `report-${reportId}.csv`))
+    function downloadReportExcel(reportId) {
+        return dashboardApi.exportReportExcel(reportId)
+            .then(response => downloadBlob(response.data, `report-${reportId}.xlsx`))
             .catch(error => { errors.value.push(error); throw error; });
     }
 
@@ -231,7 +232,7 @@ const useDashboardStore = defineStore('dashboard', () => {
         fetchTopStockProducts,
         fetchReports,
         generateReport,
-        downloadReportCsv,
+        downloadReportExcel,
         downloadReportPdf
     };
 });
