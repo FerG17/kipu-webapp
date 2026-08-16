@@ -40,7 +40,6 @@ async function submitSignIn() {
   }
 }
 
-function navigateToSignUp() { router.push({ name: 'sign-up' }); }
 function navigateToForgotPassword() { router.push({ name: 'forgot-password' }); }
 </script>
 
@@ -184,13 +183,6 @@ function navigateToForgotPassword() { router.push({ name: 'forgot-password' }); 
           </button>
         </form>
 
-        <!-- Register link -->
-        <p class="text-center mt-5 auth-footer-text">
-          {{ t('sign-in.no-account') }}
-          <button type="button" class="auth-link" style="font-weight: 700;" @click="navigateToSignUp">
-            {{ t('sign-in.register') }}
-          </button>
-        </p>
       </div>
 
       <p class="mt-8 auth-copyright">© 2026 Bodega Platform</p>
