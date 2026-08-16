@@ -557,6 +557,8 @@
     "payment-cancel-sale": "Cancel sale",
     "payment-cancel-confirm-header": "Cancel this sale?",
     "payment-cancel-confirm-message": "The cart stays as is, but the payment step will close. Continue?",
+    "payment-cancel-confirm-back": "Go back",
+    "payment-cancel-confirm-accept": "Yes, cancel",
     "payment-confirm": "Confirm payment",
     "success-title": "Sale registered!",
     "success-credit-plan-created": "Sale registered in {installments} installments.",

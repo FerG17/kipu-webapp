@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useI18n }       from 'vue-i18n';
-import { useConfirm }    from 'primevue';
 import { PaymentMethod } from '../../domain/model/sale.entity.js';
 
 /**
@@ -50,20 +49,22 @@ const emit = defineEmits([
 ]);
 
 const { t } = useI18n();
-const confirm = useConfirm();
 
 /**
- * Asks for confirmation before cancelling the in-progress sale — a stray tap
- * on this button used to close the modal instantly with no way back short of
- * re-adding every cart line by hand.
+ * Whether the inline "cancel this sale?" confirmation panel is showing.
+ * Built as a small overlay local to this component, rather than PrimeVue's
+ * global ConfirmDialog (which this app also uses in Settings) — that global
+ * dialog's default z-index sits below this modal's own backdrop (z-50, see
+ * style.css's z-index scale), so it rendered invisibly behind the payment
+ * modal instead of on top of it. A local overlay sidesteps that entirely.
+ * @type {import('vue').Ref<boolean>}
  */
-function handleCancelClick() {
-  confirm.require({
-    message: t('pos.payment-cancel-confirm-message'),
-    header:  t('pos.payment-cancel-confirm-header'),
-    icon:    'pi pi-exclamation-triangle',
-    accept:  () => emit('cancel')
-  });
+const showCancelConfirm = ref(false);
+
+/** Confirms cancelling the in-progress sale and closes the payment modal. */
+function confirmCancel() {
+  showCancelConfirm.value = false;
+  emit('cancel');
 }
 
 /**
@@ -361,7 +362,7 @@ function handleConfirm() {
         <button
             class="flex-1 border-round-xl py-3"
             style="border: 1px solid var(--border); color: var(--text-muted); font-size: 0.88rem; font-weight: 600; background: var(--surface); cursor: pointer;"
-            @click="handleCancelClick"
+            @click="showCancelConfirm = true"
         >
           {{ t('pos.payment-cancel-sale') }}
         </button>
@@ -380,6 +381,49 @@ function handleConfirm() {
         >
           {{ t('pos.payment-confirm') }}
         </button>
+      </div>
+
+      <!-- Cancel confirmation overlay — local to this component, always on
+           top of the modal above (see the note on showCancelConfirm). -->
+      <div
+          v-if="showCancelConfirm"
+          class="fixed inset-0 flex align-items-center justify-content-center px-4"
+          style="background-color: rgba(0,0,0,0.35); z-index: 60;"
+          @click.self="showCancelConfirm = false"
+      >
+        <div
+            class="w-full border-round-2xl p-4 text-center shadow-8"
+            style="max-width: 320px; background-color: var(--surface); border: 1px solid var(--border);"
+        >
+          <div
+              class="flex align-items-center justify-content-center border-round-3xl mx-auto mb-3"
+              style="width: 48px; height: 48px; background-color: var(--status-warning-bg);"
+          >
+            <i class="pi pi-exclamation-triangle" style="font-size: 1.4rem; color: var(--status-warning-fg);" />
+          </div>
+          <p class="m-0 mb-1" style="font-size: 1rem; font-weight: 700; color: var(--text);">
+            {{ t('pos.payment-cancel-confirm-header') }}
+          </p>
+          <p class="m-0 mb-4" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;">
+            {{ t('pos.payment-cancel-confirm-message') }}
+          </p>
+          <div class="flex gap-2">
+            <button
+                class="flex-1 border-round-xl py-2"
+                style="border: 1px solid var(--border); color: var(--text-muted); font-size: 0.85rem; font-weight: 600; background: var(--surface); cursor: pointer;"
+                @click="showCancelConfirm = false"
+            >
+              {{ t('pos.payment-cancel-confirm-back') }}
+            </button>
+            <button
+                class="flex-1 border-round-xl py-2"
+                style="border: none; color: var(--brand-ink); font-size: 0.85rem; font-weight: 700; background: var(--status-critical-fg); cursor: pointer;"
+                @click="confirmCancel"
+            >
+              {{ t('pos.payment-cancel-confirm-accept') }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

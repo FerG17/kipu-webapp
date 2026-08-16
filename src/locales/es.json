@@ -557,6 +557,8 @@
     "payment-cancel-sale": "Cancelar venta",
     "payment-cancel-confirm-header": "¿Cancelar esta venta?",
     "payment-cancel-confirm-message": "El carrito se mantiene, pero se cierra el registro del pago. ¿Quieres continuar?",
+    "payment-cancel-confirm-back": "Volver",
+    "payment-cancel-confirm-accept": "Sí, cancelar",
     "payment-confirm": "Confirmar pago",
     "success-title": "¡Venta registrada!",
     "success-credit-plan-created": "Venta a {installments} cuotas registrada.",
