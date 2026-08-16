@@ -143,24 +143,29 @@ function formatCurrency(amount) {
           </div>
         </div>
 
-        <!-- Info grid -->
-        <div class="grid">
+        <!-- Info rows — one field per full-width row (not a 2-column grid) so a
+             long email never has to share its row with another value and wrap
+             awkwardly; matches the supplier detail modal's layout. -->
+        <div style="display: flex; flex-direction: column; gap: 10px;">
           <div
               v-for="info in [
-                            { label: t('customer-form.document-number'), value: customer.documentNumber || '—' },
-                            { label: t('customer-form.phone-number'),    value: customer.phoneNumber    || '—' },
-                            { label: t('customer-form.email'),           value: customer.email          || '—' },
-                            { label: t('customers.detail-purchases'),    value: String(totalPurchases)        }
+                            { icon: 'pi-hashtag',       label: t('customer-form.document-number'), value: customer.documentNumber || '—' },
+                            { icon: 'pi-phone',         label: t('customer-form.phone-number'),    value: customer.phoneNumber    || '—' },
+                            { icon: 'pi-envelope',      label: t('customer-form.email'),            value: customer.email          || '—' },
+                            { icon: 'pi-shopping-bag',  label: t('customers.detail-purchases'),     value: String(totalPurchases)        }
                         ]"
               :key="info.label"
-              class="col-6"
+              style="display: flex; align-items: flex-start; gap: 12px;"
           >
             <div
-                class="border-round-xl p-3"
-                style="background-color: var(--surface-alt); border: 1px solid var(--border);"
+                class="flex align-items-center justify-content-center border-round shrink-0"
+                style="width: 1.75rem; height: 1.75rem; background-color: var(--surface-alt);"
             >
-              <p class="m-0 mb-1" style="font-size: 0.68rem; color: var(--text-faint);">{{ info.label }}</p>
-              <p class="m-0" style="font-size: 0.88rem; font-weight: 600; color: var(--text);">{{ info.value }}</p>
+              <i :class="['pi', info.icon]" style="color: var(--text-faint); font-size: 0.78rem;" />
+            </div>
+            <div style="min-width: 0;">
+              <p class="m-0" style="font-size: 0.68rem; color: var(--text-faint);">{{ info.label }}</p>
+              <p class="m-0" style="font-size: 0.85rem; font-weight: 500; color: var(--text); overflow-wrap: anywhere;">{{ info.value }}</p>
             </div>
           </div>
         </div>

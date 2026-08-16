@@ -12,6 +12,7 @@ import { Product, ProductCategory, ProductStatus } from '../../domain/model/prod
 import { toDateLocale }   from '../../../shared/presentation/date-locale.js';
 import { isCustomCategory, orderedCategoryOptions, filterableCategoryOptions } from '../category-options.js';
 import { canWriteInventory } from '../../../iam/application/permissions.js';
+import { useModalScrollLock } from '../../../shared/presentation/use-modal-scroll-lock.js';
 
 const { t, locale } = useI18n();
 const toast        = useToast();
@@ -856,6 +857,13 @@ const showWarehouseModal = ref(false);
 const savingWarehouse    = ref(false);
 const warehouseForm      = ref({ name: '', code: '', address: '', capacity: 'MEDIUM' });
 
+// Background content behind these modals was still scrollable on mobile,
+// which read as the modal itself being broken once the virtual keyboard
+// covered fields further down.
+useModalScrollLock(showProductModal);
+useModalScrollLock(showIntakeModal);
+useModalScrollLock(showWarehouseModal);
+
 function openWarehouseModal() {
   warehouseForm.value = { name: '', code: '', address: '', capacity: 'MEDIUM' };
   showWarehouseModal.value = true;
@@ -1416,7 +1424,7 @@ function saveWarehouse() {
       </div>
 
       <!-- Warehouse summary cards — double as filter buttons for the table below -->
-      <div class="stat-grid">
+      <div class="warehouse-grid">
         <button
             v-for="warehouse in warehouseSummary"
             :key="warehouse.key"
@@ -1718,7 +1726,7 @@ function saveWarehouse() {
         class="fixed inset-0 z-50 flex align-items-end sm:align-items-center justify-content-center modal-overlay"
         @click.self="showIntakeModal = false"
     >
-      <div class="w-full border-round-t-2xl sm:border-round-2xl modal-container-sm">
+      <div class="w-full border-round-t-2xl sm:border-round-2xl overflow-y-auto modal-container-sm">
         <!-- Modal header -->
         <div class="flex align-items-center justify-content-between px-5 py-4 modal-header">
           <div class="flex align-items-center gap-3">
@@ -1815,7 +1823,7 @@ function saveWarehouse() {
         class="fixed inset-0 z-50 flex align-items-end sm:align-items-center justify-content-center modal-overlay"
         @click.self="showWarehouseModal = false"
     >
-      <div class="w-full border-round-t-2xl sm:border-round-2xl modal-container-sm">
+      <div class="w-full border-round-t-2xl sm:border-round-2xl overflow-y-auto modal-container-sm">
         <div class="flex align-items-center justify-content-between px-5 py-4 modal-header">
           <div class="flex align-items-center gap-3">
             <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: linear-gradient(135deg, var(--brand-soft), var(--brand-soft));">
@@ -1922,11 +1930,20 @@ function saveWarehouse() {
 /* ── Stat cards ──────────────────────────────────────────────── */
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
 @media (min-width: 768px) {
-  .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* Warehouse cards are a variable-length list (1-N items), unlike the fixed
+   4-tile .stat-grid — reusing that grid squeezed a single warehouse into
+   half the row width instead of using the space it actually has. */
+.warehouse-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
 }
 
 .stat-icon {
@@ -2242,7 +2259,7 @@ function saveWarehouse() {
 
 .mini-stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
 }
 
@@ -2350,7 +2367,7 @@ function saveWarehouse() {
 
 .warehouse-stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.75rem;
 }
 
@@ -2427,6 +2444,7 @@ function saveWarehouse() {
 
 .modal-container-sm {
   max-width: 480px;
+  max-height: 92vh;
   background-color: var(--surface);
   border: 1px solid var(--border);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);

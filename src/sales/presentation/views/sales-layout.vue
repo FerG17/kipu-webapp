@@ -69,7 +69,7 @@ function navigateToTab(routeName) {
   <div class="flex flex-column h-full overflow-hidden">
 
     <!-- Header -->
-    <div class="flex align-items-center justify-content-between px-4 sm:px-6 pt-5 pb-3">
+    <div class="flex align-items-center justify-content-between px-4 sm:px-6 pb-3">
       <div>
         <h1 class="m-0" style="font-size: 1.3rem; font-weight: 700; color: var(--brand); line-height: 1.2;">
           {{ t('sales.title') }}

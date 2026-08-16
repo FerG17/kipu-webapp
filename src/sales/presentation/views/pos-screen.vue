@@ -444,10 +444,7 @@ onMounted(() => {
 
       <!-- Products grid -->
       <div class="flex-1 overflow-y-auto p-4">
-        <div
-            class="grid"
-            style="gap: 10px;"
-        >
+        <div class="grid">
           <div
               v-for="product in filteredProducts"
               :key="product.id"
@@ -592,6 +589,7 @@ onMounted(() => {
           </button>
         </div>
         <cart-panel
+            class="flex-1 min-h-0"
             :cart-items="cartItems"
             :total="cartTotal"
             @update-quantity="handleQuantityChange"

@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { useI18n }       from 'vue-i18n';
 import { PaymentMethod } from '../../domain/model/sale.entity.js';
+import { useModalScrollLock } from '../../../shared/presentation/use-modal-scroll-lock.js';
 
 /**
  * PaymentModal component for the Sales & POS Management bounded context.
@@ -49,6 +50,10 @@ const emit = defineEmits([
 ]);
 
 const { t } = useI18n();
+
+// This component is only ever mounted while the parent's v-if is open
+// (see pos-screen.vue), so the lock's lifetime just follows the component's.
+useModalScrollLock(ref(true));
 
 /**
  * Whether the inline "cancel this sale?" confirmation panel is showing.
@@ -203,8 +208,8 @@ function handleConfirm() {
   >
     <!-- Modal panel -->
     <div
-        class="w-full border-round-top-2xl sm:border-round-2xl p-5 shadow-8"
-        style="max-width: 400px; background-color: var(--surface); border: 1px solid var(--border);"
+        class="w-full border-round-top-2xl sm:border-round-2xl p-5 shadow-8 overflow-y-auto"
+        style="max-width: 400px; max-height: 92vh; background-color: var(--surface); border: 1px solid var(--border);"
     >
       <!-- Header -->
       <div class="flex align-items-center justify-content-between mb-4">
