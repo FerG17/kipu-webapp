@@ -145,7 +145,7 @@ async function handleSignOut() {
 </script>
 
 <template>
-  <pv-toast/>
+  <pv-toast :breakpoints="{ '576px': { width: '92vw', left: '4vw', right: '4vw' } }"/>
   <pv-confirm-dialog/>
 
   <div class="bodega-shell flex min-h-screen">

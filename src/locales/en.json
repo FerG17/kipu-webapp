@@ -390,6 +390,7 @@
     "toast-save-success": "Product saved successfully",
     "toast-save-error": "Could not save the product. Check your connection and try again.",
     "toast-duplicate-barcode": "That barcode is already registered on another product.",
+    "toast-invalid-expiration": "The product was saved, but the cost price and expiration date couldn't be registered because that date has already passed. Edit it to fix the date.",
     "toast-warehouse-required": "Select a warehouse to register the initial stock.",
     "scan-modal-title": "Scan barcode",
     "scan-modal-hint": "Scan with the reader or type the code and press Enter",

@@ -841,7 +841,6 @@ function resolveProductName(detail) {
                   <td class="orders-detail-td orders-detail-td-right orders-detail-tfoot-total">
                     {{ formatCurrency(selectedOrder.totalAmount) }}
                   </td>
-                  <td class="orders-detail-td"></td>
                 </tr>
                 </tfoot>
               </table>

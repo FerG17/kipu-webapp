@@ -611,7 +611,7 @@ function formatDateTime(isoDate) {
 
 .alerts-tabs { display: flex; gap: 0.25rem; margin-bottom: 0.75rem; }
 .alerts-tab-btn { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 1rem; border: none; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 500; cursor: pointer; color: var(--text-muted); background: transparent; transition: all 0.15s; position: relative; }
-.alerts-tab-btn:hover { background-color: var(--surface-alt); }
+.alerts-tab-btn:hover:not(.alerts-tab-btn-active) { background-color: var(--surface-alt); }
 .alerts-tab-btn-active { background-color: var(--brand); color: var(--surface); font-weight: 700; }
 .alerts-tab-badge { position: absolute; top: -0.25rem; right: -0.25rem; width: 1rem; height: 1rem; border-radius: 50%; background-color: var(--status-critical-fg); color: var(--surface); font-size: 0.6rem; font-weight: 800; display: flex; align-items: center; justify-content: center; }
 

@@ -444,17 +444,14 @@ onMounted(() => {
 
       <!-- Products grid -->
       <div class="flex-1 overflow-y-auto p-4">
-        <div
-            class="grid"
-            style="gap: 10px;"
-        >
+        <div class="grid">
           <div
               v-for="product in filteredProducts"
               :key="product.id"
               class="col-6 md:col-4 xl:col-3"
           >
             <button
-                class="w-full border-round-xl p-3 text-left flex flex-column justify-content-between"
+                class="w-full h-full border-round-xl p-3 text-left flex flex-column justify-content-between"
                 :disabled="product.isOutOfStock"
                 :style="{
                                 border:          `2px solid ${isProductInCart(product.id) ? 'var(--brand)' : 'var(--border)'}`,
@@ -469,8 +466,9 @@ onMounted(() => {
               <div>
                 <p
                     class="m-0 mb-1"
-                    style="font-size: 0.78rem; font-weight: 600; line-height: 1.3;"
+                    style="font-size: 0.78rem; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;"
                     :style="{ color: product.isOutOfStock ? 'var(--text-faint)' : 'var(--text)' }"
+                    :title="product.name"
                 >
                   {{ product.name }}
                 </p>
@@ -592,6 +590,7 @@ onMounted(() => {
           </button>
         </div>
         <cart-panel
+            class="flex-1 min-h-0"
             :cart-items="cartItems"
             :total="cartTotal"
             @update-quantity="handleQuantityChange"

@@ -12,6 +12,7 @@ import { Product, ProductCategory, ProductStatus } from '../../domain/model/prod
 import { toDateLocale }   from '../../../shared/presentation/date-locale.js';
 import { isCustomCategory, orderedCategoryOptions, filterableCategoryOptions } from '../category-options.js';
 import { canWriteInventory } from '../../../iam/application/permissions.js';
+import { useModalScrollLock } from '../../../shared/presentation/use-modal-scroll-lock.js';
 
 const { t, locale } = useI18n();
 const toast        = useToast();
@@ -28,6 +29,12 @@ const { fetchProducts, fetchInventory, fetchBatches, fetchAllStockMovements,
 
 const { suppliers: allSuppliers, suppliersLoaded: suppliersLoadedRef } = toRefs(supplierStore);
 const { addSupplier } = supplierStore;
+
+// Backend rejects a batch whose expiration date is already in the past
+// (CreateOrUpdateBatchCommand) — caught here too so the date picker itself
+// refuses it instead of letting the request round-trip into a 400 after the
+// product/stock intake have already been committed.
+const todayIsoDate = new Date().toISOString().slice(0, 10);
 
 const savingProduct  = ref(false);
 const savingIntake   = ref(false);
@@ -614,10 +621,18 @@ function persistProductFromModal(resolvedCategory) {
       })
       .catch(error => {
         const isDuplicateBarcode = error.response?.status === 409 && error.response?.data?.title === 'DuplicateBarcode';
+        // Reached only if the batch step fails for a reason other than a
+        // past expiration date (that case is now blocked client-side by the
+        // date picker's min attribute) — the product and its initial stock
+        // were already committed server-side by this point, so the message
+        // must not read as a total failure.
+        const isInvalidExpiration = error.response?.status === 400 && error.response?.data?.title === 'InvalidExpirationDate';
         toast.add({
           severity: 'error',
           summary:  t('common.toast-error-title'),
-          detail:   isDuplicateBarcode ? t('inventory.toast-duplicate-barcode') : t('inventory.toast-save-error'),
+          detail:   isDuplicateBarcode ? t('inventory.toast-duplicate-barcode')
+                   : isInvalidExpiration ? t('inventory.toast-invalid-expiration')
+                   : t('inventory.toast-save-error'),
           life: 4500
         });
       })
@@ -855,6 +870,13 @@ const warehouseTableRows = computed(() => {
 const showWarehouseModal = ref(false);
 const savingWarehouse    = ref(false);
 const warehouseForm      = ref({ name: '', code: '', address: '', capacity: 'MEDIUM' });
+
+// Background content behind these modals was still scrollable on mobile,
+// which read as the modal itself being broken once the virtual keyboard
+// covered fields further down.
+useModalScrollLock(showProductModal);
+useModalScrollLock(showIntakeModal);
+useModalScrollLock(showWarehouseModal);
 
 function openWarehouseModal() {
   warehouseForm.value = { name: '', code: '', address: '', capacity: 'MEDIUM' };
@@ -1416,7 +1438,7 @@ function saveWarehouse() {
       </div>
 
       <!-- Warehouse summary cards — double as filter buttons for the table below -->
-      <div class="stat-grid">
+      <div class="warehouse-grid">
         <button
             v-for="warehouse in warehouseSummary"
             :key="warehouse.key"
@@ -1645,7 +1667,7 @@ function saveWarehouse() {
             <!-- Expiration date -->
             <div>
               <label class="modal-label">{{ t('inventory.modal-field-expiration') }}</label>
-              <input v-model="productModalForm.expirationDate" type="date" class="modal-input"/>
+              <input v-model="productModalForm.expirationDate" type="date" :min="todayIsoDate" class="modal-input"/>
             </div>
           </div>
 
@@ -1718,7 +1740,7 @@ function saveWarehouse() {
         class="fixed inset-0 z-50 flex align-items-end sm:align-items-center justify-content-center modal-overlay"
         @click.self="showIntakeModal = false"
     >
-      <div class="w-full border-round-t-2xl sm:border-round-2xl modal-container-sm">
+      <div class="w-full border-round-t-2xl sm:border-round-2xl overflow-y-auto modal-container-sm">
         <!-- Modal header -->
         <div class="flex align-items-center justify-content-between px-5 py-4 modal-header">
           <div class="flex align-items-center gap-3">
@@ -1760,7 +1782,7 @@ function saveWarehouse() {
             </div>
             <div style="flex: 1;">
               <label class="modal-label">{{ t('inventory.intake-field-expiration') }}</label>
-              <input v-model="intakeForm.expirationDate" type="date" class="modal-input"/>
+              <input v-model="intakeForm.expirationDate" type="date" :min="todayIsoDate" class="modal-input"/>
             </div>
           </div>
           <!-- Sale price -->
@@ -1815,7 +1837,7 @@ function saveWarehouse() {
         class="fixed inset-0 z-50 flex align-items-end sm:align-items-center justify-content-center modal-overlay"
         @click.self="showWarehouseModal = false"
     >
-      <div class="w-full border-round-t-2xl sm:border-round-2xl modal-container-sm">
+      <div class="w-full border-round-t-2xl sm:border-round-2xl overflow-y-auto modal-container-sm">
         <div class="flex align-items-center justify-content-between px-5 py-4 modal-header">
           <div class="flex align-items-center gap-3">
             <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: linear-gradient(135deg, var(--brand-soft), var(--brand-soft));">
@@ -1922,11 +1944,20 @@ function saveWarehouse() {
 /* ── Stat cards ──────────────────────────────────────────────── */
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
 @media (min-width: 768px) {
-  .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* Warehouse cards are a variable-length list (1-N items), unlike the fixed
+   4-tile .stat-grid — reusing that grid squeezed a single warehouse into
+   half the row width instead of using the space it actually has. */
+.warehouse-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
 }
 
 .stat-icon {
@@ -2242,7 +2273,7 @@ function saveWarehouse() {
 
 .mini-stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
 }
 
@@ -2350,7 +2381,7 @@ function saveWarehouse() {
 
 .warehouse-stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.75rem;
 }
 
@@ -2427,6 +2458,7 @@ function saveWarehouse() {
 
 .modal-container-sm {
   max-width: 480px;
+  max-height: 92vh;
   background-color: var(--surface);
   border: 1px solid var(--border);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);

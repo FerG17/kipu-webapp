@@ -151,7 +151,7 @@ onMounted(() => {
   font-size: 0.85rem; font-weight: 500; cursor: pointer;
   color: var(--text-muted); background: transparent; transition: all 0.15s;
 }
-.suppliers-tab-btn:hover { background-color: var(--surface-alt); }
+.suppliers-tab-btn:hover:not(.suppliers-tab-btn-active) { background-color: var(--surface-alt); }
 .suppliers-tab-btn-active { background-color: var(--brand); color: var(--surface); font-weight: 700; }
 
 .suppliers-tab-content {

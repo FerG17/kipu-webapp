@@ -650,11 +650,11 @@ const quickActions = computed(() => [
 /* 2-col on mobile → 3-col on desktop, matching the product stat-grid standard. */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
 @media (min-width: 1024px) {
-  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+  .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 .kpi-card {
@@ -662,6 +662,7 @@ const quickActions = computed(() => [
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  min-width: 0;
   padding: 1rem;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -679,6 +680,7 @@ const quickActions = computed(() => [
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  min-width: 0;
 }
 .kpi-card__label {
   margin: 0;
@@ -697,7 +699,7 @@ const quickActions = computed(() => [
   font-size: 1.25rem;
   font-weight: 700;
   line-height: 1.1;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 @media (min-width: 640px) {
   .kpi-card__value { font-size: 1.5rem; }
