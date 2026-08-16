@@ -86,13 +86,13 @@ function navigateToTab(routeName) {
     <!-- Tab navigation -->
     <div
         class="flex gap-1 px-4 py-2"
-        style="border-bottom: 1px solid var(--border);"
+        style="border-bottom: 1px solid var(--border); overflow-x: auto;"
     >
       <button
           v-for="tab in tabs"
           :key="tab.routeName"
-          class="border-round-lg px-4 py-2"
-          style="font-size: 0.85rem; border: none; cursor: pointer; transition: all 0.15s;"
+          class="border-round-lg px-4 py-2 flex-shrink-0"
+          style="font-size: 0.85rem; border: none; cursor: pointer; transition: all 0.15s; white-space: nowrap;"
           :style="{
                     backgroundColor: isActiveTab(tab.routeName) ? 'var(--brand)' : 'transparent',
                     color:           isActiveTab(tab.routeName) ? 'var(--brand-ink)'    : 'var(--text-muted)',

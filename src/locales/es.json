@@ -390,6 +390,7 @@
     "toast-save-success": "Producto guardado correctamente",
     "toast-save-error": "No se pudo guardar el producto. Verifica tu conexión e intenta de nuevo.",
     "toast-duplicate-barcode": "Ese código de barras ya está registrado en otro producto.",
+    "toast-invalid-expiration": "El producto se guardó, pero no se pudo registrar el precio de costo ni la fecha de vencimiento porque esa fecha ya pasó. Edítalo para corregirla.",
     "toast-warehouse-required": "Selecciona un almacén para registrar el stock inicial.",
     "scan-modal-title": "Escanear código de barras",
     "scan-modal-hint": "Escaneá con el lector o escribí el código y presioná Enter",

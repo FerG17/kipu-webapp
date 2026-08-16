@@ -30,6 +30,12 @@ const { fetchProducts, fetchInventory, fetchBatches, fetchAllStockMovements,
 const { suppliers: allSuppliers, suppliersLoaded: suppliersLoadedRef } = toRefs(supplierStore);
 const { addSupplier } = supplierStore;
 
+// Backend rejects a batch whose expiration date is already in the past
+// (CreateOrUpdateBatchCommand) — caught here too so the date picker itself
+// refuses it instead of letting the request round-trip into a 400 after the
+// product/stock intake have already been committed.
+const todayIsoDate = new Date().toISOString().slice(0, 10);
+
 const savingProduct  = ref(false);
 const savingIntake   = ref(false);
 const deletingProductId = ref(null);
@@ -615,10 +621,18 @@ function persistProductFromModal(resolvedCategory) {
       })
       .catch(error => {
         const isDuplicateBarcode = error.response?.status === 409 && error.response?.data?.title === 'DuplicateBarcode';
+        // Reached only if the batch step fails for a reason other than a
+        // past expiration date (that case is now blocked client-side by the
+        // date picker's min attribute) — the product and its initial stock
+        // were already committed server-side by this point, so the message
+        // must not read as a total failure.
+        const isInvalidExpiration = error.response?.status === 400 && error.response?.data?.title === 'InvalidExpirationDate';
         toast.add({
           severity: 'error',
           summary:  t('common.toast-error-title'),
-          detail:   isDuplicateBarcode ? t('inventory.toast-duplicate-barcode') : t('inventory.toast-save-error'),
+          detail:   isDuplicateBarcode ? t('inventory.toast-duplicate-barcode')
+                   : isInvalidExpiration ? t('inventory.toast-invalid-expiration')
+                   : t('inventory.toast-save-error'),
           life: 4500
         });
       })
@@ -1653,7 +1667,7 @@ function saveWarehouse() {
             <!-- Expiration date -->
             <div>
               <label class="modal-label">{{ t('inventory.modal-field-expiration') }}</label>
-              <input v-model="productModalForm.expirationDate" type="date" class="modal-input"/>
+              <input v-model="productModalForm.expirationDate" type="date" :min="todayIsoDate" class="modal-input"/>
             </div>
           </div>
 
@@ -1768,7 +1782,7 @@ function saveWarehouse() {
             </div>
             <div style="flex: 1;">
               <label class="modal-label">{{ t('inventory.intake-field-expiration') }}</label>
-              <input v-model="intakeForm.expirationDate" type="date" class="modal-input"/>
+              <input v-model="intakeForm.expirationDate" type="date" :min="todayIsoDate" class="modal-input"/>
             </div>
           </div>
           <!-- Sale price -->
