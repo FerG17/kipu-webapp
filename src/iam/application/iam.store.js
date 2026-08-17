@@ -425,6 +425,55 @@ const useIamStore = defineStore('iam', () => {
     }
 
     /**
+     * Requests a 6-digit password-reset code by email. Always resolves
+     * success from the caller's point of view — the backend itself never
+     * reveals whether the email is registered.
+     * @param {string} email
+     * @returns {Promise<{success: boolean}>}
+     */
+    async function requestPasswordReset(email) {
+        try {
+            await iamApi.requestPasswordReset(email);
+        } catch (error) {
+            errors.value.push(error);
+        }
+        return { success: true };
+    }
+
+    /**
+     * Checks a reset code without consuming it.
+     * @param {string} email
+     * @param {string} code
+     * @returns {Promise<{success: boolean}>}
+     */
+    async function verifyResetCode(email, code) {
+        try {
+            await iamApi.verifyResetCode(email, code);
+            return { success: true };
+        } catch (error) {
+            errors.value.push(error);
+            return { success: false };
+        }
+    }
+
+    /**
+     * Sets a new password against an already-verified code.
+     * @param {string} email
+     * @param {string} code
+     * @param {string} newPassword
+     * @returns {Promise<{success: boolean}>}
+     */
+    async function resetPassword(email, code, newPassword) {
+        try {
+            await iamApi.resetPassword(email, code, newPassword);
+            return { success: true };
+        } catch (error) {
+            errors.value.push(error);
+            return { success: false };
+        }
+    }
+
+    /**
      * Finds a user account entity by its identifier.
      * @param {number|string} id - User identifier.
      * @returns {UserAccount|undefined} Matching user account, if available.
@@ -557,7 +606,10 @@ const useIamStore = defineStore('iam', () => {
         changePassword,
         deleteUser,
         deactivateUser,
-        reactivateUser
+        reactivateUser,
+        requestPasswordReset,
+        verifyResetCode,
+        resetPassword
     };
 });
 
