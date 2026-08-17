@@ -126,6 +126,11 @@ function resolveRoleStyle(roleId) {
   return roleStyleByPosition(getRolePosition(roleId));
 }
 
+/** An admin can't suspend or delete their own account — deactivating kills the session they'd need to undo it with. */
+function isSelf(userAccount) {
+  return iamStore.currentUser?.id === userAccount.id;
+}
+
 function resolveStatusStyle(status) {
   if (status === 'ACTIVE') return { background: 'var(--status-ok-bg)', color: 'var(--status-ok-fg)', label: t('settings.status-active') };
   return { background: 'var(--surface-alt)', color: 'var(--text-muted)', label: t('settings.status-inactive') };
@@ -432,7 +437,7 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
                 </span>
               </div>
             </div>
-            <div class="flex align-items-center gap-1 flex-shrink-0">
+            <div v-if="!isSelf(userAccount)" class="flex align-items-center gap-1 flex-shrink-0">
               <button
                   class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
                   style="width: 32px; height: 32px; background: none; transition: background-color 0.15s;"
@@ -505,7 +510,7 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
                 </span>
               </td>
               <td class="py-3 px-4 text-right">
-                <div class="flex align-items-center justify-content-end gap-1">
+                <div v-if="!isSelf(userAccount)" class="flex align-items-center justify-content-end gap-1">
                   <button
                       class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
                       style="width: 32px; height: 32px; background: none; transition: all 0.15s;"
@@ -527,6 +532,7 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
                     <i class="pi pi-trash" style="color: var(--status-critical-fg); font-size: 0.85rem;"/>
                   </button>
                 </div>
+                <span v-else style="color: var(--text-faint); font-size: 0.72rem;">—</span>
               </td>
             </tr>
             </tbody>
