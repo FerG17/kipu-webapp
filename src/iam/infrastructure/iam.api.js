@@ -141,6 +141,24 @@ export class IamApi extends BaseApi {
     }
 
     /**
+     * Suspends a team member's access without deleting the account.
+     * @param {number|string} id - User identifier.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    deactivateUser(id) {
+        return this.http.patch(`${usersEndpointPath}/${id}/deactivate`);
+    }
+
+    /**
+     * Restores a previously suspended team member's access.
+     * @param {number|string} id - User identifier.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    reactivateUser(id) {
+        return this.http.patch(`${usersEndpointPath}/${id}/reactivate`);
+    }
+
+    /**
      * Fetches all available roles.
      * @returns {Promise<import('axios').AxiosResponse>} All role resources.
      */

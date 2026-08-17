@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, toRefs, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useConfirm } from 'primevue';
+import { useConfirm, useToast } from 'primevue';
 import useIamStore from '../../application/iam.store.js';
 import useThemeStore from '../../../shared/application/theme.store.js';
 import LanguageSwitcher from '../../../shared/presentation/components/language-switcher.vue';
@@ -11,6 +11,7 @@ import { canManageTeam, canEditBusinessProfile } from '../../application/permiss
 
 const { t }     = useI18n();
 const confirm   = useConfirm();
+const toast     = useToast();
 const iamStore  = useIamStore();
 const themeStore = useThemeStore();
 
@@ -25,7 +26,7 @@ const themeOptions = [
 ];
 
 const { users, usersLoaded, rolesLoaded, currentBusiness, businessLoaded } = toRefs(iamStore);
-const { fetchUsers, fetchRoles, fetchBusiness, getRolePosition, deleteUser } = iamStore;
+const { fetchUsers, fetchRoles, fetchBusiness, getRolePosition, deleteUser, deactivateUser, reactivateUser } = iamStore;
 
 const activeTab = ref('profile');
 
@@ -125,6 +126,11 @@ function resolveRoleStyle(roleId) {
   return roleStyleByPosition(getRolePosition(roleId));
 }
 
+/** An admin can't suspend or delete their own account — deactivating kills the session they'd need to undo it with. */
+function isSelf(userAccount) {
+  return iamStore.currentUser?.id === userAccount.id;
+}
+
 function resolveStatusStyle(status) {
   if (status === 'ACTIVE') return { background: 'var(--status-ok-bg)', color: 'var(--status-ok-fg)', label: t('settings.status-active') };
   return { background: 'var(--surface-alt)', color: 'var(--text-muted)', label: t('settings.status-inactive') };
@@ -137,6 +143,30 @@ function confirmDeleteUser(userAccount) {
     icon:    'pi pi-exclamation-triangle',
     accept:  () => deleteUser(userAccount)
   });
+}
+
+/**
+ * Suspends still needs confirmation (it kicks the person out immediately),
+ * reactivating doesn't — it only restores access, nothing destructive to walk back.
+ */
+function confirmDeactivateUser(userAccount) {
+  confirm.require({
+    message: t('settings.confirm-deactivate-user', { name: userAccount.fullName }),
+    header:  t('settings.deactivate-user-header'),
+    icon:    'pi pi-exclamation-triangle',
+    accept:  () => deactivateUser(userAccount)
+        .then(() => toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('settings.toast-deactivate-success', { name: userAccount.fullName }), life: 3500 }))
+        .catch(error => {
+          const isLastAdmin = error.response?.status === 409 && error.response?.data?.title === 'CannotRemoveLastAdmin';
+          toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: isLastAdmin ? t('settings.toast-last-admin-error') : t('settings.toast-user-action-error'), life: 4500 });
+        })
+  });
+}
+
+function reactivateUserAccount(userAccount) {
+  reactivateUser(userAccount)
+      .then(() => toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('settings.toast-reactivate-success', { name: userAccount.fullName }), life: 3500 }))
+      .catch(() => toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('settings.toast-user-action-error'), life: 4500 }));
 }
 
 /**
@@ -407,15 +437,28 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
                 </span>
               </div>
             </div>
-            <button
-                class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer flex-shrink-0"
-                style="width: 32px; height: 32px; background: none; transition: background-color 0.15s;"
-                @click="confirmDeleteUser(userAccount)"
-                @mouseenter="(e) => e.currentTarget.style.backgroundColor = 'var(--status-critical-bg)'"
-                @mouseleave="(e) => e.currentTarget.style.backgroundColor = 'transparent'"
-            >
-              <i class="pi pi-trash" style="color: var(--status-critical-fg); font-size: 0.85rem;"/>
-            </button>
+            <div v-if="!isSelf(userAccount)" class="flex align-items-center gap-1 flex-shrink-0">
+              <button
+                  class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
+                  style="width: 32px; height: 32px; background: none; transition: background-color 0.15s;"
+                  :title="userAccount.status === 'ACTIVE' ? t('settings.action-deactivate') : t('settings.action-reactivate')"
+                  @click="userAccount.status === 'ACTIVE' ? confirmDeactivateUser(userAccount) : reactivateUserAccount(userAccount)"
+                  @mouseenter="(e) => e.currentTarget.style.backgroundColor = 'var(--status-warning-bg)'"
+                  @mouseleave="(e) => e.currentTarget.style.backgroundColor = 'transparent'"
+              >
+                <i :class="userAccount.status === 'ACTIVE' ? 'pi pi-lock' : 'pi pi-lock-open'" style="color: var(--status-warning-fg); font-size: 0.85rem;"/>
+              </button>
+              <button
+                  class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
+                  style="width: 32px; height: 32px; background: none; transition: background-color 0.15s;"
+                  :title="t('settings.delete-user-header')"
+                  @click="confirmDeleteUser(userAccount)"
+                  @mouseenter="(e) => e.currentTarget.style.backgroundColor = 'var(--status-critical-bg)'"
+                  @mouseleave="(e) => e.currentTarget.style.backgroundColor = 'transparent'"
+              >
+                <i class="pi pi-trash" style="color: var(--status-critical-fg); font-size: 0.85rem;"/>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -467,15 +510,29 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
                 </span>
               </td>
               <td class="py-3 px-4 text-right">
-                <button
-                    class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer ml-auto"
-                    style="width: 32px; height: 32px; background: none; transition: all 0.15s;"
-                    @click="confirmDeleteUser(userAccount)"
-                    @mouseenter="(e) => { e.currentTarget.style.backgroundColor = 'var(--status-critical-bg)'; e.currentTarget.style.transform = 'scale(1.1)'; }"
-                    @mouseleave="(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }"
-                >
-                  <i class="pi pi-trash" style="color: var(--status-critical-fg); font-size: 0.85rem;"/>
-                </button>
+                <div v-if="!isSelf(userAccount)" class="flex align-items-center justify-content-end gap-1">
+                  <button
+                      class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
+                      style="width: 32px; height: 32px; background: none; transition: all 0.15s;"
+                      :title="userAccount.status === 'ACTIVE' ? t('settings.action-deactivate') : t('settings.action-reactivate')"
+                      @click="userAccount.status === 'ACTIVE' ? confirmDeactivateUser(userAccount) : reactivateUserAccount(userAccount)"
+                      @mouseenter="(e) => { e.currentTarget.style.backgroundColor = 'var(--status-warning-bg)'; e.currentTarget.style.transform = 'scale(1.1)'; }"
+                      @mouseleave="(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }"
+                  >
+                    <i :class="userAccount.status === 'ACTIVE' ? 'pi pi-lock' : 'pi pi-lock-open'" style="color: var(--status-warning-fg); font-size: 0.85rem;"/>
+                  </button>
+                  <button
+                      class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
+                      style="width: 32px; height: 32px; background: none; transition: all 0.15s;"
+                      :title="t('settings.delete-user-header')"
+                      @click="confirmDeleteUser(userAccount)"
+                      @mouseenter="(e) => { e.currentTarget.style.backgroundColor = 'var(--status-critical-bg)'; e.currentTarget.style.transform = 'scale(1.1)'; }"
+                      @mouseleave="(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }"
+                  >
+                    <i class="pi pi-trash" style="color: var(--status-critical-fg); font-size: 0.85rem;"/>
+                  </button>
+                </div>
+                <span v-else style="color: var(--text-faint); font-size: 0.72rem;">—</span>
               </td>
             </tr>
             </tbody>

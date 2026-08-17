@@ -505,6 +505,31 @@ const useIamStore = defineStore('iam', () => {
         });
     }
 
+    /**
+     * Suspends a team member's access without deleting the account —
+     * updates the local status pill immediately so the table reflects it
+     * without a full refetch. Rejects (e.g. "last active admin") are left
+     * for the caller to catch and show as a toast.
+     * @param {UserAccount} userAccount - UserAccount entity to suspend.
+     * @returns {Promise<void>}
+     */
+    async function deactivateUser(userAccount) {
+        await iamApi.deactivateUser(userAccount.id);
+        const user = users.value.find(user => user.id === userAccount.id);
+        if (user) user.status = 'INACTIVE';
+    }
+
+    /**
+     * Restores a previously suspended team member's access.
+     * @param {UserAccount} userAccount - UserAccount entity to reactivate.
+     * @returns {Promise<void>}
+     */
+    async function reactivateUser(userAccount) {
+        await iamApi.reactivateUser(userAccount.id);
+        const user = users.value.find(user => user.id === userAccount.id);
+        if (user) user.status = 'ACTIVE';
+    }
+
     return {
         currentUser,
         users,
@@ -530,7 +555,9 @@ const useIamStore = defineStore('iam', () => {
         updateBusiness,
         updateUserProfile,
         changePassword,
-        deleteUser
+        deleteUser,
+        deactivateUser,
+        reactivateUser
     };
 });
 
