@@ -1298,9 +1298,20 @@ function saveWarehouse() {
     <button
         v-if="activeTab === 'products' && canWrite"
         class="sm:hidden fixed flex align-items-center justify-content-center border-round-3xl border-none cursor-pointer fab"
+        :title="t('inventory.btn-register-intake')"
         @click="openIntakeModal(null)"
     >
       <i class="pi pi-inbox" style="font-size: 1.3rem;"/>
+    </button>
+
+    <!-- FAB: mobile quick scan -->
+    <button
+        v-if="activeTab === 'products' && canWrite"
+        class="sm:hidden fixed flex align-items-center justify-content-center border-round-3xl border-none cursor-pointer fab fab-scan"
+        :title="t('inventory.btn-scan-barcode')"
+        @click="openScanModal"
+    >
+      <i class="pi pi-qrcode" style="font-size: 1.3rem;"/>
     </button>
 
     <!-- ══════════════════════════════════════════════════════════════
@@ -2362,6 +2373,15 @@ function saveWarehouse() {
   transition: transform 0.18s;
 }
 .fab:hover { transform: scale(1.1); }
+
+.fab-scan {
+  bottom: 90px;
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, var(--accent), var(--accent));
+  color: var(--accent-ink);
+  box-shadow: 0 4px 18px rgba(111, 128, 85, 0.5);
+}
 
 /* ── Movement table specifics ────────────────────────────────── */
 .movement-date {
