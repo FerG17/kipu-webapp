@@ -11,8 +11,9 @@
  * - On confirmSale: the sale and all of its lines are persisted atomically in
  *   a single POST /sales (see confirmSale) — the backend validates stock,
  *   decrements it, and returns the sale already PAID with lines embedded.
- * - totalAmount stored on the sale resource equals the sum of all line totals
- *   (pre-tax subtotal); IGV and grandTotal are derived in the domain entity.
+ * - totalAmount stored on the sale resource equals the sum of all line totals.
+ *   Prices already include IGV, so this is the final amount — no separate
+ *   tax calculation happens client-side.
  * - currentSale holds the in-progress POS session (null when no active session).
  *
  * @module useSalesStore
@@ -306,11 +307,13 @@ const useSalesStore = defineStore('sales', () => {
                 paymentMethod: paymentMethod,
                 currency:      'PEN',
                 description:   description,
+                // discount isn't part of the backend's sale contract (see
+                // SaleLineResource/CreateSaleCommandValidator) — the POS never
+                // offers it, so it's never sent.
                 lines: currentSale.value.details.map(detail => ({
                     productId: detail.productId,
                     quantity:  detail.quantity,
-                    unitPrice: detail.unitPrice,
-                    discount:  detail.discount
+                    unitPrice: detail.unitPrice
                 }))
             };
             const saleResponse = await salesApi.createSale(saleResource);

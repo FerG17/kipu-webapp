@@ -42,19 +42,37 @@ function customerNameForPlan(plan) {
 }
 
 /**
- * Resolves the sale's grandTotal (with IGV) for a plan, or null if the sale
- * isn't loaded yet.
+ * Resolves the sale's total for a plan, or null if the sale isn't loaded
+ * yet. Prices already include IGV (the business bakes it into BasePrice),
+ * so this is just the persisted total — no extra tax gets layered on here.
  * @param {import('../../domain/model/payment-plan.entity.js').PaymentPlan} plan
  * @returns {number|null}
  */
 function saleTotalForPlan(plan) {
   const sale = salesStore.getSaleById(plan.saleId);
-  return sale ? sale.grandTotal : null;
+  return sale ? sale.totalAmount : null;
 }
 
 /**
- * Per-installment amount for a plan, derived client-side from the sale's
- * total split evenly across totalInstallments — purely informational, the
+ * Splits a total into `count` installment amounts that sum back to it
+ * exactly (in cents) — a naive `total / count` can drop or misplace
+ * fractions of a cent, so every installment gets the same floored amount
+ * except the last, which absorbs whatever's left over.
+ * @param {number} total
+ * @param {number} count
+ * @returns {number[]}
+ */
+function splitIntoInstallments(total, count) {
+  const totalCents = Math.round(total * 100);
+  const baseCents = Math.floor(totalCents / count);
+  const lastCents = totalCents - baseCents * (count - 1);
+  return Array.from({ length: count }, (_, index) =>
+      (index === count - 1 ? lastCents : baseCents) / 100
+  );
+}
+
+/**
+ * Amount of the plan's next unpaid installment — purely informational, the
  * backend tracks installment counts only, not individual amounts.
  * @param {import('../../domain/model/payment-plan.entity.js').PaymentPlan} plan
  * @returns {string}
@@ -62,7 +80,9 @@ function saleTotalForPlan(plan) {
 function installmentAmountLabel(plan) {
   const total = saleTotalForPlan(plan);
   if (total == null) return '—';
-  return formatCurrency(total / plan.totalInstallments);
+  const amounts = splitIntoInstallments(total, plan.totalInstallments);
+  const nextIndex = Math.min(plan.paidInstallments, amounts.length - 1);
+  return formatCurrency(amounts[nextIndex]);
 }
 
 /**

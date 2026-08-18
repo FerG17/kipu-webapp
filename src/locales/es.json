@@ -395,6 +395,7 @@
     "modal-field-stock-readonly-hint": "Para corregir el stock, usa \"Registrar ingreso\"",
     "modal-field-min-stock": "Stock mínimo *",
     "modal-field-price": "Precio de venta (S/) *",
+    "error-base-price": "Ingresa un precio de venta mayor a 0",
     "modal-field-cost": "Precio de costo (S/)",
     "modal-field-expiration": "Fecha de vencimiento",
     "modal-field-warehouse": "Almacén",
