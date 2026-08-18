@@ -395,6 +395,7 @@
     "modal-field-stock-readonly-hint": "To correct stock, use \"Register intake\"",
     "modal-field-min-stock": "Minimum stock *",
     "modal-field-price": "Sale price (S/) *",
+    "error-base-price": "Enter a sale price greater than 0",
     "modal-field-cost": "Cost price (S/)",
     "modal-field-expiration": "Expiration date",
     "modal-field-warehouse": "Warehouse",

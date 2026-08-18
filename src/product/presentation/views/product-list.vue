@@ -36,6 +36,20 @@ const { addSupplier } = supplierStore;
 // product/stock intake have already been committed.
 const todayIsoDate = new Date().toISOString().slice(0, 10);
 
+/**
+ * Parses a money field's raw string value into a number, tolerating a comma
+ * as the decimal separator. The `type="number"` inputs this feeds normally
+ * normalize that themselves, but browser/OS locale can disagree with the
+ * page and reject a typed comma outright, leaving the model at '' — which
+ * `parseFloat('') || 0` then silently turns into a valid-looking 0 instead
+ * of surfacing that the price never actually registered.
+ * @param {string} rawValue
+ * @returns {number} NaN when unparsable, not silently coerced to 0.
+ */
+function parseMoneyInput(rawValue) {
+  return parseFloat(String(rawValue).replace(',', '.'));
+}
+
 const savingProduct  = ref(false);
 const savingIntake   = ref(false);
 const deletingProductId = ref(null);
@@ -396,6 +410,24 @@ const productModalForm = ref({
   barcode:        ''
 });
 
+const productModalErrors = ref({ basePrice: '' });
+
+const supplierMultiselectRef = ref(null);
+
+/**
+ * PrimeVue's MultiSelect computes its overlay position (`alignOverlay`)
+ * synchronously as soon as the panel starts entering — before the browser
+ * has laid out its content, so `append-to="body"` alone isn't enough here:
+ * the width it measures at that instant is unreliable and the panel ends up
+ * pinned to the left edge instead of under the field (same failure mode
+ * `append-to="body"` was already added to fix, on 2026-08-16). Re-running
+ * alignment on `@show` — fired once the panel has actually finished
+ * entering — recalculates against real, settled dimensions.
+ */
+function realignSupplierMultiselect() {
+  supplierMultiselectRef.value?.alignOverlay?.();
+}
+
 /**
  * @param {string} [prefillBarcode] - Set when opened from the scan entry
  *   point after a code didn't match any known product, so the code isn't
@@ -408,6 +440,7 @@ function openCreateProductModal(prefillBarcode = '') {
     warehouseId: warehouses.value[0] ? String(warehouses.value[0].id) : '',
     barcode: prefillBarcode
   };
+  productModalErrors.value = { basePrice: '' };
   showAddSupplierInline.value = false;
   showProductModal.value = true;
 }
@@ -474,6 +507,7 @@ function openEditProductModal(product) {
     warehouseId:    '',
     barcode:        product.barcode ?? ''
   };
+  productModalErrors.value = { basePrice: '' };
   showAddSupplierInline.value = false;
   showProductModal.value = true;
 }
@@ -495,7 +529,7 @@ function openEditProductModal(product) {
  */
 function findDuplicateProduct(resolvedCategory) {
   const name      = productModalForm.value.name.trim().toLowerCase();
-  const basePrice = parseFloat(productModalForm.value.basePrice) || 0;
+  const basePrice = parseMoneyInput(productModalForm.value.basePrice) || 0;
 
   return products.value.find(product =>
       product.isActive
@@ -507,6 +541,18 @@ function findDuplicateProduct(resolvedCategory) {
 
 function saveProductFromModal() {
   if (!productModalForm.value.name.trim()) return;
+
+  // Server rejects a base price of 0 or less (ProductRuleExtensions.
+  // MustBeAMoneyAmount) — validated here too so the field surfaces a clear
+  // reason instead of round-tripping into an opaque 400, and so a comma
+  // decimal that the number input silently dropped (leaving the model at
+  // '') doesn't slip through as an unintended 0.
+  const basePriceValue = parseMoneyInput(productModalForm.value.basePrice);
+  if (!(basePriceValue > 0)) {
+    productModalErrors.value = { basePrice: t('inventory.error-base-price') };
+    return;
+  }
+  productModalErrors.value = { basePrice: '' };
 
   // A new product with initial stock needs a real warehouse to place it in
   // — warehouseId is a non-nullable int on the backend's stock-intake
@@ -569,14 +615,14 @@ function persistProductFromModal(resolvedCategory) {
     // there's no dedicated description field in this form, so a new product
     // starts blank and an edit leaves whatever was already there untouched.
     description: editingProduct.value ? editingProduct.value.description : '',
-    basePrice:   parseFloat(productModalForm.value.basePrice) || 0,
+    basePrice:   parseMoneyInput(productModalForm.value.basePrice),
     status:      ProductStatus.ACTIVE,
     barcode:     productModalForm.value.barcode.trim() || null,
     supplierIds: productModalForm.value.supplierIds
   });
 
   const minimumStock   = parseInt(productModalForm.value.minimumStock) || 0;
-  const purchasePrice  = parseFloat(productModalForm.value.cost) || 0;
+  const purchasePrice  = parseMoneyInput(productModalForm.value.cost) || 0;
   const expirationDate = productModalForm.value.expirationDate;
 
   savingProduct.value = true;
@@ -1596,6 +1642,7 @@ function saveWarehouse() {
               <div style="flex: 1;">
                 <label class="modal-label">{{ t('inventory.modal-field-supplier') }}</label>
                 <pv-multiselect
+                    ref="supplierMultiselectRef"
                     v-model="productModalForm.supplierIds"
                     :options="activeSupplierOptions"
                     option-label="label"
@@ -1604,6 +1651,7 @@ function saveWarehouse() {
                     append-to="body"
                     :placeholder="t('inventory.modal-field-supplier-placeholder')"
                     class="w-full modal-multiselect"
+                    @show="realignSupplierMultiselect"
                 />
                 <button type="button" class="modal-link-btn mt-1" @click="toggleAddSupplierInline">
                   <i class="pi pi-plus" style="font-size: 0.65rem;"/> {{ t('inventory.modal-field-supplier-add-new') }}
@@ -1676,7 +1724,14 @@ function saveWarehouse() {
             <div class="flex flex-column sm:flex-row gap-4">
               <div style="flex: 1;">
                 <label class="modal-label">{{ t('inventory.modal-field-price') }}</label>
-                <input v-model="productModalForm.basePrice" type="number" min="0" step="0.01" placeholder="0.00" class="modal-input"/>
+                <input
+                    v-model="productModalForm.basePrice"
+                    type="number" min="0.01" step="0.01" placeholder="0.00"
+                    class="modal-input"
+                    :class="{ 'modal-input-error': productModalErrors.basePrice }"
+                    @input="productModalErrors.basePrice = ''"
+                />
+                <p v-if="productModalErrors.basePrice" class="modal-field-error">{{ productModalErrors.basePrice }}</p>
               </div>
               <div style="flex: 1;">
                 <label class="modal-label">{{ t('inventory.modal-field-cost') }}</label>
@@ -2593,6 +2648,14 @@ function saveWarehouse() {
 .modal-field-hint {
   font-size: 0.7rem;
   color: var(--text-faint);
+}
+.modal-input-error {
+  border-color: var(--status-critical-fg);
+}
+.modal-field-error {
+  font-size: 0.7rem;
+  color: var(--status-critical-fg);
+  margin-top: 0.25rem;
 }
 .intake-modal-hint {
   font-size: 0.76rem;
