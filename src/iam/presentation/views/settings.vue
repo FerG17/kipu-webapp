@@ -8,6 +8,7 @@ import LanguageSwitcher from '../../../shared/presentation/components/language-s
 import InviteUserModal from '../components/invite-user-modal.vue';
 import { roleLabelKey, roleStyleByPosition } from '../role-labels.js';
 import { canManageTeam, canEditBusinessProfile } from '../../application/permissions.js';
+import { isStrongPassword } from '../../domain/model/password-rules.js';
 
 const { t }     = useI18n();
 const confirm   = useConfirm();
@@ -217,9 +218,9 @@ async function submitPasswordChange() {
   securityErrors.value = { currentPassword: '', newPassword: '', confirmPassword: '' };
   securitySuccess.value = false;
   let isValid = true;
-  if (!securityForm.value.currentPassword)                                              { securityErrors.value.currentPassword = t('settings.error-current-password'); isValid = false; }
-  if (!securityForm.value.newPassword || securityForm.value.newPassword.length < 8)     { securityErrors.value.newPassword     = t('settings.error-new-password');     isValid = false; }
-  if (securityForm.value.newPassword !== securityForm.value.confirmPassword)            { securityErrors.value.confirmPassword  = t('settings.error-confirm-password'); isValid = false; }
+  if (!securityForm.value.currentPassword)                       { securityErrors.value.currentPassword = t('settings.error-current-password'); isValid = false; }
+  if (!isStrongPassword(securityForm.value.newPassword))          { securityErrors.value.newPassword     = t('settings.error-new-password');     isValid = false; }
+  if (securityForm.value.newPassword !== securityForm.value.confirmPassword) { securityErrors.value.confirmPassword = t('settings.error-confirm-password'); isValid = false; }
   if (!isValid) return;
 
   securitySubmitting.value = true;
@@ -227,7 +228,15 @@ async function submitPasswordChange() {
   securitySubmitting.value = false;
 
   if (!result.success) {
-    securityErrors.value.currentPassword = t(result.errorKey);
+    // WeakPassword belongs under the new-password field; everything else
+    // (wrong current password, a stale/conflicting write, network failure)
+    // reads more naturally attached to the current-password field, which
+    // is where this form already surfaces its one general error line.
+    if (result.errorKey === 'iam-errors.weak-password') {
+      securityErrors.value.newPassword = t(result.errorKey);
+    } else {
+      securityErrors.value.currentPassword = t(result.errorKey);
+    }
     return;
   }
 

@@ -57,7 +57,8 @@
     "register": "Create account",
     "error-empty": "Please enter your email and password.",
     "error-invalid-email": "Please enter a valid email address.",
-    "error-credentials": "Invalid credentials. Please check your email and password."
+    "error-credentials": "Invalid credentials. Please check your email and password.",
+    "session-expired": "Your session expired. Sign in again to continue."
   },
   "sign-up": {
     "strength-weak": "Weak",
@@ -113,12 +114,17 @@
     "confirm-password-label": "Confirm new password",
     "reset-submit": "Reset password",
     "resetting": "Saving…",
-    "error-password-length": "Password must be at least 8 characters.",
+    "error-password-length": "Password must be at least 8 characters, with at least one letter and one number.",
     "error-password-mismatch": "Passwords do not match.",
     "error-reset-failed": "Couldn't reset the password. The code may have expired — request a new one.",
+    "error-request-failed": "Couldn't send the code. Check your connection and try again.",
     "success-title": "Password reset!",
     "success-body": "You can now sign in with your new password. Every other device was signed out.",
     "success-cta": "Go to sign in"
+  },
+  "iam-errors": {
+    "weak-password": "Password must be at least 8 characters, with at least one letter and one number.",
+    "concurrent-modification": "This changed elsewhere just now. Refresh and try again."
   },
   "sidebar": {
     "logout": "Sign out",
@@ -185,7 +191,7 @@
     "invite-error-last-name": "Last name must be at least 2 characters.",
     "invite-error-email": "Enter a valid email address.",
     "invite-error-role": "Select a role.",
-    "invite-error-password": "Password must be at least 8 characters.",
+    "invite-error-password": "Password must be at least 8 characters, with at least one letter and one number.",
     "invite-error-generic": "Could not invite the user. Please try again.",
     "invite-btn-cancel": "Cancel",
     "invite-btn-submit": "Invite",
@@ -196,7 +202,7 @@
     "confirm-password": "Confirm new password",
     "error-current-password": "Current password is required.",
     "error-current-password-invalid": "Current password is incorrect.",
-    "error-new-password": "New password must be at least 8 characters.",
+    "error-new-password": "New password must be at least 8 characters, with at least one letter and one number.",
     "error-confirm-password": "Passwords do not match.",
     "error-password-change-failed": "Could not change password. Please try again.",
     "success-password": "Password changed successfully.",
