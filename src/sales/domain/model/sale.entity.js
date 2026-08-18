@@ -52,8 +52,8 @@ import { SaleDetail }  from './sale-detail.entity.js';
  * - A Sale can only be cancelled while its current status is PAID
  *   (enforced by the store).
  * - totalAmount is derived from the sum of all SaleDetail lineTotals (see computed getter).
- * - IGV (Peruvian value-added tax) is 18% of the subtotal (totalAmount).
- * - grandTotal = totalAmount + igvAmount.
+ * - Prices already include IGV (the business bakes it into each product's
+ *   BasePrice) — there is deliberately no separate tax calculation here.
  *
  * @class Sale
  */
@@ -122,26 +122,5 @@ export class Sale {
     get subtotal() {
         const sum = this.details.reduce((accumulator, detail) => accumulator + detail.lineTotal, 0);
         return Math.round(sum * 100) / 100;
-    }
-
-    /**
-     * Calculates the IGV (Impuesto General a las Ventas) tax amount.
-     * IGV rate in Peru is 18% of the subtotal.
-     *
-     * @returns {number} IGV amount rounded to two decimal places.
-     */
-    get igvAmount() {
-        return Math.round(this.subtotal * 0.18 * 100) / 100;
-    }
-
-    /**
-     * Calculates the grand total including IGV.
-     *
-     * Formula: subtotal + igvAmount = subtotal × 1.18
-     *
-     * @returns {number} Grand total rounded to two decimal places.
-     */
-    get grandTotal() {
-        return Math.round((this.subtotal + this.igvAmount) * 100) / 100;
     }
 }
