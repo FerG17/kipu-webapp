@@ -4,6 +4,7 @@ import { useI18n }      from 'vue-i18n';
 import useIamStore      from '../../application/iam.store.js';
 import { UserAccount }  from '../../domain/model/user-account.entity.js';
 import { roleLabelKey } from '../role-labels.js';
+import { isStrongPassword } from '../../domain/model/password-rules.js';
 
 /**
  * InviteUserModal component for the Identity & Access Management bounded context.
@@ -61,7 +62,7 @@ const isFormValid = computed(() =>
     lastName.value.trim().length >= 2 &&
     email.value.includes('@') &&
     roleId.value !== '' &&
-    password.value.length >= 8
+    isStrongPassword(password.value)
 );
 
 function validateForm() {
@@ -70,7 +71,7 @@ function validateForm() {
   if (lastName.value.trim().length < 2)      fieldErrors.value.lastName  = t('settings.invite-error-last-name');
   if (!email.value.includes('@'))            fieldErrors.value.email    = t('settings.invite-error-email');
   if (roleId.value === '')                   fieldErrors.value.roleId   = t('settings.invite-error-role');
-  if (password.value.length < 8)             fieldErrors.value.password = t('settings.invite-error-password');
+  if (!isStrongPassword(password.value))     fieldErrors.value.password = t('settings.invite-error-password');
   return Object.keys(fieldErrors.value).length === 0;
 }
 
@@ -95,7 +96,7 @@ async function handleSubmit() {
   if (result.success) {
     emit('invited');
   } else {
-    submitError.value = t('settings.invite-error-generic');
+    submitError.value = t(result.errorKey ?? 'settings.invite-error-generic');
   }
 }
 </script>

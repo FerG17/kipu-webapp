@@ -57,7 +57,8 @@
     "register": "Crear cuenta",
     "error-empty": "Por favor ingresa tu correo y contraseña.",
     "error-invalid-email": "Por favor ingresa un correo válido.",
-    "error-credentials": "Credenciales inválidas. Revisa tu correo y contraseña."
+    "error-credentials": "Credenciales inválidas. Revisa tu correo y contraseña.",
+    "session-expired": "Tu sesión expiró. Inicia sesión de nuevo para continuar."
   },
   "sign-up": {
     "strength-weak": "Débil",
@@ -113,12 +114,17 @@
     "confirm-password-label": "Confirmar nueva contraseña",
     "reset-submit": "Restablecer contraseña",
     "resetting": "Guardando…",
-    "error-password-length": "La contraseña debe tener al menos 8 caracteres.",
+    "error-password-length": "La contraseña debe tener al menos 8 caracteres, con al menos una letra y un número.",
     "error-password-mismatch": "Las contraseñas no coinciden.",
     "error-reset-failed": "No se pudo restablecer la contraseña. El código pudo haber expirado — solicita uno nuevo.",
+    "error-request-failed": "No se pudo enviar el código. Revisa tu conexión e inténtalo de nuevo.",
     "success-title": "¡Contraseña restablecida!",
     "success-body": "Ya puedes iniciar sesión con tu nueva contraseña. Se cerró la sesión en todos tus demás dispositivos.",
     "success-cta": "Ir a iniciar sesión"
+  },
+  "iam-errors": {
+    "weak-password": "La contraseña debe tener al menos 8 caracteres, con al menos una letra y un número.",
+    "concurrent-modification": "Esto cambió en otro lugar recién. Actualiza e intenta de nuevo."
   },
   "sidebar": {
     "logout": "Cerrar sesión",
@@ -185,7 +191,7 @@
     "invite-error-last-name": "El apellido debe tener al menos 2 caracteres.",
     "invite-error-email": "Ingresa un correo electrónico válido.",
     "invite-error-role": "Selecciona un rol.",
-    "invite-error-password": "La contraseña debe tener al menos 8 caracteres.",
+    "invite-error-password": "La contraseña debe tener al menos 8 caracteres, con al menos una letra y un número.",
     "invite-error-generic": "No se pudo invitar al usuario. Inténtalo de nuevo.",
     "invite-btn-cancel": "Cancelar",
     "invite-btn-submit": "Invitar",
@@ -196,7 +202,7 @@
     "confirm-password": "Confirmar nueva contraseña",
     "error-current-password": "La contraseña actual es obligatoria.",
     "error-current-password-invalid": "La contraseña actual es incorrecta.",
-    "error-new-password": "La nueva contraseña debe tener al menos 8 caracteres.",
+    "error-new-password": "La nueva contraseña debe tener al menos 8 caracteres, con al menos una letra y un número.",
     "error-confirm-password": "Las contraseñas no coinciden.",
     "error-password-change-failed": "No se pudo cambiar la contraseña. Inténtalo de nuevo.",
     "success-password": "Contraseña cambiada exitosamente.",

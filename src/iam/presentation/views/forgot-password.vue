@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import useIamStore from '../../application/iam.store.js';
+import { isStrongPassword } from '../../domain/model/password-rules.js';
 
 const { t }    = useI18n();
 const router   = useRouter();
@@ -30,15 +31,23 @@ async function submitEmail() {
     return;
   }
   isLoading.value = true;
-  await iamStore.requestPasswordReset(email.value);
+  const result = await iamStore.requestPasswordReset(email.value);
   isLoading.value = false;
+  if (!result.success) {
+    localError.value = t('forgot-password.error-request-failed');
+    return;
+  }
   step.value = 'code';
 }
 
 async function resendCode() {
   isLoading.value = true;
-  await iamStore.requestPasswordReset(email.value);
+  const result = await iamStore.requestPasswordReset(email.value);
   isLoading.value = false;
+  if (!result.success) {
+    localError.value = t('forgot-password.error-request-failed');
+    return;
+  }
   code.value = '';
   resendNotice.value = true;
   setTimeout(() => { resendNotice.value = false; }, 3500);
@@ -60,7 +69,7 @@ async function submitCode() {
   const result = await iamStore.verifyResetCode(email.value, code.value);
   isLoading.value = false;
   if (!result.success) {
-    localError.value = t('forgot-password.error-invalid-code');
+    localError.value = t(result.errorKey ?? 'forgot-password.error-invalid-code');
     return;
   }
   step.value = 'password';
@@ -79,7 +88,7 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
 
 async function submitNewPassword() {
   localError.value = '';
-  if (!newPassword.value || newPassword.value.length < 8) {
+  if (!isStrongPassword(newPassword.value)) {
     localError.value = t('forgot-password.error-password-length');
     return;
   }
@@ -91,7 +100,7 @@ async function submitNewPassword() {
   const result = await iamStore.resetPassword(email.value, code.value, newPassword.value);
   isLoading.value = false;
   if (!result.success) {
-    localError.value = t('forgot-password.error-reset-failed');
+    localError.value = t(result.errorKey ?? 'forgot-password.error-reset-failed');
     return;
   }
   step.value = 'success';

@@ -13,6 +13,16 @@ const showPassword = ref(false);
 const localError   = ref('');
 const isLoading    = ref(false);
 
+// Set by the store's SESSION_EXPIRED_EVENT listener right before it reloads
+// here — read once and cleared immediately so a manual refresh of this page
+// doesn't keep showing a stale notice.
+const SESSION_EXPIRED_MESSAGE_KEY = 'kipu.session-expired';
+const sessionExpiredNotice = ref(false);
+if (sessionStorage.getItem(SESSION_EXPIRED_MESSAGE_KEY)) {
+  sessionExpiredNotice.value = true;
+  sessionStorage.removeItem(SESSION_EXPIRED_MESSAGE_KEY);
+}
+
 function validateForm() {
   if (!form.value.email || !form.value.password) {
     localError.value = t('sign-in.error-empty');
@@ -104,6 +114,12 @@ function navigateToForgotPassword() { router.push({ name: 'forgot-password' }); 
         <div class="mb-7">
           <h2 class="m-0 auth-title">{{ t('sign-in.title') }}</h2>
           <p class="m-0 mt-1 auth-subtitle">{{ t('sign-in.subtitle') }}</p>
+        </div>
+
+        <!-- Session-expired notice -->
+        <div v-if="sessionExpiredNotice" class="auth-notice-box flex align-items-center gap-2 p-3 border-round-lg mb-5">
+          <i class="pi pi-info-circle flex-shrink-0" style="color: var(--status-warning-fg); font-size: 0.9rem;"/>
+          <p class="m-0" style="color: var(--status-warning-fg); font-size: 0.875rem;">{{ t('sign-in.session-expired') }}</p>
         </div>
 
         <!-- Form -->
@@ -287,6 +303,7 @@ function navigateToForgotPassword() { router.push({ name: 'forgot-password' }); 
 .auth-remember-text { color: var(--text-muted); font-size: 0.875rem; }
 
 .auth-error-box { background-color: var(--status-critical-bg); border: 1px solid color-mix(in srgb, var(--status-critical-fg) 30%, transparent); }
+.auth-notice-box { background-color: var(--status-warning-bg); border: 1px solid color-mix(in srgb, var(--status-warning-fg) 30%, transparent); }
 
 .auth-submit-btn {
   padding: 14px; font-size: 0.95rem; font-weight: 700; color: var(--brand-ink);

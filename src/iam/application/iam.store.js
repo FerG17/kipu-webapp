@@ -20,6 +20,7 @@ import { UserAccountAssembler } from '../infrastructure/user-account.assembler.j
 import { BusinessAssembler } from '../infrastructure/business.assembler.js';
 import { UserAccount } from '../domain/model/user-account.entity.js';
 import { SESSION_EXPIRED_EVENT } from '../../shared/infrastructure/base-api.js';
+import { resolveIamErrorKey } from '../domain/model/iam-error-messages.js';
 
 const iamApi = new IamApi();
 const authProvider = new AuthProvider();
@@ -92,6 +93,15 @@ const useIamStore = defineStore('iam', () => {
     const SESSION_STORAGE_KEY = 'kipu.session';
 
     /**
+     * sessionStorage key the sign-in page checks on mount to tell "your
+     * session expired" apart from a deliberate sign-out — set right before
+     * the full-page reload the SESSION_EXPIRED_EVENT listener below
+     * triggers, read and cleared by sign-in.vue.
+     * @type {string}
+     */
+    const SESSION_EXPIRED_MESSAGE_KEY = 'kipu.session-expired';
+
+    /**
      * Serialises a UserAccount entity into a plain resource (password excluded)
      * suitable for persisting in localStorage and re-feeding to the assembler.
      * @param {UserAccount} user
@@ -148,13 +158,20 @@ const useIamStore = defineStore('iam', () => {
     // When BaseApi sees a 401 on a non-auth endpoint (session cookie
     // missing/expired/revoked), it dispatches this event. Wired here (not in
     // BaseApi) so the shared/infrastructure layer never depends on IAM.
-    // Fire-and-forget is fine — nothing here needs to wait on the backend
-    // sign-out call. Guarded on isAuthenticated so a stray event can never
-    // trigger a real /sign-out call (and its own possible 401) when there
-    // was no session to begin with — belt-and-suspenders alongside BaseApi's
-    // own exclusion of the authentication endpoints.
+    // isAuthenticated is flipped to false synchronously, before any await —
+    // a burst of parallel 401s (several requests in flight when the session
+    // dies) dispatches this event more than once, and since nothing yields
+    // to another handler until after that flip, only the first one passes
+    // the guard and calls signOut(). Reloads to /sign-in the same way
+    // layout.vue's manual sign-out does, rather than leaving the user
+    // parked on a now-broken page behind the scenes.
     window.addEventListener(SESSION_EXPIRED_EVENT, () => {
-        if (isAuthenticated.value) signOut();
+        if (!isAuthenticated.value) return;
+        isAuthenticated.value = false;
+        sessionStorage.setItem(SESSION_EXPIRED_MESSAGE_KEY, '1');
+        signOut().finally(() => {
+            window.location.href = '/sign-in';
+        });
     });
 
     /**
@@ -416,43 +433,44 @@ const useIamStore = defineStore('iam', () => {
             await iamApi.changePassword(currentUser.value.id, currentPassword, newPassword);
             return { success: true, errorKey: null };
         } catch (error) {
-            if (error?.response?.status === 401) {
-                return { success: false, errorKey: 'settings.error-current-password-invalid' };
-            }
             errors.value.push(error);
-            return { success: false, errorKey: 'settings.error-password-change-failed' };
+            return { success: false, errorKey: resolveIamErrorKey(error, 'settings.error-password-change-failed') };
         }
     }
 
     /**
-     * Requests a 6-digit password-reset code by email. Always resolves
-     * success from the caller's point of view — the backend itself never
-     * reveals whether the email is registered.
+     * Requests a 6-digit password-reset code by email. The backend itself
+     * never reveals whether the email is registered — it answers 200
+     * whether or not an account exists — so `success: true` here only means
+     * the request reached the server; it is not proof an email was sent.
+     * A real failure (network error, 4xx/5xx) still needs to surface so the
+     * caller doesn't advance the wizard on a request that never landed.
      * @param {string} email
      * @returns {Promise<{success: boolean}>}
      */
     async function requestPasswordReset(email) {
         try {
             await iamApi.requestPasswordReset(email);
+            return { success: true };
         } catch (error) {
             errors.value.push(error);
+            return { success: false };
         }
-        return { success: true };
     }
 
     /**
      * Checks a reset code without consuming it.
      * @param {string} email
      * @param {string} code
-     * @returns {Promise<{success: boolean}>}
+     * @returns {Promise<{success: boolean, errorKey: string|null}>}
      */
     async function verifyResetCode(email, code) {
         try {
             await iamApi.verifyResetCode(email, code);
-            return { success: true };
+            return { success: true, errorKey: null };
         } catch (error) {
             errors.value.push(error);
-            return { success: false };
+            return { success: false, errorKey: resolveIamErrorKey(error, 'forgot-password.error-invalid-code') };
         }
     }
 
@@ -461,15 +479,15 @@ const useIamStore = defineStore('iam', () => {
      * @param {string} email
      * @param {string} code
      * @param {string} newPassword
-     * @returns {Promise<{success: boolean}>}
+     * @returns {Promise<{success: boolean, errorKey: string|null}>}
      */
     async function resetPassword(email, code, newPassword) {
         try {
             await iamApi.resetPassword(email, code, newPassword);
-            return { success: true };
+            return { success: true, errorKey: null };
         } catch (error) {
             errors.value.push(error);
-            return { success: false };
+            return { success: false, errorKey: resolveIamErrorKey(error, 'forgot-password.error-reset-failed') };
         }
     }
 
@@ -497,7 +515,7 @@ const useIamStore = defineStore('iam', () => {
      *
      * @param {UserAccount} userAccount - UserAccount entity to persist (no password).
      * @param {string} password - Temporary password assigned to the invited user.
-     * @returns {Promise<{success: boolean}>}
+     * @returns {Promise<{success: boolean, errorKey: string|null}>}
      */
     async function addUser(userAccount, password) {
         const resource = UserAccountAssembler.toResourceFromEntity(userAccount, { password });
@@ -506,10 +524,10 @@ const useIamStore = defineStore('iam', () => {
             const response = await iamApi.inviteUser(resource);
             const newUser = UserAccountAssembler.toEntityFromResource(response.data);
             users.value.push(newUser);
-            return { success: true };
+            return { success: true, errorKey: null };
         } catch (error) {
             errors.value.push(error.message ?? error);
-            return { success: false };
+            return { success: false, errorKey: resolveIamErrorKey(error, 'settings.invite-error-generic') };
         }
     }
 
