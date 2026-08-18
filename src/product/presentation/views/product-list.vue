@@ -416,16 +416,57 @@ const supplierMultiselectRef = ref(null);
 
 /**
  * PrimeVue's MultiSelect computes its overlay position (`alignOverlay`)
- * synchronously as soon as the panel starts entering — before the browser
- * has laid out its content, so `append-to="body"` alone isn't enough here:
- * the width it measures at that instant is unreliable and the panel ends up
- * pinned to the left edge instead of under the field (same failure mode
- * `append-to="body"` was already added to fix, on 2026-08-16). Re-running
- * alignment on `@show` — fired once the panel has actually finished
- * entering — recalculates against real, settled dimensions.
+ * synchronously inside the transition's `onOverlayEnter` hook, while the
+ * panel still carries its `p-anchored-overlay-enter-from`/`-enter-active`
+ * classes (confirmed by instrumenting a live repro: `getComputedStyle` on
+ * the panel reports `insetInlineStart: 0px` even though its own inline
+ * `style` attribute already says the correct pixel value — the transition
+ * state itself is overriding the freshly-computed position until the enter
+ * transition actually finishes advancing, which is exactly what `@show`
+ * is supposed to signal, but doesn't reliably fire in time to catch it.
+ * Neither a fixed delay (`nextTick`, nor any tested `setTimeout`) nor
+ * `@show` reliably lands the correction in the same window the transition
+ * resolves in. Since the exact timing can't be pinned down, this instead:
+ *
+ * 1. Hides the panel the instant it exists, before the user can see it in
+ *    the wrong spot — this is what actually kills the "white rectangle"
+ *    flash the wrong position caused, regardless of how long it takes.
+ * 2. Retries `alignOverlay()` on a short interval, checking after each
+ *    attempt whether the panel's left edge now actually matches the
+ *    field's — not just trusting that a later call is "probably" right.
+ * 3. Reveals the panel only once that check passes (or once retries run
+ *    out, so it's never left permanently invisible).
+ *
+ * `append-to="body"` (already in place from an earlier fix, 2026-08-16)
+ * only fixes where the panel lives in the DOM, not this transition race.
  */
 function realignSupplierMultiselect() {
-  supplierMultiselectRef.value?.alignOverlay?.();
+  const maxAttempts = 24; // ~50ms * 24 ≈ 1.2s worst case before giving up and revealing anyway
+  let attemptsLeft = maxAttempts;
+  const attempt = () => {
+    const instance = supplierMultiselectRef.value;
+    const panel = instance?.overlay;
+    const target = instance?.$el;
+    if (!instance?.alignOverlay || !panel || !target) return;
+
+    if (attemptsLeft === maxAttempts) panel.style.visibility = 'hidden';
+
+    instance.alignOverlay();
+    attemptsLeft -= 1;
+
+    const targetLeft = target.getBoundingClientRect().left;
+    // A correctly-aligned panel's left edge sits at (or very near) the
+    // field's — the bug instead clamps it near the viewport's own left
+    // edge, so "close to 0 while the field itself isn't" is the tell.
+    const looksCorrect = Math.abs(panel.getBoundingClientRect().left - targetLeft) < 5 || targetLeft < 5;
+
+    if (looksCorrect || attemptsLeft <= 0) {
+      panel.style.visibility = 'visible';
+    } else {
+      setTimeout(attempt, 50);
+    }
+  };
+  nextTick(attempt);
 }
 
 /**
@@ -1651,7 +1692,7 @@ function saveWarehouse() {
                     append-to="body"
                     :placeholder="t('inventory.modal-field-supplier-placeholder')"
                     class="w-full modal-multiselect"
-                    @show="realignSupplierMultiselect"
+                    @before-show="realignSupplierMultiselect"
                 />
                 <button type="button" class="modal-link-btn mt-1" @click="toggleAddSupplierInline">
                   <i class="pi pi-plus" style="font-size: 0.65rem;"/> {{ t('inventory.modal-field-supplier-add-new') }}
