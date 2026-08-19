@@ -158,6 +158,20 @@ const useSalesStore = defineStore('sales', () => {
     }
 
     /**
+     * Fetches sales within a date range directly from the server, without
+     * touching the shared `sales`/`salesLoaded` state — other views (Team
+     * stats, Clientes, Cuotas) rely on that cache holding the FULL set, so a
+     * date-scoped result must not overwrite it. Callers (Sales History's
+     * date filter) hold the returned array themselves.
+     * @param {string} [dateFrom] - 'yyyy-mm-dd'.
+     * @param {string} [dateTo]   - 'yyyy-mm-dd'.
+     * @returns {Promise<import('../domain/model/sale.entity.js').Sale[]>}
+     */
+    function fetchSalesInRange(dateFrom, dateTo) {
+        return salesApi.getSales(dateFrom, dateTo).then(response => SaleAssembler.toEntitiesFromResponse(response));
+    }
+
+    /**
      * Loads all customers for the authenticated business and updates local
      * state. Scoped server-side by the JWT, no businessId parameter needed
      * or accepted.
@@ -578,6 +592,7 @@ const useSalesStore = defineStore('sales', () => {
         getCustomerById,
         // Fetch
         fetchSales,
+        fetchSalesInRange,
         fetchCustomers,
         fetchSaleDetailsForSale,
         // POS session

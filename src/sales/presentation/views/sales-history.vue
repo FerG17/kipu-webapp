@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n }      from 'vue-i18n';
 import { useToast }     from 'primevue/usetoast';
 import useSalesStore    from '../../application/sales.store.js';
@@ -46,6 +46,40 @@ const loadingDetailsSaleId = ref(null);
 /** @type {import('vue').Ref<number|null>} The id of the sale currently being cancelled, to block double-submit. */
 const cancellingSaleId = ref(null);
 
+/** @type {import('vue').Ref<string>} Date filter lower bound, 'yyyy-mm-dd' or '' (no bound). */
+const dateFrom = ref('');
+
+/** @type {import('vue').Ref<string>} Date filter upper bound, 'yyyy-mm-dd' or '' (no bound). */
+const dateTo = ref('');
+
+/**
+ * Sales matching the current date filter, fetched from the server
+ * (GET /sales?dateFrom&dateTo — see sales.store.js#fetchSalesInRange). Null
+ * means no date filter is active; filteredSales then falls back to the full
+ * salesStore.sales cache instead. Kept separate from that cache on purpose —
+ * other views (Clientes, Cuotas, the stats bar) expect it to hold every
+ * sale, not whatever range was last filtered here.
+ * @type {import('vue').Ref<import('../../domain/model/sale.entity.js').Sale[]|null>}
+ */
+const dateFilteredSales = ref(null);
+
+/** @type {import('vue').Ref<boolean>} Whether a date-range fetch is in flight. */
+const loadingDateFilter = ref(false);
+
+watch([dateFrom, dateTo], ([from, to]) => {
+  if (!from && !to) {
+    dateFilteredSales.value = null;
+    return;
+  }
+  loadingDateFilter.value = true;
+  salesStore.fetchSalesInRange(from || undefined, to || undefined)
+      .then(result => { dateFilteredSales.value = result; })
+      .catch(() => {
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('sales.toast-date-filter-error'), life: 4500 });
+      })
+      .finally(() => { loadingDateFilter.value = false; });
+});
+
 /**
  * The sale pending the "cancel this sale?" confirmation overlay, or null
  * when it's closed. Cancelling a PAID sale restocks inventory and can't be
@@ -54,6 +88,19 @@ const cancellingSaleId = ref(null);
  * @type {import('vue').Ref<import('../../domain/model/sale.entity.js').Sale|null>}
  */
 const saleToCancel = ref(null);
+
+/**
+ * The payment plan attached to saleToCancel, if any — cancelling a sale also
+ * cancels its plan (backend behavior), so a cashier needs to see how much
+ * was already collected before confirming, not just find out after the fact.
+ * The collected amount itself isn't lost on cancellation (PaidInstallments
+ * stays as-is on the DB row) — this only makes it visible before the click.
+ * @type {import('vue').ComputedRef<import('../../domain/model/payment-plan.entity.js').PaymentPlan|null>}
+ */
+const cancelSalePlan = computed(() => {
+  if (!saleToCancel.value) return null;
+  return salesStore.paymentPlans.find(plan => plan.saleId === saleToCancel.value.id) || null;
+});
 
 // ─── Computed ──────────────────────────────────────────────────────────────
 
@@ -64,7 +111,7 @@ const saleToCancel = ref(null);
  */
 const filteredSales = computed(() => {
   const query = searchQuery.value.toLowerCase().trim();
-  return [...salesStore.sales]
+  return [...(dateFilteredSales.value ?? salesStore.sales)]
       .filter(sale => {
         const matchesStatus = activeStatusFilter.value === 'ALL' ||
             sale.status === activeStatusFilter.value;
@@ -295,6 +342,34 @@ onMounted(() => {
             @click="activeStatusFilter = filter.value"
         >
           {{ t(filter.labelKey) }}
+        </button>
+      </div>
+
+      <!-- Date range filter -->
+      <div class="flex align-items-center gap-2">
+        <input
+            v-model="dateFrom"
+            type="date"
+            :max="dateTo || undefined"
+            class="border-round-lg px-2 py-1"
+            style="border: 1px solid var(--border); font-size: 0.78rem; background-color: var(--surface-alt); outline: none; color: var(--text);"
+        />
+        <span style="font-size: 0.75rem; color: var(--text-faint);">—</span>
+        <input
+            v-model="dateTo"
+            type="date"
+            :min="dateFrom || undefined"
+            class="border-round-lg px-2 py-1"
+            style="border: 1px solid var(--border); font-size: 0.78rem; background-color: var(--surface-alt); outline: none; color: var(--text);"
+        />
+        <i v-if="loadingDateFilter" class="pi pi-spin pi-spinner" style="font-size: 0.85rem; color: var(--text-faint);"/>
+        <button
+            v-if="dateFrom || dateTo"
+            class="border-round-lg px-2 py-1"
+            style="border: none; background: none; color: var(--text-faint); font-size: 0.72rem; cursor: pointer;"
+            @click="dateFrom = ''; dateTo = ''"
+        >
+          {{ t('sales.date-filter-clear') }}
         </button>
       </div>
     </div>
@@ -584,11 +659,17 @@ onMounted(() => {
         <p class="m-0 mb-1" style="font-size: 1rem; font-weight: 700; color: var(--text);">
           {{ t('sales.cancel-confirm-header') }}
         </p>
-        <p class="m-0 mb-4" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;">
+        <p class="m-0" :class="cancelSalePlan ? 'mb-1' : 'mb-4'" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;">
           {{ t('sales.cancel-confirm-message', {
             id: saleToCancel.id,
             customer: getCustomerName(saleToCancel.customerId),
             total: formatCurrency(saleToCancel.subtotal)
+          }) }}
+        </p>
+        <p v-if="cancelSalePlan" class="m-0 mb-4" style="font-size: 0.8rem; color: var(--status-warning-fg); font-weight: 600; line-height: 1.5;">
+          {{ t('sales.cancel-confirm-plan-warning', {
+            paid: cancelSalePlan.paidInstallments,
+            total: cancelSalePlan.totalInstallments
           }) }}
         </p>
         <div class="flex gap-2">

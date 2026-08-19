@@ -47,11 +47,17 @@ export class SalesApi extends BaseApi {
     /**
      * Fetches all sales for the authenticated business. Scoped server-side
      * by the JWT — SalesController.GetSales has no businessId query
-     * parameter at all (only optional dateFrom/dateTo).
+     * parameter, only optional dateFrom/dateTo (both 'yyyy-mm-dd').
+     * @param {string} [dateFrom]
+     * @param {string} [dateTo]
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getSales() {
-        return this.#salesEndpoint.getAll();
+    getSales(dateFrom, dateTo) {
+        const params = new URLSearchParams();
+        if (dateFrom) params.set('dateFrom', dateFrom);
+        if (dateTo)   params.set('dateTo', dateTo);
+        const query = params.toString();
+        return query ? this.http.get(`${salesEndpointPath}?${query}`) : this.#salesEndpoint.getAll();
     }
 
     /**

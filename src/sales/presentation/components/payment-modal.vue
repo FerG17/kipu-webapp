@@ -147,7 +147,10 @@ const changeAmount = computed(() =>
  * @type {import('vue').ComputedRef<boolean>}
  */
 const canConfirm = computed(() => {
-  const paymentOk = selectedMethod.value !== PaymentMethod.CASH || changeAmount.value >= 0;
+  // Cash-received/change only matters when actually collecting cash now — a
+  // credit sale collects nothing upfront, so its cash input stays hidden
+  // (see the template) and must not gate confirmation.
+  const paymentOk = sellOnCredit.value || selectedMethod.value !== PaymentMethod.CASH || changeAmount.value >= 0;
   if (!sellOnCredit.value) return paymentOk;
   return paymentOk && !!selectedCustomerId.value && (parseInt(installmentsInput.value) || 0) >= 2;
 });
@@ -333,8 +336,9 @@ function handleConfirm() {
         </div>
       </div>
 
-      <!-- Cash input (only for CASH method) -->
-      <div v-if="selectedMethod === PaymentMethod.CASH" class="mb-4">
+      <!-- Cash input (only for CASH method, and only when actually collecting
+           cash now — a credit sale collects nothing upfront). -->
+      <div v-if="selectedMethod === PaymentMethod.CASH && !sellOnCredit" class="mb-4">
         <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
           {{ t('pos.payment-cash-received') }}
         </label>
