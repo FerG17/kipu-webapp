@@ -383,6 +383,12 @@ const useSalesStore = defineStore('sales', () => {
                 sales.value[index] = cancelledSale;
             }
 
+            // A credit sale's payment plan is cancelled server-side in the same
+            // request (SaleCommandService) — refresh so it drops off "Cuotas
+            // pendientes" immediately instead of showing a plan for a sale that
+            // no longer exists until the tab is revisited.
+            if (paymentPlansLoaded.value) fetchPendingPaymentPlans();
+
             return { success: true };
         } catch (error) {
             errors.value.push(error);

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, toRefs } from 'vue';
 import { useI18n }        from 'vue-i18n';
 import { useToast }       from 'primevue/usetoast';
+import { useConfirm }     from 'primevue';
 import useSupplierStore   from '../../application/supplier.store.js';
 import useIamStore        from '../../../iam/application/iam.store.js';
 import useProductStore    from '../../../product/application/product.store.js';
@@ -11,6 +12,7 @@ import { useTodayLocalDateString } from '../../../shared/presentation/use-today-
 
 const { t }         = useI18n();
 const toast         = useToast();
+const confirm       = useConfirm();
 const supplierStore = useSupplierStore();
 const iamStore      = useIamStore();
 const productStore  = useProductStore();
@@ -282,26 +284,33 @@ function receiveOrder() {
 
   const order = selectedOrder.value;
 
-  updatingOrderStatus.value = true;
-  updatePurchaseOrderStatus(order.id, PurchaseOrderStatus.RECEIVED)
-      .then(() => {
-        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.order-toast-receive-success'), life: 3500 });
-        showOrderDetailModal.value = false;
-        // The backend just replenished stock for every line of this order
-        // (see MarkReceived), which may have resolved LOW_STOCK/OUT_OF_STOCK
-        // alerts and created/updated batches — unlike saveIntake, this
-        // touches several products at once, so there's no single response to
-        // patch state from; a real refresh is needed for all three.
-        productStore.fetchInventory();
-        productStore.fetchBatches();
-        alertsStore.fetchAlerts();
-      })
-      .catch(() => {
-        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.order-toast-status-error'), life: 4500 });
-      })
-      .finally(() => {
-        updatingOrderStatus.value = false;
-      });
+  confirm.require({
+    message: t('suppliers.confirm-receive-body'),
+    header:  t('suppliers.confirm-receive-header'),
+    icon:    'pi pi-inbox',
+    accept:  () => {
+      updatingOrderStatus.value = true;
+      updatePurchaseOrderStatus(order.id, PurchaseOrderStatus.RECEIVED)
+          .then(() => {
+            toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.order-toast-receive-success'), life: 3500 });
+            showOrderDetailModal.value = false;
+            // The backend just replenished stock for every line of this order
+            // (see MarkReceived), which may have resolved LOW_STOCK/OUT_OF_STOCK
+            // alerts and created/updated batches — unlike saveIntake, this
+            // touches several products at once, so there's no single response to
+            // patch state from; a real refresh is needed for all three.
+            productStore.fetchInventory();
+            productStore.fetchBatches();
+            alertsStore.fetchAlerts();
+          })
+          .catch(() => {
+            toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.order-toast-status-error'), life: 4500 });
+          })
+          .finally(() => {
+            updatingOrderStatus.value = false;
+          });
+    }
+  });
 }
 
 /**
@@ -330,18 +339,25 @@ function delayOrder() {
 function cancelOrder() {
   if (!selectedOrder.value) return;
 
-  updatingOrderStatus.value = true;
-  updatePurchaseOrderStatus(selectedOrder.value.id, PurchaseOrderStatus.CANCELLED)
-      .then(() => {
-        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.order-toast-cancel-success'), life: 3500 });
-        showOrderDetailModal.value = false;
-      })
-      .catch(() => {
-        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.order-toast-status-error'), life: 4500 });
-      })
-      .finally(() => {
-        updatingOrderStatus.value = false;
-      });
+  confirm.require({
+    message: t('suppliers.confirm-cancel-order-body'),
+    header:  t('suppliers.confirm-cancel-order-header'),
+    icon:    'pi pi-exclamation-triangle',
+    accept:  () => {
+      updatingOrderStatus.value = true;
+      updatePurchaseOrderStatus(selectedOrder.value.id, PurchaseOrderStatus.CANCELLED)
+          .then(() => {
+            toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.order-toast-cancel-success'), life: 3500 });
+            showOrderDetailModal.value = false;
+          })
+          .catch(() => {
+            toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.order-toast-status-error'), life: 4500 });
+          })
+          .finally(() => {
+            updatingOrderStatus.value = false;
+          });
+    }
+  });
 }
 
 /**
