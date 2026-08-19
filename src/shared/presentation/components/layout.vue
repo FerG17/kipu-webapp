@@ -323,8 +323,14 @@ async function handleSignOut() {
   font-weight: 600;
 }
 .bodega-nav-item--critical {
-  background-color: color-mix(in srgb, var(--status-critical-fg) 20%, transparent);
-  color: color-mix(in srgb, var(--status-critical-fg) 55%, var(--brand-ink));
+  /* Needs to read as MORE urgent than the plain active state, not less —
+     mixing the critical color down to 55% against --brand-ink (the old
+     value) landed weaker than --active's full-strength --brand-ink, so an
+     alert item ended up looking more washed out than an ordinary selected
+     one instead of standing out from it. */
+  background-color: color-mix(in srgb, var(--status-critical-fg) 28%, transparent);
+  color: var(--brand-ink);
+  font-weight: 600;
 }
 .bodega-nav-active-bar {
   right: 0; top: 50%; transform: translateY(-50%);

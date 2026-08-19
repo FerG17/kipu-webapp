@@ -162,17 +162,42 @@ const useIamStore = defineStore('iam', () => {
     // a burst of parallel 401s (several requests in flight when the session
     // dies) dispatches this event more than once, and since nothing yields
     // to another handler until after that flip, only the first one passes
-    // the guard and calls signOut(). Reloads to /sign-in the same way
-    // layout.vue's manual sign-out does, rather than leaving the user
+    // the guard and calls clearLocalSession(). Reloads to /sign-in the same
+    // way layout.vue's manual sign-out does, rather than leaving the user
     // parked on a now-broken page behind the scenes.
+    //
+    // Deliberately does NOT call the real /sign-out endpoint the way a
+    // manual sign-out does. This session is already dead server-side — the
+    // 401 that got us here proves it — so there is nothing valid left to
+    // revoke for THIS session. But /sign-out's job is "invalidate this
+    // user's TokenVersion everywhere" (see User.RevokeAllSessions, one
+    // counter shared by every session/device/tab), so calling it from an
+    // auto-triggered cleanup would also kill any OTHER session that is
+    // still perfectly valid — e.g. the very tab that just changed its own
+    // password and got a freshly reissued cookie a moment earlier. Confirmed
+    // this exact cascade manually: change password in tab B, tab A's next
+    // click called /sign-out and logged tab B out too.
     window.addEventListener(SESSION_EXPIRED_EVENT, () => {
         if (!isAuthenticated.value) return;
         isAuthenticated.value = false;
         sessionStorage.setItem(SESSION_EXPIRED_MESSAGE_KEY, '1');
-        signOut().finally(() => {
-            window.location.href = '/sign-in';
-        });
+        clearLocalSession();
+        window.location.href = '/sign-in';
     });
+
+    /**
+     * Clears local session state only — no backend call. Shared by the
+     * auto-triggered session-expiry cleanup above and by signOut() below,
+     * which layers the real backend revocation on top for a deliberate,
+     * user-initiated sign-out.
+     * @returns {void}
+     */
+    function clearLocalSession() {
+        currentUser.value     = null;
+        isAuthenticated.value = false;
+        errors.value          = [];
+        clearSession();
+    }
 
     /**
      * Number of loaded user accounts.
@@ -267,10 +292,7 @@ const useIamStore = defineStore('iam', () => {
      */
     async function signOut() {
         await authProvider.signOut();
-        currentUser.value     = null;
-        isAuthenticated.value = false;
-        errors.value          = [];
-        clearSession();
+        clearLocalSession();
     }
 
     /**
