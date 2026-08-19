@@ -25,16 +25,23 @@ const pageNotFound = () => import('./shared/presentation/views/page-not-found.vu
  * @type {import('vue-router').RouteRecordRaw[]}
  */
 const routes = [
-    // Redirect Sign-in
-    {path: '/', redirect: '/sign-in'},
+    // '/' resolves through '/app' below — anonymous users land on sign-in
+    // (the auth guard redirects there for any non-public route), authenticated
+    // users land on '/app/home' instead of the sign-in screen they'd already
+    // passed.
+    {path: '/', redirect: '/app'},
 
     // Public IAM routes
     ...iamPublicRoutes,
 
-    // Authenticated routes wrapped in the sidebar Layout
+    // Authenticated routes wrapped in the sidebar Layout. The parent itself
+    // has no content to render (Layout is just the sidebar shell around
+    // <router-view>), so visiting '/app' with no child route selected must
+    // redirect somewhere real instead of rendering a blank page.
     {
         path:      '/app',
         component: Layout,
+        redirect:  '/app/home',
         children: [
             { path: 'home',  name: 'home',  component: Home,  meta: { title: 'Home' } },
             ...dashboardRoutes,

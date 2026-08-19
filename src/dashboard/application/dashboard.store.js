@@ -81,9 +81,6 @@ const useDashboardStore = defineStore('dashboard', () => {
     /** @type {import('vue').Ref<boolean>} */
     const reportsLoaded = ref(false);
 
-    /** @type {import('vue').Ref<Error[]>} */
-    const errors = ref([]);
-
     /** @type {import('vue').ComputedRef<number>} */
     const reportsCount = computed(() => reports.value.length);
 
@@ -101,8 +98,7 @@ const useDashboardStore = defineStore('dashboard', () => {
             })
             .catch(error => {
                 kpisLoaded.value = true;
-                if (isForbidden(error)) { dashboardForbidden.value = true; return; }
-                errors.value.push(error);
+                if (isForbidden(error)) dashboardForbidden.value = true;
             });
     }
 
@@ -135,8 +131,7 @@ const useDashboardStore = defineStore('dashboard', () => {
                 dashboardForbidden.value = false;
             })
             .catch(error => {
-                if (isForbidden(error)) { dashboardForbidden.value = true; return; }
-                errors.value.push(error);
+                if (isForbidden(error)) dashboardForbidden.value = true;
             });
     }
 
@@ -153,8 +148,7 @@ const useDashboardStore = defineStore('dashboard', () => {
             })
             .catch(error => {
                 topStockLoaded.value = true;
-                if (isForbidden(error)) { dashboardForbidden.value = true; return; }
-                errors.value.push(error);
+                if (isForbidden(error)) dashboardForbidden.value = true;
             });
     }
 
@@ -170,8 +164,7 @@ const useDashboardStore = defineStore('dashboard', () => {
             })
             .catch(error => {
                 reportsLoaded.value = true;
-                if (isForbidden(error)) { dashboardForbidden.value = true; return; }
-                errors.value.push(error);
+                if (isForbidden(error)) dashboardForbidden.value = true;
             });
     }
 
@@ -201,8 +194,7 @@ const useDashboardStore = defineStore('dashboard', () => {
      */
     function downloadReportExcel(reportId) {
         return dashboardApi.exportReportExcel(reportId)
-            .then(response => downloadBlob(response.data, `report-${reportId}.xlsx`))
-            .catch(error => { errors.value.push(error); throw error; });
+            .then(response => downloadBlob(response.data, `report-${reportId}.xlsx`));
     }
 
     /**
@@ -212,8 +204,7 @@ const useDashboardStore = defineStore('dashboard', () => {
      */
     function downloadReportPdf(reportId) {
         return dashboardApi.exportReportPdf(reportId)
-            .then(response => downloadBlob(response.data, `report-${reportId}.pdf`))
-            .catch(error => { errors.value.push(error); throw error; });
+            .then(response => downloadBlob(response.data, `report-${reportId}.pdf`));
     }
 
     return {
@@ -226,7 +217,6 @@ const useDashboardStore = defineStore('dashboard', () => {
         reports,
         reportsLoaded,
         reportsCount,
-        errors,
         fetchKpis,
         fetchSalesByDay,
         fetchTopStockProducts,

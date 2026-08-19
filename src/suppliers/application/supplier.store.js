@@ -39,9 +39,6 @@ const useSupplierStore = defineStore('supplier', () => {
     /** @type {import('vue').Ref<boolean>} */
     const purchaseOrdersLoaded = ref(false);
 
-    /** @type {import('vue').Ref<Error[]>} */
-    const errors = ref([]);
-
     // ─── Computed ──────────────────────────────────────────────────────────────
 
     /**
@@ -120,8 +117,7 @@ const useSupplierStore = defineStore('supplier', () => {
             .then(response => {
                 suppliers.value       = SupplierAssembler.toEntitiesFromResponse(response);
                 suppliersLoaded.value = true;
-            })
-            .catch(error => errors.value.push(error));
+            });
     }
 
     /**
@@ -153,8 +149,7 @@ const useSupplierStore = defineStore('supplier', () => {
                     });
                 });
                 purchaseOrdersLoaded.value = true;
-            })
-            .catch(error => errors.value.push(error));
+            });
     }
 
     /**
@@ -169,10 +164,6 @@ const useSupplierStore = defineStore('supplier', () => {
                 const createdSupplier = SupplierAssembler.toEntityFromResource(response.data);
                 suppliers.value.push(createdSupplier);
                 return createdSupplier;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -189,10 +180,6 @@ const useSupplierStore = defineStore('supplier', () => {
                 const index = suppliers.value.findIndex(existingSupplier => existingSupplier.id === updatedSupplier.id);
                 if (index !== -1) suppliers.value[index] = updatedSupplier;
                 return updatedSupplier;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -223,10 +210,6 @@ const useSupplierStore = defineStore('supplier', () => {
                 const index = suppliers.value.findIndex(supplier => supplier.id === numericId);
                 if (index !== -1) suppliers.value[index] = updatedSupplier;
                 return updatedSupplier;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -259,9 +242,7 @@ const useSupplierStore = defineStore('supplier', () => {
      */
     function createPurchaseOrder(orderPayload) {
         if (!orderPayload.detailLines || orderPayload.detailLines.length === 0) {
-            const error = new Error('A purchase order requires at least one detail line.');
-            errors.value.push(error);
-            return Promise.reject(error);
+            return Promise.reject(new Error('A purchase order requires at least one detail line.'));
         }
 
         const invalidLines = orderPayload.detailLines.filter(
@@ -269,9 +250,7 @@ const useSupplierStore = defineStore('supplier', () => {
         );
 
         if (invalidLines.length > 0) {
-            const error = new Error('All purchase order lines must have quantity > 0 and unitPrice > 0.');
-            errors.value.push(error);
-            return Promise.reject(error);
+            return Promise.reject(new Error('All purchase order lines must have quantity > 0 and unitPrice > 0.'));
         }
 
         const supplierEntity = suppliers.value.find(supplier => supplier.id === parseInt(orderPayload.supplierId));
@@ -305,10 +284,6 @@ const useSupplierStore = defineStore('supplier', () => {
                 });
                 purchaseOrders.value.unshift(createdOrder);
                 return createdOrder;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -329,11 +304,9 @@ const useSupplierStore = defineStore('supplier', () => {
         if (!existingOrder) return Promise.reject(new Error(`Purchase order #${numericId} not found.`));
 
         if (!existingOrder.isActionable) {
-            const error = new Error(
+            return Promise.reject(new Error(
                 `Cannot update purchase order #${numericId}: it is already ${existingOrder.status}.`
-            );
-            errors.value.push(error);
-            return Promise.reject(error);
+            ));
         }
 
         return supplierApi.updatePurchaseOrder(numericId, { status: newStatus })
@@ -346,10 +319,6 @@ const useSupplierStore = defineStore('supplier', () => {
                 const index = purchaseOrders.value.findIndex(order => order.id === numericId);
                 if (index !== -1) purchaseOrders.value[index] = updatedOrder;
                 return updatedOrder;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -358,7 +327,6 @@ const useSupplierStore = defineStore('supplier', () => {
         purchaseOrders,
         suppliersLoaded,
         purchaseOrdersLoaded,
-        errors,
         activeSupplierCount,
         pendingOrderCount,
         pendingOrderTotal,

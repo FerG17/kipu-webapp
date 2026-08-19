@@ -80,9 +80,6 @@ const useSalesStore = defineStore('sales', () => {
     /** @type {import('vue').Ref<boolean>} */
     const paymentPlansLoaded = ref(false);
 
-    /** @type {import('vue').Ref<Error[]>} */
-    const errors = ref([]);
-
     /**
      * Total number of loaded sales.
      * @type {import('vue').ComputedRef<number>}
@@ -151,7 +148,6 @@ const useSalesStore = defineStore('sales', () => {
                 salesLoaded.value = true;
             })
             .catch(error => {
-                errors.value.push(error);
                 salesError.value = error;
                 salesLoaded.value = true;
             });
@@ -181,8 +177,6 @@ const useSalesStore = defineStore('sales', () => {
         salesApi.getCustomers().then(response => {
             customers.value   = CustomerAssembler.toEntitiesFromResponse(response);
             customersLoaded.value = true;
-        }).catch(error => {
-            errors.value.push(error);
         });
     }
 
@@ -351,7 +345,6 @@ const useSalesStore = defineStore('sales', () => {
 
             return { success: true, errorKey: null, errorDetail: null, status: null, sale: finalSale };
         } catch (error) {
-            errors.value.push(error);
             // Every failure used to collapse into the same generic "try
             // again" message — 409 (insufficient stock, inactive product)
             // and 404 (product/customer gone) have real, localized backend
@@ -388,10 +381,7 @@ const useSalesStore = defineStore('sales', () => {
     function fetchSaleDetailsForSale(saleId) {
         return salesApi.getSaleDetailsBySale(saleId)
             .then(response => SaleDetailAssembler.toEntitiesFromResponse(response))
-            .catch(error => {
-                errors.value.push(error);
-                return [];
-            });
+            .catch(() => []);
     }
 
     /**
@@ -428,8 +418,7 @@ const useSalesStore = defineStore('sales', () => {
             if (paymentPlansLoaded.value) fetchPendingPaymentPlans();
 
             return { success: true };
-        } catch (error) {
-            errors.value.push(error);
+        } catch {
             return { success: false };
         }
     }
@@ -446,9 +435,6 @@ const useSalesStore = defineStore('sales', () => {
             const newCustomer = CustomerAssembler.toEntityFromResource(response.data);
             customers.value.push(newCustomer);
             return newCustomer;
-        }).catch(error => {
-            errors.value.push(error);
-            throw error;
         });
     }
 
@@ -465,9 +451,6 @@ const useSalesStore = defineStore('sales', () => {
                 customers.value[index] = updatedCustomer;
             }
             return updatedCustomer;
-        }).catch(error => {
-            errors.value.push(error);
-            throw error;
         });
     }
 
@@ -482,9 +465,6 @@ const useSalesStore = defineStore('sales', () => {
             if (index !== -1) {
                 customers.value.splice(index, 1);
             }
-        }).catch(error => {
-            errors.value.push(error);
-            throw error;
         });
     }
 
@@ -503,8 +483,7 @@ const useSalesStore = defineStore('sales', () => {
                 paymentPlans.value = PaymentPlanAssembler.toEntitiesFromResponse(response);
                 paymentPlansLoaded.value = true;
             })
-            .catch(error => {
-                errors.value.push(error);
+            .catch(() => {
                 paymentPlansLoaded.value = true;
             });
     }
@@ -517,10 +496,7 @@ const useSalesStore = defineStore('sales', () => {
     function fetchPaymentPlanBySale(saleId) {
         return salesApi.getPaymentPlanBySale(saleId)
             .then(response => PaymentPlanAssembler.toEntityFromResource(response.data))
-            .catch(error => {
-                if (error.response?.status !== 404) errors.value.push(error);
-                return null;
-            });
+            .catch(() => null);
     }
 
     /**
@@ -540,10 +516,6 @@ const useSalesStore = defineStore('sales', () => {
                 const createdPlan = PaymentPlanAssembler.toEntityFromResource(response.data);
                 paymentPlans.value.push(createdPlan);
                 return createdPlan;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -565,10 +537,6 @@ const useSalesStore = defineStore('sales', () => {
                     paymentPlans.value[index] = updatedPlan;
                 }
                 return updatedPlan;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -582,7 +550,6 @@ const useSalesStore = defineStore('sales', () => {
         customersLoaded,
         paymentPlans,
         paymentPlansLoaded,
-        errors,
         // Computed
         salesCount,
         totalRevenue,

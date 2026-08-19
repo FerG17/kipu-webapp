@@ -80,10 +80,9 @@ const useProductStore = defineStore('product', () => {
 
     /**
      * Set when the last fetchAllStockMovements call failed (e.g. a CASHIER
-     * hitting the backend's 403 on GET /stock-movements) — kept separate
-     * from the generic `errors` array so the Movimientos tab can show the
-     * real reason instead of an empty state indistinguishable from "no
-     * movements yet".
+     * hitting the backend's 403 on GET /stock-movements), so the Movimientos
+     * tab can show the real reason instead of an empty state indistinguishable
+     * from "no movements yet".
      * @type {import('vue').Ref<Error|null>}
      */
     const stockMovementsError = ref(null);
@@ -93,9 +92,6 @@ const useProductStore = defineStore('product', () => {
 
     /** @type {import('vue').Ref<boolean>} */
     const inventoryLoaded = ref(false);
-
-    /** @type {import('vue').Ref<Error[]>} */
-    const errors = ref([]);
 
     /**
      * Total number of loaded products.
@@ -214,8 +210,7 @@ const useProductStore = defineStore('product', () => {
             .then(response => {
                 products.value       = ProductAssembler.toEntitiesFromResponse(response);
                 productsLoaded.value = true;
-            })
-            .catch(error => errors.value.push(error));
+            });
     }
 
     /**
@@ -230,8 +225,7 @@ const useProductStore = defineStore('product', () => {
                     .filter(product => !product.isActive);
                 inactiveProductsLoaded.value = true;
             })
-            .catch(error => {
-                errors.value.push(error);
+            .catch(() => {
                 inactiveProductsLoaded.value = true;
             });
     }
@@ -253,10 +247,6 @@ const useProductStore = defineStore('product', () => {
                 // would need to re-derive the full Product from the inactive
                 // copy, which is more fragile than just refetching.
                 return fetchProducts();
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -269,8 +259,7 @@ const useProductStore = defineStore('product', () => {
             .then(response => {
                 inventory.value       = InventoryItemAssembler.toEntitiesFromResponse(response);
                 inventoryLoaded.value = true;
-            })
-            .catch(error => errors.value.push(error));
+            });
     }
 
     /**
@@ -292,8 +281,7 @@ const useProductStore = defineStore('product', () => {
                         registeredAt: batch.expiration
                     })
                 );
-            })
-            .catch(error => errors.value.push(error));
+            });
     }
 
     /**
@@ -315,7 +303,6 @@ const useProductStore = defineStore('product', () => {
                 stockMovementsLoaded.value = true;
             })
             .catch(error => {
-                errors.value.push(error);
                 stockMovementsError.value = error;
                 stockMovementsLoaded.value = true;
             });
@@ -341,8 +328,7 @@ const useProductStore = defineStore('product', () => {
                 batches.value = response.data instanceof Array ? response.data : [];
                 batchesLoaded.value = true;
             })
-            .catch(error => {
-                errors.value.push(error);
+            .catch(() => {
                 batchesLoaded.value = true;
             });
     }
@@ -361,10 +347,6 @@ const useProductStore = defineStore('product', () => {
             .then(response => {
                 const index = batches.value.findIndex(batch => batch.id === response.data.id);
                 if (index !== -1) batches.value[index] = response.data;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -434,10 +416,7 @@ const useProductStore = defineStore('product', () => {
     function fetchWarehousesForBusiness() {
         return productApi.getWarehouses()
             .then(response => response.data instanceof Array ? response.data : [])
-            .catch(error => {
-                errors.value.push(error);
-                return [];
-            });
+            .catch(() => []);
     }
 
     /**
@@ -449,11 +428,7 @@ const useProductStore = defineStore('product', () => {
      */
     function createWarehouse(resource) {
         return productApi.createWarehouse(resource)
-            .then(response => response.data)
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
-            });
+            .then(response => response.data);
     }
 
     /**
@@ -465,10 +440,7 @@ const useProductStore = defineStore('product', () => {
     function fetchSuppliersForBusiness() {
         return productApi.getSuppliers()
             .then(response => response.data instanceof Array ? response.data : [])
-            .catch(error => {
-                errors.value.push(error);
-                return [];
-            });
+            .catch(() => []);
     }
 
     /**
@@ -482,10 +454,6 @@ const useProductStore = defineStore('product', () => {
                 const createdProduct = ProductAssembler.toEntityFromResource(response.data);
                 products.value.push(createdProduct);
                 return createdProduct;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -501,10 +469,6 @@ const useProductStore = defineStore('product', () => {
                 const index = products.value.findIndex(existingProduct => existingProduct.id === updatedProduct.id);
                 if (index !== -1) products.value[index] = updatedProduct;
                 return updatedProduct;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -512,7 +476,7 @@ const useProductStore = defineStore('product', () => {
      * Deletes a product and removes it from local state.
      *
      * Business rule: deletion is blocked when the product has an inventory record
-     * with currentStock > 0. An error is pushed and no API call is made.
+     * with currentStock > 0. The promise rejects and no API call is made.
      *
      * @param {number|string} id
      * @returns {Promise<void>}
@@ -522,9 +486,9 @@ const useProductStore = defineStore('product', () => {
         const inventoryItem = inventory.value.find(item => item.productId === numericId);
 
         if (inventoryItem && inventoryItem.currentStock > 0) {
-            const error = new Error(`Cannot delete product #${numericId}: it has ${inventoryItem.currentStock} units in stock.`);
-            errors.value.push(error);
-            return Promise.reject(error);
+            return Promise.reject(
+                new Error(`Cannot delete product #${numericId}: it has ${inventoryItem.currentStock} units in stock.`)
+            );
         }
 
         return productApi.deleteProduct(numericId)
@@ -534,10 +498,6 @@ const useProductStore = defineStore('product', () => {
 
                 const inventoryIndex = inventory.value.findIndex(item => item.productId === numericId);
                 if (inventoryIndex !== -1) inventory.value.splice(inventoryIndex, 1);
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -572,9 +532,7 @@ const useProductStore = defineStore('product', () => {
      */
     function registerStockIntake(resource) {
         if (resource.quantity == null || resource.quantity < 0) {
-            const error = new Error('Stock intake quantity must be zero or a positive integer.');
-            errors.value.push(error);
-            return Promise.reject(error);
+            return Promise.reject(new Error('Stock intake quantity must be zero or a positive integer.'));
         }
 
         const intakeResource = {
@@ -595,10 +553,6 @@ const useProductStore = defineStore('product', () => {
                 if (index !== -1) inventory.value[index] = updatedItem;
                 else inventory.value.push(updatedItem);
                 return updatedItem;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -615,14 +569,10 @@ const useProductStore = defineStore('product', () => {
     function adjustStock(productId, warehouseId, delta, reason) {
         const numericDelta = parseInt(delta);
         if (!numericDelta) {
-            const error = new Error('Stock adjustment delta must be a non-zero integer.');
-            errors.value.push(error);
-            return Promise.reject(error);
+            return Promise.reject(new Error('Stock adjustment delta must be a non-zero integer.'));
         }
         if (!reason || !reason.trim()) {
-            const error = new Error('Stock adjustment requires a reason.');
-            errors.value.push(error);
-            return Promise.reject(error);
+            return Promise.reject(new Error('Stock adjustment requires a reason.'));
         }
 
         return productApi.adjustStock(parseInt(productId), { warehouseId: parseInt(warehouseId), delta: numericDelta, reason: reason.trim() })
@@ -632,10 +582,6 @@ const useProductStore = defineStore('product', () => {
                 if (index !== -1) inventory.value[index] = updatedItem;
                 else inventory.value.push(updatedItem);
                 return updatedItem;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -656,16 +602,12 @@ const useProductStore = defineStore('product', () => {
      */
     function updateMinimumStock(productId, minimumStock) {
         if (minimumStock == null || Number.isNaN(minimumStock) || minimumStock < 0) {
-            const error = new Error('Minimum stock must be a non-negative integer.');
-            errors.value.push(error);
-            return Promise.reject(error);
+            return Promise.reject(new Error('Minimum stock must be a non-negative integer.'));
         }
 
         const existingItem = inventory.value.find(item => item.productId === parseInt(productId));
         if (!existingItem) {
-            const error = new Error('No inventory record exists yet for this product.');
-            errors.value.push(error);
-            return Promise.reject(error);
+            return Promise.reject(new Error('No inventory record exists yet for this product.'));
         }
 
         return productApi.updateMinimumStock(existingItem.productId, { minimumStock: parseInt(minimumStock) })
@@ -674,10 +616,6 @@ const useProductStore = defineStore('product', () => {
                 const index = inventory.value.findIndex(item => item.id === updatedItem.id);
                 if (index !== -1) inventory.value[index] = updatedItem;
                 return updatedItem;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -720,10 +658,6 @@ const useProductStore = defineStore('product', () => {
                 } else {
                     batches.value.push(response.data);
                 }
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -739,7 +673,6 @@ const useProductStore = defineStore('product', () => {
         batchesLoaded,
         stockMovementsLoaded,
         stockMovementsError,
-        errors,
         productsCount,
         stockStatusCounts,
         getProductById,

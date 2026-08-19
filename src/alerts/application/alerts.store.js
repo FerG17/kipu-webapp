@@ -50,9 +50,6 @@ const useAlertsStore = defineStore('alerts', () => {
     /** @type {import('vue').Ref<boolean>} */
     const alertsLoaded = ref(false);
 
-    /** @type {import('vue').Ref<Error[]>} */
-    const errors = ref([]);
-
     /**
      * Alert rules, one per real backend AlertType — LOW_STOCK and
      * OUT_OF_STOCK only ever expose `active` (their threshold is each
@@ -197,8 +194,7 @@ const useAlertsStore = defineStore('alerts', () => {
                 alerts.value       = [...active, ...history];
                 alertsLoaded.value = true;
             })
-            .catch(error => {
-                errors.value.push(error);
+            .catch(() => {
                 alertsLoaded.value = true;
             });
     }
@@ -221,8 +217,7 @@ const useAlertsStore = defineStore('alerts', () => {
                 });
                 alertRulesLoaded.value = true;
             })
-            .catch(error => {
-                errors.value.push(error);
+            .catch(() => {
                 alertRulesLoaded.value = true;
             });
     }
@@ -242,10 +237,6 @@ const useAlertsStore = defineStore('alerts', () => {
                 const index = alerts.value.findIndex(existing => existing.id === updatedAlert.id);
                 if (index !== -1) alerts.value[index] = updatedAlert;
                 return updatedAlert;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -264,10 +255,6 @@ const useAlertsStore = defineStore('alerts', () => {
                 const index = alerts.value.findIndex(existing => existing.id === updatedAlert.id);
                 if (index !== -1) alerts.value[index] = updatedAlert;
                 return updatedAlert;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -294,10 +281,6 @@ const useAlertsStore = defineStore('alerts', () => {
                 // right away (see AlertRuleCommandService) — refresh so they
                 // drop out of "Activas" without needing a page reload.
                 return fetchAlerts();
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -322,17 +305,12 @@ const useAlertsStore = defineStore('alerts', () => {
             .then(response => {
                 rule.threshold = response.data.thresholdValue;
                 rule.active    = response.data.enabled;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
     return {
         alerts,
         alertsLoaded,
-        errors,
         alertRules,
         alertRulesLoaded,
         alertsCount,
