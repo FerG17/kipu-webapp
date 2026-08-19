@@ -342,11 +342,11 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
             </div>
             <div class="settings-field">
               <label class="settings-label"><i class="pi pi-user" style="font-size: 0.7rem;"/> {{ t('settings.field-first-name') }}</label>
-              <input v-model="profileForm.firstName" type="text" class="settings-input"/>
+              <input v-model="profileForm.firstName" type="text" class="settings-input" maxlength="50"/>
             </div>
             <div class="settings-field">
               <label class="settings-label"><i class="pi pi-user" style="font-size: 0.7rem;"/> {{ t('settings.field-last-name') }}</label>
-              <input v-model="profileForm.lastName" type="text" class="settings-input"/>
+              <input v-model="profileForm.lastName" type="text" class="settings-input" maxlength="50"/>
             </div>
             <div class="settings-field">
               <label class="settings-label"><i class="pi pi-phone" style="font-size: 0.7rem;"/> {{ t('settings.field-phone') }}</label>
