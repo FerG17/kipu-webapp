@@ -23,7 +23,7 @@ const iamStore      = useIamStore();
 const alertsStore   = useAlertsStore();
 const supplierStore = useSupplierStore();
 
-const { products, productsLoaded, inactiveProducts, inactiveProductsLoaded, inventory, stockMovements, stockMovementsLoaded, stockMovementsError, errors } = toRefs(productStore);
+const { products, productsLoaded, inactiveProducts, inactiveProductsLoaded, inventory, stockMovements, stockMovementsLoaded, stockMovementsError } = toRefs(productStore);
 const { fetchProducts, fetchInventory, fetchBatches, fetchAllStockMovements,
   addProduct, updateProduct, deleteProduct, registerStockIntake, updateMinimumStock,
   createBatchForProduct, isProductExpiringSoon, isProductExpired,
@@ -1338,11 +1338,6 @@ function saveWarehouse() {
       </div>
 
       <template v-else>
-      <!-- Load errors -->
-      <div v-if="errors.length > 0" class="product-list-errors">
-        {{ t('errors.occurred') }}: {{ errors.map(error => error.message).join(', ') }}
-      </div>
-
       <!-- Desktop table -->
       <div class="hidden md:block border-round-xl overflow-hidden table-card">
         <div style="overflow-x: auto;">
@@ -2544,16 +2539,6 @@ function saveWarehouse() {
 .loading-text {
   color: var(--text-muted);
   font-size: 0.88rem;
-}
-
-.product-list-errors {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  color: var(--status-critical-fg);
-  font-size: 0.8rem;
-  background: var(--status-critical-bg);
-  border: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent);
-  border-radius: 0.75rem;
 }
 
 /* ── Table card ──────────────────────────────────────────────── */

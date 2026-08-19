@@ -8,6 +8,7 @@ import CustomerModal         from '../components/customer-modal.vue';
 import CustomerDetailModal   from '../components/customer-detail-modal.vue';
 import { Customer }          from '../../domain/model/customer.entity.js';
 import { toDateLocale }      from '../../../shared/presentation/date-locale.js';
+import { canEditCustomers }  from '../../../iam/application/permissions.js';
 
 /**
  * CustomerList view for the Sales & POS Management bounded context.
@@ -42,6 +43,12 @@ const savingCustomer = ref(false);
 
 /** @type {import('vue').Ref<import('../../domain/model/customer.entity.js').Customer|null>} The customer shown in the detail modal. */
 const selectedCustomer = ref(null);
+
+/** @type {import('vue').Ref<import('../../domain/model/customer.entity.js').Customer|null>} The customer being edited, or null when the modal is registering a new one. */
+const editingCustomer = ref(null);
+
+/** @type {import('vue').ComputedRef<boolean>} Whether the current user may edit customer records — admin only. */
+const canEdit = computed(() => canEditCustomers(iamStore.currentUserPosition));
 
 // ─── Computed ──────────────────────────────────────────────────────────────
 
@@ -89,33 +96,53 @@ function formatDate(dateString) {
 // ─── Actions ───────────────────────────────────────────────────────────────
 
 /**
- * Handles the save event from CustomerModal.
- * Creates a new Customer entity and persists it via the store.
- * @param {{ fullName: string, documentNumber: string, phoneNumber: string, email: string }} formData
+ * Handles the save event from CustomerModal — creates a new Customer when
+ * editingCustomer is unset, or updates the existing one when it's an edit.
+ * @param {{ id: number|null, fullName: string, documentNumber: string, phoneNumber: string, email: string }} formData
  */
-function handleRegisterCustomer(formData) {
-  const businessId = iamStore.currentUser?.businessId;
-  const customer   = new Customer({
-    businessId:     businessId,
-    fullName:       formData.fullName,
-    documentNumber: formData.documentNumber,
-    phoneNumber:    formData.phoneNumber,
-    email:          formData.email,
-    registeredAt:   new Date().toISOString()
-  });
-
+function handleSaveCustomer(formData) {
   savingCustomer.value = true;
-  salesStore.addCustomer(customer)
+
+  const request = formData.id
+      ? salesStore.updateCustomer(new Customer({ ...editingCustomer.value, ...formData }))
+      : salesStore.addCustomer(new Customer({
+          businessId:     iamStore.currentUser?.businessId,
+          fullName:       formData.fullName,
+          documentNumber: formData.documentNumber,
+          phoneNumber:    formData.phoneNumber,
+          email:          formData.email,
+          registeredAt:   new Date().toISOString()
+        }));
+
+  request
       .then(() => {
-        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('customers.toast-save-success'), life: 3500 });
-        showRegisterModal.value = false;
+        const successKey = formData.id ? 'customers.toast-update-success' : 'customers.toast-save-success';
+        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t(successKey), life: 3500 });
+        closeCustomerModal();
       })
-      .catch(() => {
-        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('customers.toast-save-error'), life: 4500 });
+      .catch(error => {
+        const errorKey = formData.id ? 'customers.toast-update-error' : 'customers.toast-save-error';
+        const detail = error.response?.data?.detail ?? t(errorKey);
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
       })
       .finally(() => {
         savingCustomer.value = false;
       });
+}
+
+/**
+ * Opens the CustomerModal pre-filled with the given customer for editing.
+ * @param {import('../../domain/model/customer.entity.js').Customer} customer
+ */
+function openEditModal(customer) {
+  editingCustomer.value = customer;
+  showRegisterModal.value = true;
+}
+
+/** Closes the CustomerModal, whether it was registering or editing. */
+function closeCustomerModal() {
+  showRegisterModal.value = false;
+  editingCustomer.value = null;
 }
 
 /**
@@ -160,7 +187,7 @@ onMounted(() => {
       <button
           class="flex align-items-center gap-2 border-round-lg px-4 py-2 shrink-0"
           style="background-color: var(--brand); color: var(--surface); font-size: 0.85rem; font-weight: 600; border: none; cursor: pointer;"
-          @click="showRegisterModal = true"
+          @click="editingCustomer = null; showRegisterModal = true"
       >
         <i class="pi pi-user-plus" style="font-size: 1rem;" />
         <span>{{ t('customers.register-btn') }}</span>
@@ -230,16 +257,25 @@ onMounted(() => {
               {{ formatDate(customer.registeredAt) }}
             </td>
             <td class="px-4 py-3">
-              <button
-                  class="flex align-items-center gap-1 border-round-lg px-3 py-2"
-                  style="background-color: var(--brand-soft); color: var(--brand); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
-                  @mouseenter="(e) => e.currentTarget.style.backgroundColor = 'var(--brand-soft)'"
-                  @mouseleave="(e) => e.currentTarget.style.backgroundColor = 'var(--brand-soft)'"
-                  @click="openDetail(customer)"
-              >
-                <i class="pi pi-eye" style="font-size: 0.8rem;" />
-                <span>{{ t('customers.view-btn') }}</span>
-              </button>
+              <div class="flex align-items-center gap-2">
+                <button
+                    class="flex align-items-center gap-1 border-round-lg px-3 py-2"
+                    style="background-color: var(--brand-soft); color: var(--brand); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
+                    @click="openDetail(customer)"
+                >
+                  <i class="pi pi-eye" style="font-size: 0.8rem;" />
+                  <span>{{ t('customers.view-btn') }}</span>
+                </button>
+                <button
+                    v-if="canEdit"
+                    class="flex align-items-center gap-1 border-round-lg px-3 py-2"
+                    style="background-color: var(--surface-alt); color: var(--text-muted); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
+                    @click="openEditModal(customer)"
+                >
+                  <i class="pi pi-pencil" style="font-size: 0.8rem;" />
+                  <span>{{ t('customers.edit-btn') }}</span>
+                </button>
+              </div>
             </td>
           </tr>
           </tbody>
@@ -271,6 +307,14 @@ onMounted(() => {
                 DNI: {{ customer.documentNumber || '—' }}
               </p>
             </div>
+            <button
+                v-if="canEdit"
+                class="flex align-items-center justify-content-center border-round-lg"
+                style="width: 36px; height: 36px; background-color: var(--surface-alt); color: var(--text-muted); border: none; cursor: pointer;"
+                @click="openEditModal(customer)"
+            >
+              <i class="pi pi-pencil" style="font-size: 0.9rem;" />
+            </button>
             <button
                 class="flex align-items-center justify-content-center border-round-lg"
                 style="width: 36px; height: 36px; background-color: var(--brand-soft); color: var(--brand); border: none; cursor: pointer;"
@@ -309,12 +353,13 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Customer register modal -->
+    <!-- Customer register/edit modal -->
     <customer-modal
         v-if="showRegisterModal"
         :saving="savingCustomer"
-        @save="handleRegisterCustomer"
-        @close="showRegisterModal = false"
+        :customer="editingCustomer"
+        @save="handleSaveCustomer"
+        @close="closeCustomerModal"
     />
 
     <!-- Customer detail modal -->

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, toRefs } from 'vue';
 import { useI18n }        from 'vue-i18n';
 import { useToast }       from 'primevue/usetoast';
+import { useConfirm }     from 'primevue';
 import useSupplierStore   from '../../application/supplier.store.js';
 import useIamStore        from '../../../iam/application/iam.store.js';
 import useProductStore    from '../../../product/application/product.store.js';
@@ -11,6 +12,7 @@ import { useTodayLocalDateString } from '../../../shared/presentation/use-today-
 
 const { t }         = useI18n();
 const toast         = useToast();
+const confirm       = useConfirm();
 const supplierStore = useSupplierStore();
 const iamStore      = useIamStore();
 const productStore  = useProductStore();
@@ -32,8 +34,7 @@ const {
   purchaseOrdersLoaded,
   suppliers,
   pendingOrderCount,
-  pendingOrderTotal,
-  errors
+  pendingOrderTotal
 } = toRefs(supplierStore);
 
 const {
@@ -208,6 +209,9 @@ function validateNewOrderForm() {
   if (!newOrderForm.value.expectedDate) {
     formErrors.expectedDate = t('suppliers.order-error-date');
     isValid                 = false;
+  } else if (newOrderForm.value.expectedDate < todayLocalDate.value) {
+    formErrors.expectedDate = t('suppliers.order-error-date-past');
+    isValid                 = false;
   }
 
   const hasInvalidLine = newOrderForm.value.lines.some(
@@ -250,8 +254,9 @@ function submitNewOrder() {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.order-toast-create-success'), life: 3500 });
         showNewOrderModal.value = false;
       })
-      .catch(() => {
-        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.order-toast-create-error'), life: 4500 });
+      .catch(error => {
+        const detail = error.response?.data?.detail ?? t('suppliers.order-toast-create-error');
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
       })
       .finally(() => {
         savingNewOrder.value = false;
@@ -282,26 +287,33 @@ function receiveOrder() {
 
   const order = selectedOrder.value;
 
-  updatingOrderStatus.value = true;
-  updatePurchaseOrderStatus(order.id, PurchaseOrderStatus.RECEIVED)
-      .then(() => {
-        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.order-toast-receive-success'), life: 3500 });
-        showOrderDetailModal.value = false;
-        // The backend just replenished stock for every line of this order
-        // (see MarkReceived), which may have resolved LOW_STOCK/OUT_OF_STOCK
-        // alerts and created/updated batches — unlike saveIntake, this
-        // touches several products at once, so there's no single response to
-        // patch state from; a real refresh is needed for all three.
-        productStore.fetchInventory();
-        productStore.fetchBatches();
-        alertsStore.fetchAlerts();
-      })
-      .catch(() => {
-        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.order-toast-status-error'), life: 4500 });
-      })
-      .finally(() => {
-        updatingOrderStatus.value = false;
-      });
+  confirm.require({
+    message: t('suppliers.confirm-receive-body'),
+    header:  t('suppliers.confirm-receive-header'),
+    icon:    'pi pi-inbox',
+    accept:  () => {
+      updatingOrderStatus.value = true;
+      updatePurchaseOrderStatus(order.id, PurchaseOrderStatus.RECEIVED)
+          .then(() => {
+            toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.order-toast-receive-success'), life: 3500 });
+            showOrderDetailModal.value = false;
+            // The backend just replenished stock for every line of this order
+            // (see MarkReceived), which may have resolved LOW_STOCK/OUT_OF_STOCK
+            // alerts and created/updated batches — unlike saveIntake, this
+            // touches several products at once, so there's no single response to
+            // patch state from; a real refresh is needed for all three.
+            productStore.fetchInventory();
+            productStore.fetchBatches();
+            alertsStore.fetchAlerts();
+          })
+          .catch(() => {
+            toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.order-toast-status-error'), life: 4500 });
+          })
+          .finally(() => {
+            updatingOrderStatus.value = false;
+          });
+    }
+  });
 }
 
 /**
@@ -330,18 +342,25 @@ function delayOrder() {
 function cancelOrder() {
   if (!selectedOrder.value) return;
 
-  updatingOrderStatus.value = true;
-  updatePurchaseOrderStatus(selectedOrder.value.id, PurchaseOrderStatus.CANCELLED)
-      .then(() => {
-        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.order-toast-cancel-success'), life: 3500 });
-        showOrderDetailModal.value = false;
-      })
-      .catch(() => {
-        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.order-toast-status-error'), life: 4500 });
-      })
-      .finally(() => {
-        updatingOrderStatus.value = false;
-      });
+  confirm.require({
+    message: t('suppliers.confirm-cancel-order-body'),
+    header:  t('suppliers.confirm-cancel-order-header'),
+    icon:    'pi pi-exclamation-triangle',
+    accept:  () => {
+      updatingOrderStatus.value = true;
+      updatePurchaseOrderStatus(selectedOrder.value.id, PurchaseOrderStatus.CANCELLED)
+          .then(() => {
+            toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.order-toast-cancel-success'), life: 3500 });
+            showOrderDetailModal.value = false;
+          })
+          .catch(() => {
+            toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.order-toast-status-error'), life: 4500 });
+          })
+          .finally(() => {
+            updatingOrderStatus.value = false;
+          });
+    }
+  });
 }
 
 /**
@@ -599,11 +618,6 @@ function resolveProductName(detail) {
         <i class="pi pi-clipboard orders-empty-icon" />
         <p class="orders-empty-text">{{ t('suppliers.order-no-results') }}</p>
       </div>
-    </div>
-
-    <!-- ─── Error display ──────────────────────────────────────────────── -->
-    <div v-if="errors.length > 0" class="orders-errors">
-      {{ t('errors.occurred') }}: {{ errors.map(error => error.message).join(', ') }}
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════════════
@@ -1266,14 +1280,6 @@ function resolveProductName(detail) {
   color:       var(--brand);
 }
 
-/* ─── Errors ────────────────────────────────────────────────────────────────── */
-.orders-errors {
-  padding:    0.75rem 1.25rem;
-  color:      var(--status-critical-fg);
-  font-size:  0.8rem;
-  background: var(--status-critical-bg);
-  border-top: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent);
-}
 
 /* ─── Modal overlay ─────────────────────────────────────────────────────────── */
 .orders-modal-overlay {

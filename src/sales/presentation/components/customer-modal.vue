@@ -5,8 +5,9 @@ import { useI18n }       from 'vue-i18n';
 /**
  * CustomerModal component for the Sales & POS Management bounded context.
  *
- * Inline modal for registering a new customer directly from the Clientes tab.
- * Validates required fields before emitting the save event.
+ * Inline modal for registering a new customer, or editing an existing one
+ * when opened with a `customer` prop, from the Clientes tab. Validates
+ * required fields before emitting the save event.
  *
  * Business rules:
  * - fullName is required (minimum 2 characters).
@@ -22,13 +23,23 @@ const props = defineProps({
   saving: {
     type:    Boolean,
     default: false
+  },
+  /**
+   * The customer being edited. Null/absent means the modal is in
+   * registration mode — a fresh, blank form.
+   * @type {import('../../domain/model/customer.entity.js').Customer|null}
+   */
+  customer: {
+    type:    Object,
+    default: null
   }
 });
 
 const emit = defineEmits([
   /**
-   * Emitted when the form is valid and the user clicks register.
-   * payload: { fullName, documentNumber, phoneNumber, email }
+   * Emitted when the form is valid and the user clicks save.
+   * payload: { id, fullName, documentNumber, phoneNumber, email } — id is
+   * null in registration mode, the existing customer's id in edit mode.
    */
   'save',
   /** Emitted when the user closes the modal without saving. */
@@ -37,14 +48,16 @@ const emit = defineEmits([
 
 const { t } = useI18n();
 
+const isEditMode = computed(() => props.customer != null);
+
 /** @type {import('vue').Ref<string>} */
-const fullName = ref('');
+const fullName = ref(props.customer?.fullName ?? '');
 /** @type {import('vue').Ref<string>} */
-const documentNumber = ref('');
+const documentNumber = ref(props.customer?.documentNumber ?? '');
 /** @type {import('vue').Ref<string>} */
-const phoneNumber = ref('');
+const phoneNumber = ref(props.customer?.phoneNumber ?? '');
 /** @type {import('vue').Ref<string>} */
-const email = ref('');
+const email = ref(props.customer?.email ?? '');
 
 /** @type {import('vue').Ref<Record<string, string>>} Field-level validation error messages. */
 const fieldErrors = ref({});
@@ -98,6 +111,7 @@ function validateForm() {
 function handleSave() {
   if (!validateForm()) return;
   emit('save', {
+    id:             props.customer?.id ?? null,
     fullName:       fullName.value.trim(),
     documentNumber: documentNumber.value.trim(),
     phoneNumber:    phoneNumber.value.trim(),
@@ -124,7 +138,7 @@ function handleSave() {
           style="border-bottom: 1px solid var(--surface-alt);"
       >
         <h2 class="m-0" style="font-size: 1.05rem; font-weight: 700; color: var(--brand);">
-          {{ t('customers.modal-register-title') }}
+          {{ isEditMode ? t('customers.modal-edit-title') : t('customers.modal-register-title') }}
         </h2>
         <button
             style="background: none; border: none; cursor: pointer; padding: 4px;"
@@ -246,7 +260,7 @@ function handleSave() {
               @click="handleSave"
           >
             <i v-if="saving" class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>
-            {{ saving ? t('customers.modal-saving') : t('customers.modal-register-btn') }}
+            {{ saving ? t('customers.modal-saving') : (isEditMode ? t('customers.modal-save-btn') : t('customers.modal-register-btn')) }}
           </button>
         </div>
       </div>

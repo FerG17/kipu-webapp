@@ -55,3 +55,8 @@ export function canManageTeam(position) {
 export function canEditBusinessProfile(position) {
     return position === 'ADMIN';
 }
+
+/** Editing a customer's contact details — admin only. */
+export function canEditCustomers(position) {
+    return position === 'ADMIN';
+}
