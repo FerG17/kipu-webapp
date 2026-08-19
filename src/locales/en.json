@@ -488,6 +488,8 @@
     "btn-acknowledge":     "Acknowledge",
     "btn-resolve":         "Resolve",
     "btn-discard-batch":   "Discard batch",
+    "confirm-discard-header": "Discard batch",
+    "confirm-discard-body":   "This only closes this alert — it does not deduct units from inventory. There is currently no way to subtract stock for shrinkage or discarded goods (only through a sale); this product's count will keep showing the same units after you continue. Continue anyway?",
     "field-severity":      "Severity",
     "field-date":          "Generated",
     "modal-close":         "Close",

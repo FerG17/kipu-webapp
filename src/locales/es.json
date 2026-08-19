@@ -488,6 +488,8 @@
     "btn-acknowledge":     "Reconocer",
     "btn-resolve":         "Resolver",
     "btn-discard-batch":   "Dar de baja lote",
+    "confirm-discard-header": "Dar de baja lote",
+    "confirm-discard-body":   "Esto solo cierra esta alerta — no descuenta las unidades del inventario. Hoy no existe una forma de restar stock por mermas o productos botados (solo por venta); el conteo de este producto seguirá mostrando las mismas unidades después de continuar. ¿Continuar de todos modos?",
     "field-severity":      "Severidad",
     "field-date":          "Generada",
     "modal-close":         "Cerrar",

@@ -995,13 +995,15 @@ const showInactiveModal  = ref(false);
 const activatingProductId = ref(null);
 
 /**
- * Opens the "productos inactivos" modal, lazily loading the list the first
- * time it's needed — GetProducts (fetchProducts) excludes deactivated
- * products by default, so they're not already in memory.
+ * Opens the "productos inactivos" modal, always refetching — a product
+ * deactivated earlier in the same session (after this modal was already
+ * opened once) must show up without needing a full page reload, and
+ * GetProducts (fetchProducts) excludes deactivated products by default, so
+ * they're never already in memory from anywhere else.
  */
 function openInactiveModal() {
   showInactiveModal.value = true;
-  if (!inactiveProductsLoaded.value) fetchInactiveProducts();
+  fetchInactiveProducts();
 }
 
 function handleActivateProduct(product) {

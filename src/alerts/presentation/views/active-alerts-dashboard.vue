@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, toRefs } from 'vue';
 import { useI18n }        from 'vue-i18n';
 import { useToast }       from 'primevue/usetoast';
+import { useConfirm }     from 'primevue';
 import useAlertsStore     from '../../application/alerts.store.js';
 import useIamStore        from '../../../iam/application/iam.store.js';
 import useProductStore    from '../../../product/application/product.store.js';
@@ -11,6 +12,7 @@ import { canModerateAlerts, canManageAlertRules } from '../../../iam/application
 
 const { t, locale } = useI18n();
 const toast       = useToast();
+const confirm     = useConfirm();
 const alertsStore = useAlertsStore();
 const iamStore    = useIamStore();
 const productStore = useProductStore();
@@ -196,22 +198,35 @@ function handleResolve() {
  * the shelf (thrown out, returned), so it should stop alerting. Closes the
  * detail modal on success since the alert itself gets resolved server-side
  * as part of discarding (BatchDiscardedEventHandler).
+ *
+ * Confirms first because discarding a batch does NOT touch inventory —
+ * there is no stock-adjustment feature yet (a batch doesn't even track its
+ * own quantity, only cost/expiration), so the unit count stays exactly as
+ * it was. Skipping this warning would let someone believe the units are
+ * gone from stock when they are not.
  */
 function handleDiscardBatch() {
   if (!selectedAlert.value?.batchId) return;
-  discarding.value = true;
-  discardBatch(selectedAlert.value.batchId)
-      .then(() => {
-        selectedAlert.value = null;
-        fetchAlerts();
-        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('alerts.toast-discard-success'), life: 3500 });
-      })
-      .catch(() => {
-        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('alerts.toast-discard-error'), life: 4500 });
-      })
-      .finally(() => {
-        discarding.value = false;
-      });
+  confirm.require({
+    message:     t('alerts.confirm-discard-body'),
+    header:      t('alerts.confirm-discard-header'),
+    icon:        'pi pi-exclamation-triangle',
+    accept: () => {
+      discarding.value = true;
+      discardBatch(selectedAlert.value.batchId)
+          .then(() => {
+            selectedAlert.value = null;
+            fetchAlerts();
+            toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('alerts.toast-discard-success'), life: 3500 });
+          })
+          .catch(() => {
+            toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('alerts.toast-discard-error'), life: 4500 });
+          })
+          .finally(() => {
+            discarding.value = false;
+          });
+    }
+  });
 }
 
 // ─── Rule editing ──────────────────────────────────────────────────────────────
