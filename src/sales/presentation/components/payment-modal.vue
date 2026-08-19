@@ -81,10 +81,13 @@ const selectedMethod = ref(PaymentMethod.CASH);
 
 /**
  * Cash amount entered by the cashier (only relevant for CASH method).
- * Pre-populated with the ceiling of the total for convenience.
+ * Pre-populated with the literal total — this used to default to
+ * Math.ceil(total), which silently overstated what's actually owed (e.g. a
+ * S/15.30 sale pre-filled S/16) under a field the cashier could easily
+ * confirm without re-checking.
  * @type {import('vue').Ref<string>}
  */
-const cashInput = ref(String(Math.ceil(props.total)));
+const cashInput = ref(String(props.total));
 
 /**
  * Parsed cash amount from the input field.
@@ -145,15 +148,27 @@ const canConfirm = computed(() => {
 });
 
 /**
- * Quick cash-amount shortcuts: the exact total (rounded up to the sol) plus
- * the common Peruvian bill denominations that are at least the total, so a
- * cashier can just tap the bill they were handed instead of typing it.
- * @type {import('vue').ComputedRef<number[]>}
+ * Quick cash-amount shortcuts. The first is always the literal total — the
+ * "Exacto" button used to show Math.ceil(total) instead, which is NOT the
+ * exact amount and could overstate the change actually owed if tapped
+ * without checking. A "round up to the next sol" shortcut follows
+ * separately when the total isn't already a whole number, plus the common
+ * Peruvian bill denominations that cover it, so a cashier can just tap the
+ * bill they were handed instead of typing it.
+ * @type {import('vue').ComputedRef<Array<{amount: number, labelKey: string|null}>>}
  */
 const quickCashAmounts = computed(() => {
-  const exact = Math.ceil(props.total);
-  const bills = [10, 20, 50, 100].filter(bill => bill >= props.total && bill !== exact);
-  return [exact, ...bills].slice(0, 4);
+  const exact = props.total;
+  const roundedUp = Math.ceil(props.total);
+
+  const amounts = [{ amount: exact, labelKey: 'pos.payment-quick-exact' }];
+  if (roundedUp !== exact) amounts.push({ amount: roundedUp, labelKey: 'pos.payment-quick-round-up' });
+
+  const bills = [10, 20, 50, 100]
+      .filter(bill => bill >= props.total && bill !== exact && bill !== roundedUp)
+      .map(amount => ({ amount, labelKey: null }));
+
+  return [...amounts, ...bills].slice(0, 4);
 });
 
 /**
@@ -321,21 +336,21 @@ function handleConfirm() {
         <!-- Quick amount shortcuts -->
         <div class="flex gap-2 mb-2">
           <button
-              v-for="(amount, amountIndex) in quickCashAmounts"
-              :key="amount"
+              v-for="quick in quickCashAmounts"
+              :key="quick.amount"
               type="button"
               class="flex-1 border-round-lg py-2"
               :style="{
-                            border: `1.5px solid ${cashGiven === amount ? 'var(--status-ok-fg)' : 'var(--border)'}`,
-                            backgroundColor: cashGiven === amount ? 'var(--status-ok-bg)' : 'var(--surface)',
-                            color: cashGiven === amount ? 'var(--status-ok-fg)' : 'var(--text-muted)',
+                            border: `1.5px solid ${cashGiven === quick.amount ? 'var(--status-ok-fg)' : 'var(--border)'}`,
+                            backgroundColor: cashGiven === quick.amount ? 'var(--status-ok-bg)' : 'var(--surface)',
+                            color: cashGiven === quick.amount ? 'var(--status-ok-fg)' : 'var(--text-muted)',
                             fontSize: '0.78rem',
                             fontWeight: 700,
                             cursor: 'pointer'
                         }"
-              @click="selectQuickAmount(amount)"
+              @click="selectQuickAmount(quick.amount)"
           >
-            {{ amountIndex === 0 ? t('pos.payment-quick-exact') : formatCurrency(amount) }}
+            {{ quick.labelKey ? t(quick.labelKey) : formatCurrency(quick.amount) }}
           </button>
         </div>
         <input

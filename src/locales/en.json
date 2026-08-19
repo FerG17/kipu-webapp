@@ -597,6 +597,7 @@
     "payment-card": "Card",
     "payment-cash-received": "Cash received",
     "payment-quick-exact": "Exact",
+    "payment-quick-round-up": "Round up",
     "payment-change": "Change",
     "payment-insufficient-cash": "The amount entered is less than the total.",
     "payment-cancel-sale": "Cancel sale",
@@ -629,7 +630,8 @@
     "error-insufficient-stock-for": "Insufficient stock for {name} (available: {stock})",
     "error-max-stock": "Maximum available stock: {stock}",
     "error-confirm-failed": "Could not register the sale. Please try again.",
-    "error-stock-deduction-failed": "The sale was registered, but stock could not be deducted. Please check inventory."
+    "error-stock-deduction-failed": "The sale was registered, but stock could not be deducted. Please check inventory.",
+    "warning-total-mismatch": "The total the server recorded doesn't exactly match the cart's. Double-check the receipt."
   },
   "customers": {
     "title": "Customers",

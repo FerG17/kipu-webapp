@@ -18,6 +18,7 @@ import { defineStore }  from 'pinia';
 import { computed, ref } from 'vue';
 import { SupplierApi }              from '../infrastructure/supplier.api.js';
 import { SupplierAssembler }        from '../infrastructure/supplier.assembler.js';
+import { todayLocalDateString }     from '../../shared/domain/model/local-date.js';
 import { PurchaseOrderAssembler }   from '../infrastructure/purchase-order.assembler.js';
 import { PurchaseOrder, PurchaseOrderStatus } from '../domain/model/purchase-order.entity.js';
 
@@ -285,7 +286,7 @@ const useSupplierStore = defineStore('supplier', () => {
 
         const orderResource = {
             supplierId:   parseInt(orderPayload.supplierId),
-            date:         new Date().toISOString().slice(0, 10),
+            date:         todayLocalDateString(),
             expectedDate: orderPayload.expectedDate,
             currency:     'PEN',
             description:  orderPayload.description ?? '',

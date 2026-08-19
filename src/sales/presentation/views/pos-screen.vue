@@ -288,7 +288,10 @@ async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, t
   isSubmitting.value    = true;
   showPaymentModal.value = false;
 
-  const soldLines = [...cartItems.value];
+  // Captured before confirmSale() clears currentSale (and with it cartTotal)
+  // — this is what the cashier saw and agreed to charge, kept around only to
+  // sanity-check it against what the backend actually persisted.
+  const cartTotalBeforeConfirm = cartTotal.value;
 
   const result = await salesStore.confirmSale({
     paymentMethod: paymentMethod,
@@ -300,8 +303,11 @@ async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, t
     // The backend already decremented inventory server-side as part of
     // confirming the sale (SaleRegisteredEvent -> Product's stock decrement) —
     // refresh from that authoritative state rather than recomputing it here.
+    // The product catalog itself (not just stock counts) is refreshed too,
+    // so a long POS session picks up any price/name change made elsewhere
+    // instead of drifting further from reality with every sale.
     try {
-      await productStore.fetchInventory();
+      await Promise.all([productStore.fetchProducts(), productStore.fetchInventory()]);
       productStore.invalidateStockMovements();
       // A sale can push a product below its minimum stock (LOW_STOCK /
       // OUT_OF_STOCK) — refresh so the sidebar badge reflects it right away
@@ -320,8 +326,25 @@ async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, t
       }
     }
 
-    lastSoldLines.value  = soldLines;
-    completedSale.value  = result.sale;
+    // The receipt is built from the backend's own persisted line items, not
+    // the pre-sale cart snapshot — the cart was only ever a client-side
+    // guess of what confirming would produce; result.sale.details is what
+    // was actually written to the database.
+    lastSoldLines.value = result.sale.details.map(detail => {
+      const product = productStore.getProductById(detail.productId);
+      return {
+        productId:   detail.productId,
+        quantity:    detail.quantity,
+        unitPrice:   detail.unitPrice,
+        lineTotal:   detail.lineTotal,
+        productName: product ? product.name : t('pos.unknown-product')
+      };
+    });
+    completedSale.value = result.sale;
+
+    if (Math.abs(result.sale.totalAmount - cartTotalBeforeConfirm) > 0.01) {
+      toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('pos.warning-total-mismatch'), life: 8000 });
+    }
   } else {
     showStockError(t('pos.error-confirm-failed'));
   }
