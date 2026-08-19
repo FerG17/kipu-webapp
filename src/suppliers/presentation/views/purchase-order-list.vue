@@ -6,12 +6,21 @@ import useSupplierStore   from '../../application/supplier.store.js';
 import useIamStore        from '../../../iam/application/iam.store.js';
 import useProductStore    from '../../../product/application/product.store.js';
 import { PurchaseOrderStatus } from '../../domain/model/purchase-order.entity.js';
+import { useTodayLocalDateString } from '../../../shared/presentation/use-today-local-date.js';
 
 const { t }         = useI18n();
 const toast         = useToast();
 const supplierStore = useSupplierStore();
 const iamStore      = useIamStore();
 const productStore  = useProductStore();
+
+/**
+ * Local (not UTC) today's date, used as the minimum selectable expected
+ * date on the new-order modal — reactive so a page left open across local
+ * midnight doesn't keep rejecting today's own date as "in the past".
+ * @type {import('vue').Ref<string>}
+ */
+const todayLocalDate = useTodayLocalDateString();
 
 const savingNewOrder      = ref(false);
 const updatingOrderStatus = ref(false);
@@ -637,7 +646,7 @@ function resolveProductName(detail) {
                   type="date"
                   class="orders-modal-input"
                   :class="{ 'orders-modal-input-error': newOrderErrors.expectedDate }"
-                  :min="new Date().toISOString().slice(0, 10)"
+                  :min="todayLocalDate"
               />
               <p v-if="newOrderErrors.expectedDate" class="orders-modal-error-msg">
                 {{ newOrderErrors.expectedDate }}

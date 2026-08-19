@@ -473,15 +473,18 @@ const useProductStore = defineStore('product', () => {
      * collapses what used to be a client-orchestrated "GET, then PUT-or-POST,
      * then separately log a movement" sequence required by the mock API.
      *
-     * Business rule preserved from the mock: a quantity of exactly 0 (product
-     * registered with no initial stock, only a minimumStock threshold) skips
-     * calling the backend entirely — the real InventoryItem simply doesn't
-     * exist yet until the first real intake, since the backend command
-     * requires a positive quantity.
+     * A quantity of exactly 0 (product registered with no initial stock,
+     * only a minimumStock threshold) still calls the backend — the real
+     * command accepts a 0 quantity and creates the InventoryItem anyway
+     * (with 0 stock, minimumStock persisted, no StockMovement recorded).
+     * This used to skip the call entirely on the mistaken assumption the
+     * backend required a positive quantity, which silently dropped the
+     * minimumStock the user had just entered for any brand-new product with
+     * no initial stock.
      *
      * @param {Object} resource
      * @param {number} resource.productId
-     * @param {number} resource.quantity   - 0 skips the call; must be > 0 otherwise.
+     * @param {number} resource.quantity   - Must be a non-negative integer; 0 is valid.
      * @param {number} [resource.warehouseId]
      * @param {number} [resource.minimumStock]
      * @param {number} [resource.purchasePrice]
@@ -497,8 +500,6 @@ const useProductStore = defineStore('product', () => {
             errors.value.push(error);
             return Promise.reject(error);
         }
-
-        if (resource.quantity === 0) return Promise.resolve(null);
 
         const intakeResource = {
             warehouseId:   resource.warehouseId ? parseInt(resource.warehouseId) : null,
@@ -528,13 +529,17 @@ const useProductStore = defineStore('product', () => {
     /**
      * Updates the minimum stock threshold on a product's existing inventory record.
      *
-     * Business rule: minimumStock must be a non-negative integer. A product with
-     * no inventory record yet (never had a stock intake) has nowhere to persist
-     * this value, so the call resolves without effect — an intake must happen first.
+     * Business rule: minimumStock must be a non-negative integer. Every
+     * product gets an InventoryItem at creation time now (see
+     * registerStockIntake, which no longer skips a 0-quantity intake), so
+     * reaching "no inventory record" here means either inventory hasn't
+     * been fetched yet or this product predates that fix — surfaced as a
+     * real failure instead of a silent no-op, so a threshold the user just
+     * typed doesn't quietly vanish.
      *
      * @param {number|string} productId
      * @param {number} minimumStock
-     * @returns {Promise<import('../domain/model/inventory-item.entity.js').InventoryItem|void>}
+     * @returns {Promise<import('../domain/model/inventory-item.entity.js').InventoryItem>}
      */
     function updateMinimumStock(productId, minimumStock) {
         if (minimumStock == null || Number.isNaN(minimumStock) || minimumStock < 0) {
@@ -544,7 +549,11 @@ const useProductStore = defineStore('product', () => {
         }
 
         const existingItem = inventory.value.find(item => item.productId === parseInt(productId));
-        if (!existingItem) return Promise.resolve();
+        if (!existingItem) {
+            const error = new Error('No inventory record exists yet for this product.');
+            errors.value.push(error);
+            return Promise.reject(error);
+        }
 
         return productApi.updateMinimumStock(existingItem.productId, { minimumStock: parseInt(minimumStock) })
             .then(response => {

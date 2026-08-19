@@ -13,6 +13,7 @@ import { toDateLocale }   from '../../../shared/presentation/date-locale.js';
 import { isCustomCategory, orderedCategoryOptions, filterableCategoryOptions } from '../category-options.js';
 import { canWriteInventory } from '../../../iam/application/permissions.js';
 import { useModalScrollLock } from '../../../shared/presentation/use-modal-scroll-lock.js';
+import { useTodayLocalDateString } from '../../../shared/presentation/use-today-local-date.js';
 
 const { t, locale } = useI18n();
 const toast        = useToast();
@@ -33,8 +34,10 @@ const { addSupplier } = supplierStore;
 // Backend rejects a batch whose expiration date is already in the past
 // (CreateOrUpdateBatchCommand) — caught here too so the date picker itself
 // refuses it instead of letting the request round-trip into a 400 after the
-// product/stock intake have already been committed.
-const todayIsoDate = new Date().toISOString().slice(0, 10);
+// product/stock intake have already been committed. Local (not UTC) and
+// reactive so this page, commonly left open all day, doesn't keep rejecting
+// today's own date once local midnight has actually passed.
+const todayIsoDate = useTodayLocalDateString();
 
 /**
  * Parses a money field's raw string value into a number, tolerating a comma
@@ -595,13 +598,16 @@ function saveProductFromModal() {
   }
   productModalErrors.value = { basePrice: '' };
 
-  // A new product with initial stock needs a real warehouse to place it in
-  // — warehouseId is a non-nullable int on the backend's stock-intake
-  // command, so submitting without one (e.g. the modal was opened before
-  // the warehouse list finished loading) would otherwise send `null` and
-  // fail with an opaque 400 instead of a readable message.
+  // Every new product needs a real warehouse, even with 0 initial stock —
+  // registerStockIntake is now always called on creation (see its own
+  // comment: it persists minimumStock via a 0-quantity intake instead of
+  // skipping the call), and warehouseId is a non-nullable int on the
+  // backend's stock-intake command, so submitting without one (e.g. the
+  // modal was opened before the warehouse list finished loading) would
+  // otherwise send `null` and fail with an opaque 400 instead of a
+  // readable message.
   const initialStock = parseInt(productModalForm.value.currentStock) || 0;
-  if (!editingProduct.value && initialStock > 0 && !productModalForm.value.warehouseId) {
+  if (!editingProduct.value && !productModalForm.value.warehouseId) {
     toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-warehouse-required'), life: 4500 });
     return;
   }

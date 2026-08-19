@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useI18n }  from 'vue-i18n';
+import { useTodayLocalDateString } from '../../../shared/presentation/use-today-local-date.js';
 
 /**
  * SalesStatsBar component for the Sales & POS Management bounded context.
@@ -28,18 +29,27 @@ const props = defineProps({
 const { t } = useI18n();
 
 /**
- * ISO date string for today (YYYY-MM-DD), used to filter today's sales.
- * @type {string}
+ * Local (not UTC) date string for today (YYYY-MM-DD), used to filter
+ * today's sales — reactive so a shift left open past local midnight
+ * starts counting the new day's sales instead of yesterday's.
+ * @type {import('vue').Ref<string>}
  */
-const todayDateString = new Date().toISOString().slice(0, 10);
+const todayDateString = useTodayLocalDateString();
 
 /**
  * Sales registered today that are in PAID status.
+ *
+ * Each sale's own local calendar day is derived from its ISO timestamp
+ * (`sale.date`, a UTC instant) rather than string-matching the UTC date
+ * prefix — a sale made at 19:30 Lima time is already the next UTC day, so
+ * comparing raw ISO prefixes against a local "today" would drop every
+ * evening sale from this list even with todayDateString itself fixed.
  * @type {import('vue').ComputedRef<import('../../domain/model/sale.entity.js').Sale[]>}
  */
 const todayPaidSales = computed(() =>
     props.sales.filter(sale =>
-        sale.status === 'PAID' && sale.date && sale.date.startsWith(todayDateString)
+        sale.status === 'PAID' && sale.date &&
+        new Date(sale.date).toLocaleDateString('en-CA') === todayDateString.value
     )
 );
 

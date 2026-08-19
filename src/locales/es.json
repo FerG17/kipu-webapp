@@ -597,6 +597,7 @@
     "payment-card": "Tarjeta",
     "payment-cash-received": "Efectivo recibido",
     "payment-quick-exact": "Exacto",
+    "payment-quick-round-up": "Redondear",
     "payment-change": "Vuelto",
     "payment-insufficient-cash": "El monto ingresado es menor al total.",
     "payment-cancel-sale": "Cancelar venta",
@@ -629,7 +630,8 @@
     "error-insufficient-stock-for": "Stock insuficiente para {name} (disponible: {stock})",
     "error-max-stock": "Stock máximo disponible: {stock}",
     "error-confirm-failed": "No se pudo registrar la venta. Intenta de nuevo.",
-    "error-stock-deduction-failed": "La venta se registró, pero no se pudo descontar el stock. Revisa el inventario."
+    "error-stock-deduction-failed": "La venta se registró, pero no se pudo descontar el stock. Revisa el inventario.",
+    "warning-total-mismatch": "El total registrado por el servidor no coincide exactamente con el del carrito. Revisa el recibo."
   },
   "customers": {
     "title": "Clientes",

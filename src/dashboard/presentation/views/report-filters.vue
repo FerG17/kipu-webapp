@@ -3,7 +3,7 @@ import { ref, computed, onMounted, toRefs } from 'vue';
 import { useRouter }     from 'vue-router';
 import { useI18n }       from 'vue-i18n';
 import useDashboardStore from '../../application/dashboard.store.js';
-import useProductStore   from '../../../product/application/product.store.js';
+import useProductStore, { parseLocalDate } from '../../../product/application/product.store.js';
 import useIamStore       from '../../../iam/application/iam.store.js';
 import { ReportType }    from '../../domain/model/report.entity.js';
 import { toDateLocale }  from '../../../shared/presentation/date-locale.js';
@@ -189,8 +189,11 @@ function reportTypeLabel(type) {
  */
 function formatRange(report) {
   if (!report.dateFrom && !report.dateTo) return t('reports.no-date-range');
-  const from = report.dateFrom ? new Date(report.dateFrom).toLocaleDateString(toDateLocale(locale.value)) : '…';
-  const to   = report.dateTo   ? new Date(report.dateTo).toLocaleDateString(toDateLocale(locale.value))   : '…';
+  // parseLocalDate, not `new Date(...)`: a bare 'yyyy-mm-dd' string parses
+  // as UTC midnight, which in Peru (UTC-5) displays as the previous day —
+  // same off-by-one the weekly sales chart already avoids this way.
+  const from = report.dateFrom ? parseLocalDate(report.dateFrom).toLocaleDateString(toDateLocale(locale.value)) : '…';
+  const to   = report.dateTo   ? parseLocalDate(report.dateTo).toLocaleDateString(toDateLocale(locale.value))   : '…';
   return `${from} – ${to}`;
 }
 
