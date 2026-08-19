@@ -88,6 +88,26 @@ export class ProductApi extends BaseApi {
     }
 
     /**
+     * Fetches every product for the business, active and inactive alike —
+     * GetProducts only returns active ones by default. Used to build the
+     * "reactivate a deactivated product" screen.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    getAllProductsIncludingInactive() {
+        return this.#productsEndpoint.getAllByParam('includeInactive', true);
+    }
+
+    /**
+     * Reactivates a previously deactivated product (undoes DeleteProduct's
+     * soft delete).
+     * @param {number|string} id
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    activateProduct(id) {
+        return this.http.post(`${productsEndpointPath}/${id}/activate`);
+    }
+
+    /**
      * Fetches all inventory records for the authenticated business. Scoped
      * server-side by the JWT — InventoriesController only ever reads
      * `?productId=`, never a businessId query parameter.
@@ -104,6 +124,19 @@ export class ProductApi extends BaseApi {
      */
     getInventoryByProduct(productId) {
         return this.#inventoriesEndpoint.getAllByParam('productId', productId);
+    }
+
+    /**
+     * Manually adjusts a product's stock in one warehouse — shrinkage,
+     * breakage, theft, or a physical count correction (I25). Delta is
+     * signed: negative removes units, positive adds them. A reason is
+     * always required by the backend.
+     * @param {number|string} productId
+     * @param {{warehouseId: number, delta: number, reason: string}} resource
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    adjustStock(productId, resource) {
+        return this.http.post(`${inventoriesEndpointPath}/${productId}/adjustment`, resource);
     }
 
     /**
@@ -150,6 +183,16 @@ export class ProductApi extends BaseApi {
      */
     createBatch(resource) {
         return this.#batchesEndpoint.create(resource);
+    }
+
+    /**
+     * Discards a batch whose goods left the shelf (thrown out, returned) —
+     * this is what stops an expired batch from alerting forever.
+     * @param {number|string} batchId
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    discardBatch(batchId) {
+        return this.http.post(`${batchesEndpointPath}/${batchId}/discard`);
     }
 
     /**

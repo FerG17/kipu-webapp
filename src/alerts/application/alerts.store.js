@@ -290,6 +290,10 @@ const useAlertsStore = defineStore('alerts', () => {
             .then(response => {
                 rule.active    = response.data.enabled;
                 rule.threshold = response.data.thresholdValue;
+                // Disabling a rule resolves its active alerts server-side
+                // right away (see AlertRuleCommandService) — refresh so they
+                // drop out of "Activas" without needing a page reload.
+                return fetchAlerts();
             })
             .catch(error => {
                 errors.value.push(error);

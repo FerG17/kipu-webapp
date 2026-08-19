@@ -19,9 +19,12 @@ export const MovementType = Object.freeze({
  * Records a single stock change event for a product.
  *
  * Business rules:
- * - quantity is always a positive integer stored as an absolute value.
- * - The direction of the change is determined by the type field.
- * - signedQuantity returns a negative value for SALE movements and positive for all others.
+ * - For INTAKE, SALE and RETURN, quantity is always a positive integer —
+ *   the type field alone determines direction.
+ * - For ADJUSTMENT, quantity is signed: negative removes units, positive
+ *   adds them (a manual correction can legitimately go either way).
+ * - signedQuantity returns a negative value for SALE movements, and
+ *   quantity as-is for every other type (already signed for ADJUSTMENT).
  *
  * @class StockMovement
  */
@@ -61,16 +64,21 @@ export class StockMovement {
     }
 
     /**
-     * Returns true when this movement increases stock (INTAKE or ADJUSTMENT).
+     * Returns true when this movement increased stock — always true for
+     * INTAKE/RETURN, never for SALE, and for ADJUSTMENT only when its own
+     * signed quantity is positive (a correction can go either way).
      * @returns {boolean}
      */
     get isIntake() {
-        return this.type === MovementType.INTAKE || this.type === MovementType.ADJUSTMENT;
+        if (this.type === MovementType.SALE) return false;
+        if (this.type === MovementType.ADJUSTMENT) return this.quantity > 0;
+        return true;
     }
 
     /**
      * Returns the quantity with the correct directional sign for display.
-     * SALE → negative. INTAKE / ADJUSTMENT → positive.
+     * SALE → negative. INTAKE / RETURN → positive. ADJUSTMENT → already
+     * signed as stored.
      * @returns {number}
      */
     get signedQuantity() {
