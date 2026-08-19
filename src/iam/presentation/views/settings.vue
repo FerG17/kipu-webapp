@@ -26,7 +26,7 @@ const themeOptions = [
   { key: 'system', labelKey: 'settings.theme-system', icon: 'pi pi-desktop' }
 ];
 
-const { users, usersLoaded, rolesLoaded, currentBusiness, businessLoaded } = toRefs(iamStore);
+const { users, usersLoaded, usersLoadFailed, rolesLoaded, currentBusiness, businessLoaded } = toRefs(iamStore);
 const { fetchUsers, fetchRoles, fetchBusiness, getRolePosition, deleteUser, deactivateUser, reactivateUser } = iamStore;
 
 const activeTab = ref('profile');
@@ -143,6 +143,14 @@ function confirmDeleteUser(userAccount) {
     header:  t('settings.delete-user-header'),
     icon:    'pi pi-exclamation-triangle',
     accept:  () => deleteUser(userAccount)
+        .then(() => toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('settings.toast-delete-user-success', { name: userAccount.fullName }), life: 3500 }))
+        .catch(error => {
+          const title = error.response?.status === 409 ? error.response?.data?.title : null;
+          const detail = title === 'CannotRemoveLastAdmin' ? t('settings.toast-delete-last-admin-error')
+              : title === 'CannotRemoveOwnAccess' ? t('settings.toast-delete-own-account-error')
+              : t('settings.toast-user-action-error');
+          toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
+        })
   });
 }
 
@@ -408,8 +416,19 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
           @invited="handleUserInvited"
       />
 
+      <!-- Load failed -->
+      <div v-if="usersLoadFailed" class="flex flex-column justify-content-center align-items-center gap-3 py-8">
+        <i class="pi pi-exclamation-triangle" style="font-size: 1.3rem; color: var(--status-critical-fg);"/>
+        <span style="color: var(--text-muted); font-size: 0.88rem;">{{ t('settings.error-load-users') }}</span>
+        <button
+            class="border-round-lg border-none cursor-pointer px-3 py-2"
+            style="background: var(--surface-alt); color: var(--text); font-size: 0.82rem; font-weight: 600;"
+            @click="fetchUsers(iamStore.currentUser?.businessId)"
+        >{{ t('common.retry') }}</button>
+      </div>
+
       <!-- Loading -->
-      <div v-if="!usersLoaded" class="flex justify-content-center align-items-center gap-3 py-8">
+      <div v-else-if="!usersLoaded" class="flex justify-content-center align-items-center gap-3 py-8">
         <i class="pi pi-spin pi-spinner" style="font-size: 1.3rem; color: var(--brand);"/>
         <span style="color: var(--text-muted); font-size: 0.88rem;">Cargando usuarios…</span>
       </div>

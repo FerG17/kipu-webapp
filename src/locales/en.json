@@ -32,7 +32,8 @@
   },
   "common": {
     "toast-success-title": "Done",
-    "toast-error-title": "Error"
+    "toast-error-title": "Error",
+    "retry": "Retry"
   },
   "auth-hero": {
     "eyebrow": "Your store, in order",
@@ -49,7 +50,6 @@
     "email-placeholder": "user\\@business.com",
     "password": "Password",
     "password-placeholder": "••••••••",
-    "remember-me": "Remember session",
     "forgot-password": "Forgot your password?",
     "submit": "Sign in",
     "loading": "Verifying...",
@@ -173,6 +173,10 @@
     "toast-reactivate-success": "{name}'s access was restored.",
     "toast-last-admin-error": "You can't suspend the business's last active administrator.",
     "toast-user-action-error": "Couldn't complete the action. Please try again.",
+    "toast-delete-user-success": "{name} was deleted.",
+    "toast-delete-last-admin-error": "You can't delete the business's last active administrator.",
+    "toast-delete-own-account-error": "You can't delete your own account.",
+    "error-load-users": "Couldn't load the team. Check your connection and try again.",
     "action-deactivate": "Suspend access",
     "action-reactivate": "Restore access",
     "invite-modal-title": "Invite user",

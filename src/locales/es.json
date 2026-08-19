@@ -32,7 +32,8 @@
   },
   "common": {
     "toast-success-title": "Listo",
-    "toast-error-title": "Error"
+    "toast-error-title": "Error",
+    "retry": "Reintentar"
   },
   "auth-hero": {
     "eyebrow": "Tu bodega, en orden",
@@ -49,7 +50,6 @@
     "email-placeholder": "usuario\\@negocio.com",
     "password": "Contraseña",
     "password-placeholder": "••••••••",
-    "remember-me": "Recordar sesión",
     "forgot-password": "¿Olvidaste tu contraseña?",
     "submit": "Iniciar sesión",
     "loading": "Verificando...",
@@ -173,6 +173,10 @@
     "toast-reactivate-success": "Se reactivó el acceso de {name}.",
     "toast-last-admin-error": "No puedes suspender al último administrador activo del negocio.",
     "toast-user-action-error": "No se pudo completar la acción. Inténtalo de nuevo.",
+    "toast-delete-user-success": "Se eliminó a {name}.",
+    "toast-delete-last-admin-error": "No puedes eliminar al último administrador activo del negocio.",
+    "toast-delete-own-account-error": "No puedes eliminar tu propia cuenta.",
+    "error-load-users": "No se pudo cargar el equipo. Revisa tu conexión e intenta de nuevo.",
     "action-deactivate": "Suspender acceso",
     "action-reactivate": "Reactivar acceso",
     "invite-modal-title": "Invitar usuario",
