@@ -334,8 +334,9 @@ function confirmDeactivation() {
         showConfirmDeact.value = false;
         deactTarget.value      = null;
       })
-      .catch(() => {
-        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.toast-deactivate-error'), life: 4500 });
+      .catch(error => {
+        const detail = error.response?.data?.detail ?? t('suppliers.toast-deactivate-error');
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
       })
       .finally(() => {
         deactivatingSupplier.value = false;

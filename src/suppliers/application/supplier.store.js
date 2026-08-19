@@ -3,7 +3,8 @@
  *
  * Business rules enforced here:
  * - fetchSuppliers and fetchPurchaseOrders are scoped to the authenticated business.
- * - A supplier cannot be deactivated while it has PENDING or DELAYED purchase orders.
+ * - A supplier cannot be deactivated while it has PENDING or DELAYED purchase
+ *   orders — enforced by the backend (409 Conflict).
  * - A purchase order requires at least one detail line before being submitted.
  * - A purchase order can only transition to RECEIVED or CANCELLED when its current
  *   status is PENDING or DELAYED; attempts on final states are silently rejected.
@@ -203,25 +204,16 @@ const useSupplierStore = defineStore('supplier', () => {
      * but silently left the supplier active.
      *
      * Business rule: deactivation is blocked when the supplier has any
-     * PENDING or DELAYED purchase orders.
+     * PENDING or DELAYED purchase orders — enforced backend-side (409,
+     * localized message) since a client-only guard here duplicated that
+     * check with a hardcoded English message and could run against a
+     * `purchaseOrders` list that hadn't loaded yet.
      *
      * @param {number|string} supplierId
      * @returns {Promise<import('../domain/model/supplier.entity.js').Supplier>}
      */
     function deactivateSupplier(supplierId) {
         const numericId      = parseInt(supplierId);
-        const activeOrders   = purchaseOrders.value.filter(order =>
-            order.supplierId === numericId && order.isActionable
-        );
-
-        if (activeOrders.length > 0) {
-            const error = new Error(
-                `Cannot deactivate supplier #${numericId}: it has ${activeOrders.length} active order(s).`
-            );
-            errors.value.push(error);
-            return Promise.reject(error);
-        }
-
         const existingSupplier = suppliers.value.find(supplier => supplier.id === numericId);
         if (!existingSupplier) return Promise.reject(new Error(`Supplier #${numericId} not found.`));
 

@@ -210,6 +210,9 @@ function validateNewOrderForm() {
   if (!newOrderForm.value.expectedDate) {
     formErrors.expectedDate = t('suppliers.order-error-date');
     isValid                 = false;
+  } else if (newOrderForm.value.expectedDate < todayLocalDate) {
+    formErrors.expectedDate = t('suppliers.order-error-date-past');
+    isValid                 = false;
   }
 
   const hasInvalidLine = newOrderForm.value.lines.some(
@@ -252,8 +255,9 @@ function submitNewOrder() {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.order-toast-create-success'), life: 3500 });
         showNewOrderModal.value = false;
       })
-      .catch(() => {
-        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.order-toast-create-error'), life: 4500 });
+      .catch(error => {
+        const detail = error.response?.data?.detail ?? t('suppliers.order-toast-create-error');
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
       })
       .finally(() => {
         savingNewOrder.value = false;

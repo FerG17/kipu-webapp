@@ -114,15 +114,27 @@ function getProductName(productId) {
 }
 
 /**
- * Returns the badge style config for a given SaleStatus.
- * @param {string} status
- * @returns {{ label: string, color: string, background: string }}
+ * Returns the badge style config for a sale.
+ *
+ * Sale.status is PAID as soon as checkout succeeds (stock is decremented
+ * atomically with creation — see the backend's SaleStatus doc comment), which
+ * for a CREDIT sale means "the transaction went through", not "fully paid
+ * off". Cross-referencing the pending-plans list — the only thing a CREDIT
+ * sale still owes on — avoids showing "Completada" while it's still on a
+ * payment plan.
+ * @param {import('../../domain/model/sale.entity.js').Sale} sale
+ * @returns {{ labelKey: string, color: string, background: string }}
  */
-function getStatusConfig(status) {
-  if (status === SaleStatus.PAID) {
+function getStatusConfig(sale) {
+  if (sale.status === SaleStatus.PAID) {
+    const hasPendingInstallments = sale.paymentMethod === 'CREDIT' &&
+        salesStore.paymentPlans.some(plan => plan.saleId === sale.id);
+    if (hasPendingInstallments) {
+      return { labelKey: 'sales.status-pending-installments', color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)' };
+    }
     return { labelKey: 'sales.status-paid',      color: 'var(--status-ok-fg)', background: 'var(--status-ok-bg)' };
   }
-  if (status === SaleStatus.CANCELLED) {
+  if (sale.status === SaleStatus.CANCELLED) {
     return { labelKey: 'sales.status-cancelled', color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)' };
   }
   return { labelKey: 'sales.status-open',          color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)' };
@@ -234,10 +246,11 @@ async function confirmCancelSale() {
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
 onMounted(() => {
-  if (!salesStore.salesLoaded)      salesStore.fetchSales();
-  if (!salesStore.customersLoaded)  salesStore.fetchCustomers();
-  if (!productStore.productsLoaded) productStore.fetchProducts();
-  if (!productStore.inventoryLoaded) productStore.fetchInventory();
+  if (!salesStore.salesLoaded)        salesStore.fetchSales();
+  if (!salesStore.customersLoaded)    salesStore.fetchCustomers();
+  if (!salesStore.paymentPlansLoaded) salesStore.fetchPendingPaymentPlans();
+  if (!productStore.productsLoaded)   productStore.fetchProducts();
+  if (!productStore.inventoryLoaded)  productStore.fetchInventory();
 });
 </script>
 
@@ -353,11 +366,11 @@ onMounted(() => {
                                         class="border-round-md px-2 py-1"
                                         style="font-size: 0.7rem; font-weight: 600;"
                                         :style="{
-                                            backgroundColor: getStatusConfig(sale.status).background,
-                                            color:           getStatusConfig(sale.status).color
+                                            backgroundColor: getStatusConfig(sale).background,
+                                            color:           getStatusConfig(sale).color
                                         }"
                                     >
-                                        {{ t(getStatusConfig(sale.status).labelKey) }}
+                                        {{ t(getStatusConfig(sale).labelKey) }}
                                     </span>
               </td>
               <td class="px-4 py-3">
@@ -441,11 +454,11 @@ onMounted(() => {
                 class="border-round-md px-2 py-1"
                 style="font-size: 0.7rem; font-weight: 600;"
                 :style="{
-                                backgroundColor: getStatusConfig(sale.status).background,
-                                color:           getStatusConfig(sale.status).color
+                                backgroundColor: getStatusConfig(sale).background,
+                                color:           getStatusConfig(sale).color
                             }"
             >
-                            {{ t(getStatusConfig(sale.status).labelKey) }}
+                            {{ t(getStatusConfig(sale).labelKey) }}
                         </span>
           </div>
 
