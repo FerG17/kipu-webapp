@@ -27,6 +27,7 @@ const {
 } = toRefs(alertsStore);
 
 const { fetchAlerts, fetchAlertRules, acknowledgeAlert, resolveAlert, toggleAlertRule, updateAlertRuleThreshold } = alertsStore;
+const { discardBatch } = productStore;
 
 /**
  * Whether the current role may acknowledge/resolve alerts — reads stay open
@@ -154,6 +155,7 @@ const filteredAlerts = computed(() => {
 // ─── Modal actions ─────────────────────────────────────────────────────────────
 const acknowledging = ref(false);
 const resolving     = ref(false);
+const discarding    = ref(false);
 
 function openDetail(alert) { selectedAlert.value = alert; }
 
@@ -186,6 +188,29 @@ function handleResolve() {
       })
       .finally(() => {
         resolving.value = false;
+      });
+}
+
+/**
+ * Discards the batch behind an EXPIRATION/EXPIRED alert — the goods left
+ * the shelf (thrown out, returned), so it should stop alerting. Closes the
+ * detail modal on success since the alert itself gets resolved server-side
+ * as part of discarding (BatchDiscardedEventHandler).
+ */
+function handleDiscardBatch() {
+  if (!selectedAlert.value?.batchId) return;
+  discarding.value = true;
+  discardBatch(selectedAlert.value.batchId)
+      .then(() => {
+        selectedAlert.value = null;
+        fetchAlerts();
+        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('alerts.toast-discard-success'), life: 3500 });
+      })
+      .catch(() => {
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('alerts.toast-discard-error'), life: 4500 });
+      })
+      .finally(() => {
+        discarding.value = false;
       });
 }
 
@@ -577,6 +602,14 @@ function formatDateTime(isoDate) {
             <button class="alerts-modal-btn-resolve" :disabled="resolving" @click="handleResolve">
               <i :class="resolving ? 'pi pi-spin pi-spinner' : 'pi pi-check'" /> {{ t('alerts.btn-resolve') }}
             </button>
+            <button
+                v-if="(selectedAlert.type === 'EXPIRATION' || selectedAlert.type === 'EXPIRED') && selectedAlert.batchId"
+                class="alerts-modal-btn-discard"
+                :disabled="discarding"
+                @click="handleDiscardBatch"
+            >
+              <i :class="discarding ? 'pi pi-spin pi-spinner' : 'pi pi-trash'" /> {{ t('alerts.btn-discard-batch') }}
+            </button>
           </div>
           <button class="alerts-modal-btn-close" @click="selectedAlert = null">{{ t('alerts.modal-close') }}</button>
         </div>
@@ -708,6 +741,8 @@ function formatDateTime(isoDate) {
 .alerts-modal-btn-acknowledge:hover { background-color: var(--status-warning-bg); }
 .alerts-modal-btn-resolve { width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.65rem; background-color: var(--status-ok-bg); color: var(--status-ok-fg); border: none; border-radius: 0.75rem; font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: background-color 0.15s; }
 .alerts-modal-btn-resolve:hover { background-color: var(--status-ok-bg); }
+.alerts-modal-btn-discard { width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.65rem; background-color: var(--status-critical-bg); color: var(--status-critical-fg); border: none; border-radius: 0.75rem; font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: background-color 0.15s; }
+.alerts-modal-btn-discard:hover { background-color: var(--status-critical-bg); }
 .alerts-modal-btn-close { width: 100%; padding: 0.65rem; background-color: var(--brand); color: var(--surface); border: none; border-radius: 0.75rem; font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: background-color 0.15s; }
 .alerts-modal-btn-close:hover { background-color: var(--brand); }
 

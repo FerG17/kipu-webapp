@@ -44,6 +44,19 @@ const useProductStore = defineStore('product', () => {
     /** @type {import('vue').Ref<import('../domain/model/product.entity.js').Product[]>} */
     const products = ref([]);
 
+    /**
+     * Deactivated products only — populated on demand by fetchInactiveProducts,
+     * used by the "reactivate a product" screen. GetProducts excludes these
+     * by default, so they live in a separate ref rather than mixed into
+     * `products` (which every stock/status computation above assumes is
+     * active-only).
+     * @type {import('vue').Ref<import('../domain/model/product.entity.js').Product[]>}
+     */
+    const inactiveProducts = ref([]);
+
+    /** @type {import('vue').Ref<boolean>} */
+    const inactiveProductsLoaded = ref(false);
+
     /** @type {import('vue').Ref<import('../domain/model/inventory-item.entity.js').InventoryItem[]>} */
     const inventory = ref([]);
 
@@ -206,6 +219,48 @@ const useProductStore = defineStore('product', () => {
     }
 
     /**
+     * Fetches every deactivated product for the authenticated business, for
+     * the "reactivate a product" screen — GetProducts (fetchProducts)
+     * excludes these by default.
+     */
+    function fetchInactiveProducts() {
+        return productApi.getAllProductsIncludingInactive()
+            .then(response => {
+                inactiveProducts.value = ProductAssembler.toEntitiesFromResponse(response)
+                    .filter(product => !product.isActive);
+                inactiveProductsLoaded.value = true;
+            })
+            .catch(error => {
+                errors.value.push(error);
+                inactiveProductsLoaded.value = true;
+            });
+    }
+
+    /**
+     * Reactivates a deactivated product, moving it back from
+     * `inactiveProducts` into `products`.
+     * @param {number|string} id
+     * @returns {Promise<void>}
+     */
+    function activateProduct(id) {
+        const numericId = parseInt(id);
+        return productApi.activateProduct(numericId)
+            .then(() => {
+                const index = inactiveProducts.value.findIndex(product => product.id === numericId);
+                if (index !== -1) inactiveProducts.value.splice(index, 1);
+                // Brings the product back into the main list the same way a
+                // freshly-created one would appear — a targeted local patch
+                // would need to re-derive the full Product from the inactive
+                // copy, which is more fragile than just refetching.
+                return fetchProducts();
+            })
+            .catch(error => {
+                errors.value.push(error);
+                throw error;
+            });
+    }
+
+    /**
      * Fetches all inventory records for the authenticated business — scoped
      * server-side by the JWT, no businessId parameter needed or accepted.
      */
@@ -289,6 +344,27 @@ const useProductStore = defineStore('product', () => {
             .catch(error => {
                 errors.value.push(error);
                 batchesLoaded.value = true;
+            });
+    }
+
+    /**
+     * Discards a batch (goods left the shelf) — this is what stops an
+     * expired/expiring batch from alerting forever. Patches the local copy
+     * to INACTIVE from the response instead of a full refetch, so the
+     * "vence en N días" / "vencido" state clears immediately everywhere
+     * batches.value is read from (product list, alert modal).
+     * @param {number|string} batchId
+     * @returns {Promise<void>}
+     */
+    function discardBatch(batchId) {
+        return productApi.discardBatch(batchId)
+            .then(response => {
+                const index = batches.value.findIndex(batch => batch.id === response.data.id);
+                if (index !== -1) batches.value[index] = response.data;
+            })
+            .catch(error => {
+                errors.value.push(error);
+                throw error;
             });
     }
 
@@ -616,6 +692,8 @@ const useProductStore = defineStore('product', () => {
 
     return {
         products,
+        inactiveProducts,
+        inactiveProductsLoaded,
         inventory,
         stockMovements,
         batches,
@@ -635,8 +713,11 @@ const useProductStore = defineStore('product', () => {
         isProductExpiringSoon,
         isProductExpired,
         fetchProducts,
+        fetchInactiveProducts,
+        activateProduct,
         fetchInventory,
         fetchBatches,
+        discardBatch,
         fetchStockMovements,
         fetchAllStockMovements,
         invalidateStockMovements,

@@ -23,10 +23,11 @@ const iamStore      = useIamStore();
 const alertsStore   = useAlertsStore();
 const supplierStore = useSupplierStore();
 
-const { products, productsLoaded, inventory, stockMovements, stockMovementsLoaded, stockMovementsError, errors } = toRefs(productStore);
+const { products, productsLoaded, inactiveProducts, inactiveProductsLoaded, inventory, stockMovements, stockMovementsLoaded, stockMovementsError, errors } = toRefs(productStore);
 const { fetchProducts, fetchInventory, fetchBatches, fetchAllStockMovements,
   addProduct, updateProduct, deleteProduct, registerStockIntake, updateMinimumStock,
-  createBatchForProduct, isProductExpiringSoon, isProductExpired } = productStore;
+  createBatchForProduct, isProductExpiringSoon, isProductExpired,
+  fetchInactiveProducts, activateProduct } = productStore;
 
 const { suppliers: allSuppliers, suppliersLoaded: suppliersLoadedRef } = toRefs(supplierStore);
 const { addSupplier } = supplierStore;
@@ -988,12 +989,42 @@ const showWarehouseModal = ref(false);
 const savingWarehouse    = ref(false);
 const warehouseForm      = ref({ name: '', code: '', address: '', capacity: 'MEDIUM' });
 
+// ── Reactivate product modal ────────────────────────────────────────────────
+
+const showInactiveModal  = ref(false);
+const activatingProductId = ref(null);
+
+/**
+ * Opens the "productos inactivos" modal, lazily loading the list the first
+ * time it's needed — GetProducts (fetchProducts) excludes deactivated
+ * products by default, so they're not already in memory.
+ */
+function openInactiveModal() {
+  showInactiveModal.value = true;
+  if (!inactiveProductsLoaded.value) fetchInactiveProducts();
+}
+
+function handleActivateProduct(product) {
+  activatingProductId.value = product.id;
+  activateProduct(product.id)
+      .then(() => {
+        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-activate-success', { name: product.name }), life: 3500 });
+      })
+      .catch(() => {
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-activate-error'), life: 4500 });
+      })
+      .finally(() => {
+        activatingProductId.value = null;
+      });
+}
+
 // Background content behind these modals was still scrollable on mobile,
 // which read as the modal itself being broken once the virtual keyboard
 // covered fields further down.
 useModalScrollLock(showProductModal);
 useModalScrollLock(showIntakeModal);
 useModalScrollLock(showWarehouseModal);
+useModalScrollLock(showInactiveModal);
 
 function openWarehouseModal() {
   warehouseForm.value = { name: '', code: '', address: '', capacity: 'MEDIUM' };
@@ -1062,6 +1093,16 @@ function saveWarehouse() {
           </button>
         </div>
       </div>
+
+      <button
+          v-if="canWrite"
+          class="flex align-items-center gap-2 mt-3 border-none bg-transparent cursor-pointer p-0 btn-inactive-link"
+          :title="t('inventory.btn-inactive-products-hint')"
+          @click="openInactiveModal"
+      >
+        <i class="pi pi-eye-slash" style="font-size: 0.8rem;"/>
+        {{ t('inventory.btn-inactive-products') }}
+      </button>
 
       <!-- Stat cards: 2-col mobile → 4-col desktop -->
       <div class="stat-grid mt-4">
@@ -1903,6 +1944,7 @@ function saveWarehouse() {
           <div>
             <label class="modal-label">{{ t('inventory.intake-field-product') }}</label>
             <select v-model="intakeForm.productId" class="modal-input modal-select">
+              <option value="" disabled>{{ t('inventory.intake-field-product-placeholder') }}</option>
               <option v-for="product in products" :key="product.id" :value="String(product.id)">{{ product.name }}</option>
             </select>
           </div>
@@ -2031,6 +2073,54 @@ function saveWarehouse() {
       </div>
     </div>
 
+    <!-- ═══════════════════════════════════════════════════════════════
+         MODAL: INACTIVE PRODUCTS (reactivate)
+    ═══════════════════════════════════════════════════════════════ -->
+    <div
+        v-if="showInactiveModal"
+        class="fixed inset-0 z-50 flex align-items-end sm:align-items-center justify-content-center modal-overlay"
+        @click.self="showInactiveModal = false"
+    >
+      <div class="w-full border-round-t-2xl sm:border-round-2xl overflow-y-auto modal-container-sm">
+        <div class="flex align-items-center justify-content-between px-5 py-4 modal-header">
+          <div class="flex align-items-center gap-3">
+            <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: linear-gradient(135deg, var(--brand-soft), var(--brand-soft));">
+              <i class="pi pi-eye-slash" style="color: var(--brand); font-size: 0.95rem;"/>
+            </div>
+            <p class="m-0 modal-title">{{ t('inventory.inactive-modal-title') }}</p>
+          </div>
+          <button class="p-2 border-round-lg border-none cursor-pointer btn-modal-close" @click="showInactiveModal = false">
+            <i class="pi pi-times" style="font-size: 1rem;"/>
+          </button>
+        </div>
+
+        <div class="px-5 py-5 flex flex-column gap-3">
+          <p v-if="!inactiveProductsLoaded" class="m-0" style="font-size: 0.85rem; color: var(--text-muted);">
+            <i class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>{{ t('inventory.inactive-loading') }}
+          </p>
+          <p v-else-if="inactiveProducts.length === 0" class="m-0" style="font-size: 0.85rem; color: var(--text-muted);">
+            {{ t('inventory.inactive-empty') }}
+          </p>
+          <div
+              v-for="product in inactiveProducts"
+              :key="product.id"
+              class="flex align-items-center justify-content-between gap-3 px-3 py-2 border-round-lg"
+              style="border: 1px solid var(--border); background: var(--surface-alt);"
+          >
+            <span style="font-size: 0.85rem; font-weight: 600; color: var(--text);">{{ product.name }}</span>
+            <button
+                class="flex align-items-center gap-2 px-3 py-1 border-round-lg border-none cursor-pointer btn-primary"
+                :disabled="activatingProductId === product.id"
+                @click="handleActivateProduct(product)"
+            >
+              <i :class="activatingProductId === product.id ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'" style="font-size: 0.8rem;"/>
+              {{ t('inventory.inactive-btn-reactivate') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -2068,6 +2158,16 @@ function saveWarehouse() {
 .btn-intake-outline:hover {
   background-color: var(--brand-soft);
   border-color: var(--brand);
+}
+
+.btn-inactive-link {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+.btn-inactive-link:hover {
+  color: var(--brand);
 }
 
 .btn-primary {

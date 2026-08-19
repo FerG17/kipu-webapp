@@ -5,6 +5,7 @@ import { useToast }       from 'primevue/usetoast';
 import useSupplierStore   from '../../application/supplier.store.js';
 import useIamStore        from '../../../iam/application/iam.store.js';
 import useProductStore    from '../../../product/application/product.store.js';
+import useAlertsStore     from '../../../alerts/application/alerts.store.js';
 import { PurchaseOrderStatus } from '../../domain/model/purchase-order.entity.js';
 import { useTodayLocalDateString } from '../../../shared/presentation/use-today-local-date.js';
 
@@ -13,6 +14,7 @@ const toast         = useToast();
 const supplierStore = useSupplierStore();
 const iamStore      = useIamStore();
 const productStore  = useProductStore();
+const alertsStore   = useAlertsStore();
 
 /**
  * Local (not UTC) today's date, used as the minimum selectable expected
@@ -285,6 +287,14 @@ function receiveOrder() {
       .then(() => {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.order-toast-receive-success'), life: 3500 });
         showOrderDetailModal.value = false;
+        // The backend just replenished stock for every line of this order
+        // (see MarkReceived), which may have resolved LOW_STOCK/OUT_OF_STOCK
+        // alerts and created/updated batches — unlike saveIntake, this
+        // touches several products at once, so there's no single response to
+        // patch state from; a real refresh is needed for all three.
+        productStore.fetchInventory();
+        productStore.fetchBatches();
+        alertsStore.fetchAlerts();
       })
       .catch(() => {
         toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.order-toast-status-error'), life: 4500 });
