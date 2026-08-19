@@ -644,6 +644,7 @@
     "payment-cancel-confirm-back": "Go back",
     "payment-cancel-confirm-accept": "Yes, cancel",
     "payment-confirm": "Confirm payment",
+    "payment-confirming": "Confirming...",
     "success-title": "Sale registered!",
     "success-credit-plan-created": "Sale registered in {installments} installments.",
     "success-credit-plan-failed": "The sale was registered, but the installment plan could not be created. Create it from the Installments tab.",

@@ -286,7 +286,6 @@ async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, t
   if (isSubmitting.value) return;
 
   isSubmitting.value    = true;
-  showPaymentModal.value = false;
 
   // Captured before confirmSale() clears currentSale (and with it cartTotal)
   // — this is what the cashier saw and agreed to charge, kept around only to
@@ -298,6 +297,8 @@ async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, t
     customerId:    customerId ?? null,
     description:   ''
   });
+
+  showPaymentModal.value = false;
 
   if (result.success) {
     // The backend already decremented inventory server-side as part of
@@ -346,7 +347,17 @@ async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, t
       toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('pos.warning-total-mismatch'), life: 8000 });
     }
   } else {
-    showStockError(t('pos.error-confirm-failed'));
+    showStockError(result.errorDetail ?? t('pos.error-confirm-failed'));
+
+    // A rejected sale (most commonly a 409: stock changed since the cart was
+    // built, or the product got deactivated mid-session) means the POS's
+    // idea of available stock is already stale — refresh it here too, not
+    // only on the success path, so the cashier sees real numbers before
+    // trying again.
+    if (result.status === 409) {
+      productStore.fetchProducts();
+      productStore.fetchInventory();
+    }
   }
 
   isSubmitting.value = false;
@@ -628,6 +639,7 @@ onMounted(() => {
         v-if="showPaymentModal"
         :total="cartTotal"
         :customers="salesStore.customers"
+        :saving="isSubmitting"
         @confirm="handlePaymentConfirm"
         @cancel="showPaymentModal = false"
     />

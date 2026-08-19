@@ -35,6 +35,11 @@ const props = defineProps({
   customers: {
     type:    Array,
     default: () => []
+  },
+  /** Whether the confirm call is in flight (disables the form, shows a spinner). */
+  saving: {
+    type:    Boolean,
+    default: false
   }
 });
 
@@ -203,7 +208,7 @@ function formatCurrency(amount) {
  * Handles the confirm action by emitting the selected method and cash given.
  */
 function handleConfirm() {
-  if (!canConfirm.value) return;
+  if (!canConfirm.value || props.saving) return;
   emit('confirm', {
     paymentMethod:     selectedMethod.value,
     cashGiven:         selectedMethod.value === PaymentMethod.CASH ? cashGiven.value : props.total,
@@ -219,7 +224,7 @@ function handleConfirm() {
   <div
       class="fixed inset-0 z-50 flex align-items-end sm:align-items-center justify-content-center"
       style="background-color: rgba(0,0,0,0.5);"
-      @click.self="emit('cancel')"
+      @click.self="!saving && emit('cancel')"
   >
     <!-- Modal panel -->
     <div
@@ -382,6 +387,7 @@ function handleConfirm() {
         <button
             class="flex-1 border-round-xl py-3"
             style="border: 1px solid var(--border); color: var(--text-muted); font-size: 0.88rem; font-weight: 600; background: var(--surface); cursor: pointer;"
+            :disabled="saving"
             @click="showCancelConfirm = true"
         >
           {{ t('pos.payment-cancel-sale') }}
@@ -389,17 +395,18 @@ function handleConfirm() {
         <button
             class="flex-1 border-round-xl py-3"
             :style="{
-                        backgroundColor: canConfirm ? 'var(--brand)' : 'var(--text-faint)',
+                        backgroundColor: (canConfirm && !saving) ? 'var(--brand)' : 'var(--text-faint)',
                         color: 'var(--brand-ink)',
                         fontSize: '0.88rem',
                         fontWeight: 600,
                         border: 'none',
-                        cursor: canConfirm ? 'pointer' : 'not-allowed'
+                        cursor: (canConfirm && !saving) ? 'pointer' : 'not-allowed'
                     }"
-            :disabled="!canConfirm"
+            :disabled="!canConfirm || saving"
             @click="handleConfirm"
         >
-          {{ t('pos.payment-confirm') }}
+          <i v-if="saving" class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>
+          {{ saving ? t('pos.payment-confirming') : t('pos.payment-confirm') }}
         </button>
       </div>
 
