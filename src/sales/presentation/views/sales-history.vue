@@ -118,17 +118,19 @@ function getProductName(productId) {
  *
  * Sale.status is PAID as soon as checkout succeeds (stock is decremented
  * atomically with creation — see the backend's SaleStatus doc comment), which
- * for a CREDIT sale means "the transaction went through", not "fully paid
- * off". Cross-referencing the pending-plans list — the only thing a CREDIT
- * sale still owes on — avoids showing "Completada" while it's still on a
- * payment plan.
+ * for a credit sale means "the transaction went through", not "fully paid
+ * off". There's no PaymentMethod value for "credit" (PaymentMethod is only
+ * CASH/CARD/YAPE/PLIN — the method itself, not whether it's on installments)
+ * — a credit sale is identified purely by having a PaymentPlan attached, via
+ * a separate command after the sale (see payment-modal.vue's sellOnCredit).
+ * Cross-referencing the pending-plans list avoids showing "Completada"
+ * while a sale is still on an open plan, regardless of its payment method.
  * @param {import('../../domain/model/sale.entity.js').Sale} sale
  * @returns {{ labelKey: string, color: string, background: string }}
  */
 function getStatusConfig(sale) {
   if (sale.status === SaleStatus.PAID) {
-    const hasPendingInstallments = sale.paymentMethod === 'CREDIT' &&
-        salesStore.paymentPlans.some(plan => plan.saleId === sale.id);
+    const hasPendingInstallments = salesStore.paymentPlans.some(plan => plan.saleId === sale.id);
     if (hasPendingInstallments) {
       return { labelKey: 'sales.status-pending-installments', color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)' };
     }

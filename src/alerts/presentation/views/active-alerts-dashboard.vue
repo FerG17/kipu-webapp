@@ -20,7 +20,6 @@ const productStore = useProductStore();
 const {
   alerts,
   alertsLoaded,
-  errors,
   alertRules,
   activeAlertsCount,
   criticalActiveCount,
@@ -525,11 +524,6 @@ function formatDateTime(isoDate) {
         </div>
       </div>
 
-      <!-- ── Errors ─────────────────────────────────────────────────── -->
-      <div v-if="errors.length > 0" class="alerts-errors">
-        {{ t('errors.occurred') }}: {{ errors.map(error => error.message).join(', ') }}
-      </div>
-
     </div>
 
     <!-- ═════════════════════════════ Modal: Detail ══════════════════════ -->
@@ -733,7 +727,6 @@ function formatDateTime(isoDate) {
 .alerts-rule-threshold-edit-btn { margin-left: auto; padding: 0.25rem 0.6rem; background-color: var(--surface-alt); color: var(--text-muted); border: none; border-radius: 0.4rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: background-color 0.15s; }
 .alerts-rule-threshold-edit-btn:hover { background-color: var(--border); }
 
-.alerts-errors { margin-top: 0.75rem; padding: 0.75rem; color: var(--status-critical-fg); font-size: 0.8rem; background: var(--status-critical-bg); border: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent); border-radius: 0.75rem; }
 
 .alerts-modal-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; background-color: rgba(0,0,0,0.5); }
 .alerts-modal { width: 100%; background-color: var(--surface); border-radius: 1.25rem 1.25rem 0 0; border: 1px solid var(--border); box-shadow: 0 25px 50px rgba(0,0,0,0.15); max-height: 90dvh; overflow-y: auto; }

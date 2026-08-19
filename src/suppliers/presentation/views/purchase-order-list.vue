@@ -34,8 +34,7 @@ const {
   purchaseOrdersLoaded,
   suppliers,
   pendingOrderCount,
-  pendingOrderTotal,
-  errors
+  pendingOrderTotal
 } = toRefs(supplierStore);
 
 const {
@@ -210,7 +209,7 @@ function validateNewOrderForm() {
   if (!newOrderForm.value.expectedDate) {
     formErrors.expectedDate = t('suppliers.order-error-date');
     isValid                 = false;
-  } else if (newOrderForm.value.expectedDate < todayLocalDate) {
+  } else if (newOrderForm.value.expectedDate < todayLocalDate.value) {
     formErrors.expectedDate = t('suppliers.order-error-date-past');
     isValid                 = false;
   }
@@ -619,11 +618,6 @@ function resolveProductName(detail) {
         <i class="pi pi-clipboard orders-empty-icon" />
         <p class="orders-empty-text">{{ t('suppliers.order-no-results') }}</p>
       </div>
-    </div>
-
-    <!-- ─── Error display ──────────────────────────────────────────────── -->
-    <div v-if="errors.length > 0" class="orders-errors">
-      {{ t('errors.occurred') }}: {{ errors.map(error => error.message).join(', ') }}
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════════════
@@ -1286,14 +1280,6 @@ function resolveProductName(detail) {
   color:       var(--brand);
 }
 
-/* ─── Errors ────────────────────────────────────────────────────────────────── */
-.orders-errors {
-  padding:    0.75rem 1.25rem;
-  color:      var(--status-critical-fg);
-  font-size:  0.8rem;
-  background: var(--status-critical-bg);
-  border-top: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent);
-}
 
 /* ─── Modal overlay ─────────────────────────────────────────────────────────── */
 .orders-modal-overlay {

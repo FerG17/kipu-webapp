@@ -26,7 +26,7 @@ const dashboardStore = useDashboardStore();
 const productStore   = useProductStore();
 const iamStore       = useIamStore();
 
-const { reports, reportsLoaded, errors } = toRefs(dashboardStore);
+const { reports, reportsLoaded } = toRefs(dashboardStore);
 const { fetchReports, generateReport, downloadReportExcel, downloadReportPdf } = dashboardStore;
 
 /**
@@ -326,11 +326,6 @@ function formatGeneratedAt(isoDate) {
           {{ generating ? t('reports.apply') + '…' : t('reports.apply') }}
         </button>
 
-        <!-- Store-level errors -->
-        <div v-if="errors.length" class="store-errors">
-          <i class="pi pi-exclamation-triangle"/>
-          {{ t('errors.occurred') }}: {{ errors.map(error => error.message).join(', ') }}
-        </div>
       </div>
 
       <!-- ── Right: result + history ─────────────────────────────────────────── -->
@@ -626,19 +621,6 @@ function formatGeneratedAt(isoDate) {
 .btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-generate { width: 100%; padding: 0.85rem; font-size: 0.92rem; }
 .result-card__download-btn { flex: 1; }
-
-/* ── Store errors ────────────────────────────────────────────────────── */
-.store-errors {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.65rem 0.9rem;
-  background: var(--status-critical-bg);
-  border: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent);
-  border-radius: 0.5rem;
-  color: var(--status-critical-fg);
-  font-size: 0.82rem;
-}
 
 /* ── Result column ───────────────────────────────────────────────────── */
 .result-column { display: flex; flex-direction: column; gap: 1.25rem; }

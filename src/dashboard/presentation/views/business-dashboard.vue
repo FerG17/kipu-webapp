@@ -22,8 +22,7 @@ const {
   dashboardForbidden,
   salesByDay,
   topStockProducts,
-  topStockLoaded,
-  errors
+  topStockLoaded
 } = toRefs(dashboardStore);
 
 const { alerts, alertsLoaded } = toRefs(alertsStore);
@@ -550,12 +549,6 @@ const quickActions = computed(() => [
       </div>
     </div>
 
-    <!-- ── Errors ──────────────────────────────────────────────────────────── -->
-    <div v-if="errors.length" class="error-banner mt-3">
-      <i class="pi pi-exclamation-triangle"/>
-      {{ t('errors.occurred') }}: {{ errors.map(error => error.message).join(', ') }}
-    </div>
-
     </template>
   </div>
 </template>
@@ -1000,19 +993,6 @@ const quickActions = computed(() => [
   color: var(--status-warning-fg);
   font-size: 0.95rem;
   text-align: center;
-}
-
-/* ── Error banner ───────────────────────────────────────────────────── */
-.error-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border-radius: 0.625rem;
-  background: var(--status-critical-bg);
-  border: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent);
-  color: var(--status-critical-fg);
-  font-size: 0.85rem;
 }
 
 /* ── Shimmer animation ──────────────────────────────────────────────── */

@@ -16,7 +16,7 @@ const supplierStore = useSupplierStore();
 const iamStore      = useIamStore();
 const productStore  = useProductStore();
 
-const { suppliers, suppliersLoaded, errors } = toRefs(supplierStore);
+const { suppliers, suppliersLoaded } = toRefs(supplierStore);
 const { fetchSuppliers, addSupplier, updateSupplier, deactivateSupplier } = supplierStore;
 
 const savingSupplier      = ref(false);
@@ -547,11 +547,6 @@ function formatCurrency(amount) {
         <i class="pi pi-building supplier-list-empty-icon" />
         <p class="supplier-list-empty-text">{{ t('suppliers.no-results') }}</p>
       </div>
-    </div>
-
-    <!-- ── Error display ──────────────────────────────────────────────── -->
-    <div v-if="errors.length > 0" class="supplier-list-errors">
-      {{ t('errors.occurred') }}: {{ errors.map(e => e.message).join(', ') }}
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════════════
@@ -1225,14 +1220,6 @@ function formatCurrency(amount) {
   background-color: var(--brand-soft);
 }
 
-/* ─── Errors ────────────────────────────────────────────────────────────────── */
-.supplier-list-errors {
-  padding:    0.75rem 1.25rem;
-  color:      var(--status-critical-fg);
-  font-size:  0.8rem;
-  background: var(--status-critical-bg);
-  border-top: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent);
-}
 
 /* ─── Modal overlay ─────────────────────────────────────────────────────────── */
 .supplier-modal-overlay {
