@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import LanguageSwitcher from './language-switcher.vue';
 import useIamStore from '../../../iam/application/iam.store.js';
 import useAlertsStore from '../../../alerts/application/alerts.store.js';
+import { AlertStatus } from '../../../alerts/domain/model/alert.entity.js';
 import { roleLabelKey } from '../../../iam/presentation/role-labels.js';
 import { canAccessDashboard, canAccessSales, canAccessSuppliers } from '../../../iam/application/permissions.js';
 
@@ -104,12 +105,15 @@ const menuItems = computed(() =>
 );
 
 /**
- * Number of active (non-resolved) alerts for the sidebar badge.
- * Business rule: only alerts with status !== 'RESOLVED' are counted.
+ * Number of active alerts for the sidebar badge. Must match the dashboard's
+ * own "Activas" count (alerts.store.js#activeAlertsCount) — ACKNOWLEDGED is
+ * deliberately excluded (it's a real, distinct status the owner already
+ * acted on), not just "not resolved", or the badge disagrees with the
+ * screen the moment something gets acknowledged.
  * @type {import('vue').ComputedRef<number>}
  */
 const activeAlertCount = computed(() =>
-    alertsStore.alerts.filter(alert => alert.status !== 'RESOLVED').length
+    alertsStore.alerts.filter(alert => alert.status === AlertStatus.ACTIVE).length
 );
 
 /**
