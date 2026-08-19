@@ -1,5 +1,4 @@
 const activeAlertsDashboard     = () => import('./views/active-alerts-dashboard.vue');
-const alertNotificationStatus   = () => import('./views/alert-notification-status.vue');
 
 /**
  * Route definitions for the Alerts & Operational Monitoring bounded context.
@@ -13,12 +12,6 @@ const alertsRoutes = [
         name:      'alerts',
         component: activeAlertsDashboard,
         meta:      { title: 'Alerts' }
-    },
-    {
-        path:      'alerts/:id',
-        name:      'alert-detail',
-        component: alertNotificationStatus,
-        meta:      { title: 'Alert Detail' }
     }
 ];
 

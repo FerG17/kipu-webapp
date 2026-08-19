@@ -132,7 +132,7 @@ async function handleSubmit() {
             </label>
             <input
                 v-model="firstName" type="text" :placeholder="t('settings.invite-field-name-placeholder')"
-                class="w-full border-round-lg px-3 py-2"
+                class="w-full border-round-lg px-3 py-2" maxlength="50"
                 style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none;"
                 @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
                 @blur="(e) => e.target.style.borderColor = fieldErrors.firstName ? 'var(--status-critical-fg)' : 'var(--border)'"
@@ -145,7 +145,7 @@ async function handleSubmit() {
             </label>
             <input
                 v-model="lastName" type="text" :placeholder="t('settings.invite-field-last-name-placeholder')"
-                class="w-full border-round-lg px-3 py-2"
+                class="w-full border-round-lg px-3 py-2" maxlength="50"
                 style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none;"
                 @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
                 @blur="(e) => e.target.style.borderColor = fieldErrors.lastName ? 'var(--status-critical-fg)' : 'var(--border)'"

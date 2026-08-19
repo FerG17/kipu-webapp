@@ -45,6 +45,16 @@ const useSalesStore = defineStore('sales', () => {
      */
     const currentSale = ref(null);
 
+    /**
+     * Idempotency key for the current checkout attempt — generated once in
+     * startNewSale and sent unchanged with every confirmSale() call for that
+     * same cart, including retries. Lets the backend recognise "this already
+     * went through, the response just never arrived" instead of selling the
+     * same cart twice on a retry after a dropped connection.
+     * @type {import('vue').Ref<string|null>}
+     */
+    const currentSaleIdempotencyKey = ref(null);
+
     /** @type {import('vue').Ref<boolean>} */
     const salesLoaded = ref(false);
 
@@ -177,6 +187,7 @@ const useSalesStore = defineStore('sales', () => {
             date:       new Date().toISOString(),
             details:    []
         });
+        currentSaleIdempotencyKey.value = crypto.randomUUID();
     }
 
     /**
@@ -288,17 +299,17 @@ const useSalesStore = defineStore('sales', () => {
      * @param {string} paymentMethod - One of the PaymentMethod enum values.
      * @param {number|null} customerId - Optional customer id.
      * @param {string} description - Optional sale description/note.
-     * @returns {Promise<{ success: boolean, errorKey: string|null, sale: Sale|null }>}
+     * @returns {Promise<{ success: boolean, errorKey: string|null, errorDetail: string|null, status: number|null, sale: Sale|null }>}
      */
     async function confirmSale({ paymentMethod, customerId = null, description = '' }) {
         if (!currentSale.value) {
-            return { success: false, errorKey: 'pos.error-no-active-sale', sale: null };
+            return { success: false, errorKey: 'pos.error-no-active-sale', errorDetail: null, status: null, sale: null };
         }
         if (currentSale.value.details.length === 0) {
-            return { success: false, errorKey: 'pos.error-empty-cart', sale: null };
+            return { success: false, errorKey: 'pos.error-empty-cart', errorDetail: null, status: null, sale: null };
         }
         if (!paymentMethod || !Object.values(PaymentMethod).includes(paymentMethod)) {
-            return { success: false, errorKey: 'pos.error-no-payment-method', sale: null };
+            return { success: false, errorKey: 'pos.error-no-payment-method', errorDetail: null, status: null, sale: null };
         }
 
         try {
@@ -314,18 +325,31 @@ const useSalesStore = defineStore('sales', () => {
                     productId: detail.productId,
                     quantity:  detail.quantity,
                     unitPrice: detail.unitPrice
-                }))
+                })),
+                idempotencyKey: currentSaleIdempotencyKey.value
             };
             const saleResponse = await salesApi.createSale(saleResource);
             const finalSale    = SaleAssembler.toEntityFromResource(saleResponse.data);
 
             sales.value.push(finalSale);
             currentSale.value = null;
+            currentSaleIdempotencyKey.value = null;
 
-            return { success: true, errorKey: null, sale: finalSale };
+            return { success: true, errorKey: null, errorDetail: null, status: null, sale: finalSale };
         } catch (error) {
             errors.value.push(error);
-            return { success: false, errorKey: 'pos.error-confirm-failed', sale: null };
+            // Every failure used to collapse into the same generic "try
+            // again" message — 409 (insufficient stock, inactive product)
+            // and 404 (product/customer gone) have real, localized backend
+            // messages (see SalesActionResultAssembler) worth showing
+            // instead of guessing at a fixed i18n key here.
+            return {
+                success:     false,
+                errorKey:    'pos.error-confirm-failed',
+                errorDetail: error.response?.data?.detail ?? null,
+                status:      error.response?.status ?? null,
+                sale:        null
+            };
         }
     }
 

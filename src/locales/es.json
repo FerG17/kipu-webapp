@@ -644,6 +644,7 @@
     "payment-cancel-confirm-back": "Volver",
     "payment-cancel-confirm-accept": "Sí, cancelar",
     "payment-confirm": "Confirmar pago",
+    "payment-confirming": "Confirmando...",
     "success-title": "¡Venta registrada!",
     "success-credit-plan-created": "Venta a {installments} cuotas registrada.",
     "success-credit-plan-failed": "La venta se registró, pero no se pudo crear el plan de cuotas. Créalo desde la pestaña Cuotas.",
