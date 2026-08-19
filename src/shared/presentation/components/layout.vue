@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import LanguageSwitcher from './language-switcher.vue';
@@ -26,6 +26,20 @@ onMounted(() => {
   if (businessId && !alertsStore.alertsLoaded) {
     alertsStore.fetchAlerts(businessId);
   }
+  if (!iamStore.rolesLoaded) {
+    iamStore.fetchRoles();
+  }
+});
+
+/**
+ * Retries fetchRoles() on every navigation while it hasn't succeeded yet —
+ * layout.vue only mounts once per session, so a transient failure on the
+ * initial load used to leave the sidebar (permission-gated items, role
+ * label) stuck in its degraded fallback state until a manual F5. This
+ * mirrors authentication.guard.js's own retry-on-navigate for the route
+ * check itself.
+ */
+watch(() => route.fullPath, () => {
   if (!iamStore.rolesLoaded) {
     iamStore.fetchRoles();
   }
