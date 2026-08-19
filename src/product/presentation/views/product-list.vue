@@ -361,6 +361,31 @@ function formatMovementDate(isoString) {
 }
 
 /**
+ * Visual treatment for a "Movimientos" row's type badge. RETURN and
+ * ADJUSTMENT used to be indistinguishable — both fell into a single
+ * "anything that isn't INTAKE/SALE" bucket, sharing the "Ajuste" label and
+ * an always-green (stock added) color even when an adjustment removed
+ * stock. Distinguishes all four real types, and reads ADJUSTMENT's
+ * direction from its own signed quantity rather than assuming positive.
+ * @param {import('../../domain/model/stock-movement.entity.js').StockMovement} movement
+ * @returns {{ bg: string, fg: string, icon: string, labelKey: string }}
+ */
+function movementTypeVisual(movement) {
+  if (movement.type === 'INTAKE') {
+    return { bg: 'var(--status-ok-bg)', fg: 'var(--status-ok-fg)', icon: 'pi-arrow-circle-up', labelKey: 'inventory.movement-intake' };
+  }
+  if (movement.type === 'SALE') {
+    return { bg: 'var(--status-critical-bg)', fg: 'var(--status-critical-fg)', icon: 'pi-arrow-circle-down', labelKey: 'inventory.movement-sale' };
+  }
+  if (movement.type === 'RETURN') {
+    return { bg: 'var(--status-ok-bg)', fg: 'var(--status-ok-fg)', icon: 'pi-replay', labelKey: 'inventory.movement-return' };
+  }
+  return movement.signedQuantity < 0
+      ? { bg: 'var(--status-critical-bg)', fg: 'var(--status-critical-fg)', icon: 'pi-sliders-h', labelKey: 'inventory.movement-adjustment' }
+      : { bg: 'var(--status-warning-bg)', fg: 'var(--status-warning-fg)', icon: 'pi-sliders-h', labelKey: 'inventory.movement-adjustment' };
+}
+
+/**
  * Human-readable message for the Movimientos tab's error state — a CASHIER
  * gets the real "no permission" reason (the backend 403s that role on
  * GET /stock-movements) instead of the misleading "no movements yet" empty
@@ -1020,6 +1045,88 @@ function handleActivateProduct(product) {
       });
 }
 
+// ── Stock adjustment modal (I25 — shrinkage/breakage/theft/count fix) ──────
+
+const showAdjustModal   = ref(false);
+const adjustTargetProduct = ref(null);
+const savingAdjustment  = ref(false);
+const adjustForm = ref({ warehouseId: '', direction: 'REMOVE', quantity: '', reasonPreset: 'SHRINKAGE', reasonDetail: '' });
+
+/**
+ * Warehouses the target product actually has an InventoryItem in — an
+ * adjustment always targets a real row, there is no "create on adjust" like
+ * intake has, so the picker only ever offers warehouses the product is
+ * already stocked in. Falls back to every business warehouse only in the
+ * (should-not-happen) case a product somehow has none yet.
+ * @type {import('vue').ComputedRef<Array>}
+ */
+const adjustableWarehouses = computed(() => {
+  if (!adjustTargetProduct.value) return [];
+  const stockedWarehouseIds = inventory.value
+      .filter(item => item.productId === adjustTargetProduct.value.id)
+      .map(item => item.warehouseId);
+  const stocked = warehouses.value.filter(warehouse => stockedWarehouseIds.includes(warehouse.id));
+  return stocked.length > 0 ? stocked : warehouses.value;
+});
+
+const reasonPresetLabelKeys = {
+  SHRINKAGE:        'inventory.adjust-reason-shrinkage',
+  BREAKAGE:         'inventory.adjust-reason-breakage',
+  THEFT:            'inventory.adjust-reason-theft',
+  COUNT_CORRECTION: 'inventory.adjust-reason-count-correction',
+  OTHER:            'inventory.adjust-reason-other'
+};
+
+function openAdjustModal(product) {
+  adjustTargetProduct.value = product;
+  const stockedItem = inventory.value.find(item => item.productId === product.id);
+  adjustForm.value = {
+    warehouseId:  stockedItem ? String(stockedItem.warehouseId) : (warehouses.value[0] ? String(warehouses.value[0].id) : ''),
+    direction:    'REMOVE',
+    quantity:     '',
+    reasonPreset: 'SHRINKAGE',
+    reasonDetail: ''
+  };
+  showAdjustModal.value = true;
+}
+
+function saveAdjustment() {
+  const quantity = parseInt(adjustForm.value.quantity);
+  if (!quantity || quantity <= 0) return;
+  if (!adjustForm.value.warehouseId) return;
+
+  const delta = adjustForm.value.direction === 'REMOVE' ? -quantity : quantity;
+  const presetLabel = t(reasonPresetLabelKeys[adjustForm.value.reasonPreset]);
+  const detail = adjustForm.value.reasonDetail.trim();
+  const reason = adjustForm.value.reasonPreset === 'OTHER' ? detail : (detail ? `${presetLabel}: ${detail}` : presetLabel);
+
+  if (!reason) {
+    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-adjust-reason-required'), life: 4500 });
+    return;
+  }
+
+  savingAdjustment.value = true;
+  productStore.adjustStock(adjustTargetProduct.value.id, adjustForm.value.warehouseId, delta, reason)
+      .then(() => {
+        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-adjust-success'), life: 3500 });
+        showAdjustModal.value = false;
+        // The adjustment may have created/resolved a LOW_STOCK/OUT_OF_STOCK
+        // alert, and it's a real audit-trail entry the "Movimientos" tab
+        // should reflect right away.
+        fetchAllStockMovements();
+        alertsStore.fetchAlerts();
+      })
+      .catch(error => {
+        const detail = error?.response?.status === 409
+            ? t('inventory.toast-adjust-error-exceeds-stock')
+            : t('inventory.toast-adjust-error');
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
+      })
+      .finally(() => {
+        savingAdjustment.value = false;
+      });
+}
+
 // Background content behind these modals was still scrollable on mobile,
 // which read as the modal itself being broken once the virtual keyboard
 // covered fields further down.
@@ -1027,6 +1134,7 @@ useModalScrollLock(showProductModal);
 useModalScrollLock(showIntakeModal);
 useModalScrollLock(showWarehouseModal);
 useModalScrollLock(showInactiveModal);
+useModalScrollLock(showAdjustModal);
 
 function openWarehouseModal() {
   warehouseForm.value = { name: '', code: '', address: '', capacity: 'MEDIUM' };
@@ -1319,6 +1427,14 @@ function saveWarehouse() {
                     <i class="pi pi-inbox" style="font-size: 0.95rem;"/>
                   </button>
                   <button
+                      class="p-2 border-round-lg border-none cursor-pointer btn-icon-adjust"
+                      :title="t('inventory.btn-adjust-stock')"
+                      :aria-label="t('inventory.btn-adjust-stock')"
+                      @click="openAdjustModal(product)"
+                  >
+                    <i class="pi pi-sliders-h" style="font-size: 0.9rem;"/>
+                  </button>
+                  <button
                       class="p-2 border-round-lg border-none cursor-pointer btn-icon-edit"
                       :title="t('inventory.btn-edit')"
                       :aria-label="t('inventory.btn-edit')"
@@ -1433,6 +1549,13 @@ function saveWarehouse() {
               {{ t('inventory.btn-edit') }}
             </button>
             <button
+                class="flex align-items-center justify-content-center py-2 px-3 border-round-xl cursor-pointer btn-mobile-adjust"
+                :aria-label="t('inventory.btn-adjust-stock')"
+                @click="openAdjustModal(product)"
+            >
+              <i class="pi pi-sliders-h" style="font-size: 0.82rem;"/>
+            </button>
+            <button
                 class="flex align-items-center justify-content-center py-2 px-3 border-round-xl cursor-pointer btn-mobile-delete"
                 :disabled="deletingProductId === product.id"
                 :aria-label="t('inventory.btn-delete')"
@@ -1495,24 +1618,15 @@ function saveWarehouse() {
             <td class="px-4 py-3">
               <span
                   class="inline-flex align-items-center gap-1 border-round-3xl status-badge"
-                  :style="{
-                    backgroundColor: movement.type === 'INTAKE' ? 'var(--status-ok-bg)' : movement.type === 'SALE' ? 'var(--status-critical-bg)' : 'var(--status-warning-bg)',
-                    color:           movement.type === 'INTAKE' ? 'var(--status-ok-fg)' : movement.type === 'SALE' ? 'var(--status-critical-fg)' : 'var(--status-warning-fg)'
-                  }"
+                  :style="{ backgroundColor: movementTypeVisual(movement).bg, color: movementTypeVisual(movement).fg }"
               >
-                <i
-                    :class="movement.type === 'INTAKE' ? 'pi pi-arrow-circle-up' : movement.type === 'SALE' ? 'pi pi-arrow-circle-down' : 'pi pi-refresh'"
-                    style="font-size: 0.65rem;"
-                />
-                {{ movement.type === 'INTAKE' ? t('inventory.movement-intake') : movement.type === 'SALE' ? t('inventory.movement-sale') : t('inventory.movement-adjustment') }}
+                <i :class="`pi ${movementTypeVisual(movement).icon}`" style="font-size: 0.65rem;"/>
+                {{ t(movementTypeVisual(movement).labelKey) }}
               </span>
             </td>
             <td class="px-4 py-3">
-              <span
-                  class="stock-value"
-                  :style="{ color: movement.signedQuantity !== undefined ? (movement.signedQuantity < 0 ? 'var(--status-critical-fg)' : 'var(--status-ok-fg)') : 'var(--status-ok-fg)' }"
-              >
-                {{ movement.signedQuantity !== undefined ? (movement.signedQuantity > 0 ? '+' : '') + movement.signedQuantity : '+' + movement.quantity }}
+              <span class="stock-value" :style="{ color: movementTypeVisual(movement).fg }">
+                {{ movement.signedQuantity > 0 ? '+' : '' }}{{ movement.signedQuantity }}
               </span>
               <span class="stock-unit"> und.</span>
             </td>
@@ -1558,33 +1672,23 @@ function saveWarehouse() {
           <!-- Type icon circle -->
           <div
               class="flex align-items-center justify-content-center border-round-lg flex-shrink-0 movement-type-icon"
-              :style="{ backgroundColor: movement.type === 'INTAKE' ? 'var(--status-ok-bg)' : movement.type === 'SALE' ? 'var(--status-critical-bg)' : 'var(--status-warning-bg)' }"
+              :style="{ backgroundColor: movementTypeVisual(movement).bg }"
           >
-            <i
-                :class="movement.type === 'INTAKE' ? 'pi pi-arrow-circle-up' : movement.type === 'SALE' ? 'pi pi-arrow-circle-down' : 'pi pi-refresh'"
-                style="font-size: 1.05rem;"
-                :style="{ color: movement.type === 'INTAKE' ? 'var(--status-ok-fg)' : movement.type === 'SALE' ? 'var(--status-critical-fg)' : 'var(--status-warning-fg)' }"
-            />
+            <i :class="`pi ${movementTypeVisual(movement).icon}`" :style="{ fontSize: '1.05rem', color: movementTypeVisual(movement).fg }"/>
           </div>
           <div style="flex: 1; min-width: 0;">
             <div class="flex align-items-center justify-content-between gap-2">
               <p class="m-0 mobile-product-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ movementProductName(movement.productId) }}</p>
-              <p
-                  class="m-0 flex-shrink-0 stock-value"
-                  :style="{ color: movement.type === 'SALE' ? 'var(--status-critical-fg)' : 'var(--status-ok-fg)' }"
-              >
-                {{ movement.type === 'SALE' ? '-' : '+' }}{{ movement.quantity }}
+              <p class="m-0 flex-shrink-0 stock-value" :style="{ color: movementTypeVisual(movement).fg }">
+                {{ movement.signedQuantity > 0 ? '+' : '' }}{{ movement.signedQuantity }}
               </p>
             </div>
             <div class="flex align-items-center gap-2 mt-1 flex-wrap">
               <span
                   class="border-round-3xl inline-block category-badge-sm"
-                  :style="{
-                    backgroundColor: movement.type === 'INTAKE' ? 'var(--status-ok-bg)' : movement.type === 'SALE' ? 'var(--status-critical-bg)' : 'var(--status-warning-bg)',
-                    color:           movement.type === 'INTAKE' ? 'var(--status-ok-fg)' : movement.type === 'SALE' ? 'var(--status-critical-fg)' : 'var(--status-warning-fg)'
-                  }"
+                  :style="{ backgroundColor: movementTypeVisual(movement).bg, color: movementTypeVisual(movement).fg }"
               >
-                {{ movement.type === 'INTAKE' ? t('inventory.movement-intake') : movement.type === 'SALE' ? t('inventory.movement-sale') : t('inventory.movement-adjustment') }}
+                {{ t(movementTypeVisual(movement).labelKey) }}
               </span>
               <p class="m-0 product-desc">{{ formatMovementDate(movement.registeredAt) }}</p>
             </div>
@@ -2123,6 +2227,101 @@ function saveWarehouse() {
       </div>
     </div>
 
+    <!-- ═══════════════════════════════════════════════════════════════
+         MODAL: ADJUST STOCK (I25 — shrinkage/breakage/theft/count fix)
+    ═══════════════════════════════════════════════════════════════ -->
+    <div
+        v-if="showAdjustModal"
+        class="fixed inset-0 z-50 flex align-items-end sm:align-items-center justify-content-center modal-overlay"
+        @click.self="showAdjustModal = false"
+    >
+      <div class="w-full border-round-t-2xl sm:border-round-2xl overflow-y-auto modal-container-sm">
+        <div class="flex align-items-center justify-content-between px-5 py-4 modal-header">
+          <div class="flex align-items-center gap-3">
+            <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: var(--status-warning-bg);">
+              <i class="pi pi-sliders-h" style="color: var(--status-warning-fg); font-size: 0.95rem;"/>
+            </div>
+            <p class="m-0 modal-title">{{ t('inventory.adjust-modal-title', { name: adjustTargetProduct?.name ?? '' }) }}</p>
+          </div>
+          <button class="p-2 border-round-lg border-none cursor-pointer btn-modal-close" @click="showAdjustModal = false">
+            <i class="pi pi-times" style="font-size: 1rem;"/>
+          </button>
+        </div>
+
+        <div class="px-5 py-5 flex flex-column gap-4">
+          <p class="m-0" style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">{{ t('inventory.adjust-modal-hint') }}</p>
+
+          <div>
+            <label class="modal-label">{{ t('inventory.adjust-field-direction') }}</label>
+            <div class="flex gap-2">
+              <button
+                  type="button"
+                  class="flex-1 py-2 border-round-xl cursor-pointer btn-adjust-direction"
+                  :class="{ 'btn-adjust-direction-active-remove': adjustForm.direction === 'REMOVE' }"
+                  @click="adjustForm.direction = 'REMOVE'"
+              >
+                <i class="pi pi-minus-circle" style="margin-right: 0.35rem;"/>{{ t('inventory.adjust-direction-remove') }}
+              </button>
+              <button
+                  type="button"
+                  class="flex-1 py-2 border-round-xl cursor-pointer btn-adjust-direction"
+                  :class="{ 'btn-adjust-direction-active-add': adjustForm.direction === 'ADD' }"
+                  @click="adjustForm.direction = 'ADD'"
+              >
+                <i class="pi pi-plus-circle" style="margin-right: 0.35rem;"/>{{ t('inventory.adjust-direction-add') }}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="modal-label">{{ t('inventory.adjust-field-quantity') }}</label>
+            <input v-model="adjustForm.quantity" type="number" min="1" step="1" placeholder="0" class="modal-input"/>
+          </div>
+
+          <div v-if="adjustableWarehouses.length > 1">
+            <label class="modal-label">{{ t('inventory.modal-field-warehouse') }}</label>
+            <select v-model="adjustForm.warehouseId" class="modal-input modal-select">
+              <option v-for="warehouse in adjustableWarehouses" :key="warehouse.id" :value="String(warehouse.id)">
+                {{ warehouse.name }}
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label class="modal-label">{{ t('inventory.adjust-field-reason') }}</label>
+            <select v-model="adjustForm.reasonPreset" class="modal-input modal-select">
+              <option value="SHRINKAGE">{{ t('inventory.adjust-reason-shrinkage') }}</option>
+              <option value="BREAKAGE">{{ t('inventory.adjust-reason-breakage') }}</option>
+              <option value="THEFT">{{ t('inventory.adjust-reason-theft') }}</option>
+              <option value="COUNT_CORRECTION">{{ t('inventory.adjust-reason-count-correction') }}</option>
+              <option value="OTHER">{{ t('inventory.adjust-reason-other') }}</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="modal-label">
+              {{ adjustForm.reasonPreset === 'OTHER' ? t('inventory.adjust-field-reason-detail-required') : t('inventory.adjust-field-reason-detail-optional') }}
+            </label>
+            <input v-model="adjustForm.reasonDetail" :placeholder="t('inventory.adjust-field-reason-detail-placeholder')" class="modal-input"/>
+          </div>
+
+          <div class="flex gap-3">
+            <button class="flex-1 py-2 border-round-xl cursor-pointer btn-modal-cancel" :disabled="savingAdjustment" @click="showAdjustModal = false">
+              {{ t('inventory.modal-cancel') }}
+            </button>
+            <button
+                class="flex-1 py-2 border-round-xl border-none cursor-pointer btn-primary"
+                :disabled="savingAdjustment || !adjustForm.quantity || (adjustForm.reasonPreset === 'OTHER' && !adjustForm.reasonDetail.trim())"
+                @click="saveAdjustment"
+            >
+              <i v-if="savingAdjustment" class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>
+              {{ savingAdjustment ? t('inventory.modal-saving') : t('inventory.adjust-btn-confirm') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -2160,6 +2359,25 @@ function saveWarehouse() {
 .btn-intake-outline:hover {
   background-color: var(--brand-soft);
   border-color: var(--brand);
+}
+
+.btn-adjust-direction {
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.btn-adjust-direction-active-remove {
+  border-color: var(--status-critical-fg);
+  color: var(--status-critical-fg);
+  background: var(--status-critical-bg);
+}
+.btn-adjust-direction-active-add {
+  border-color: var(--status-ok-fg);
+  color: var(--status-ok-fg);
+  background: var(--status-ok-bg);
 }
 
 .btn-inactive-link {
@@ -2446,6 +2664,16 @@ function saveWarehouse() {
   transform: scale(1.12);
 }
 
+.btn-icon-adjust {
+  background: none;
+  color: var(--status-warning-fg);
+  transition: all 0.15s;
+}
+.btn-icon-adjust:hover {
+  background-color: var(--status-warning-bg);
+  transform: scale(1.12);
+}
+
 .btn-icon-edit {
   background: none;
   color: var(--text-muted);
@@ -2563,6 +2791,16 @@ function saveWarehouse() {
 .btn-mobile-edit:hover {
   background-color: var(--surface-alt);
   border-color: var(--text-faint);
+}
+
+.btn-mobile-adjust {
+  background: none;
+  border: 1.5px solid var(--status-warning-fg);
+  color: var(--status-warning-fg);
+  transition: all 0.15s;
+}
+.btn-mobile-adjust:hover {
+  background-color: var(--status-warning-bg);
 }
 
 .btn-mobile-delete {

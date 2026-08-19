@@ -603,6 +603,43 @@ const useProductStore = defineStore('product', () => {
     }
 
     /**
+     * Manually adjusts a product's stock in one warehouse — shrinkage,
+     * breakage, theft, or a physical count correction (I25). There is no
+     * other way to move stock outside of a sale/intake/return.
+     * @param {number|string} productId
+     * @param {number|string} warehouseId
+     * @param {number} delta - Signed: negative removes units, positive adds them.
+     * @param {string} reason
+     * @returns {Promise<import('../domain/model/inventory-item.entity.js').InventoryItem>}
+     */
+    function adjustStock(productId, warehouseId, delta, reason) {
+        const numericDelta = parseInt(delta);
+        if (!numericDelta) {
+            const error = new Error('Stock adjustment delta must be a non-zero integer.');
+            errors.value.push(error);
+            return Promise.reject(error);
+        }
+        if (!reason || !reason.trim()) {
+            const error = new Error('Stock adjustment requires a reason.');
+            errors.value.push(error);
+            return Promise.reject(error);
+        }
+
+        return productApi.adjustStock(parseInt(productId), { warehouseId: parseInt(warehouseId), delta: numericDelta, reason: reason.trim() })
+            .then(response => {
+                const updatedItem = InventoryItemAssembler.toEntityFromResource(response.data);
+                const index = inventory.value.findIndex(item => item.id === updatedItem.id);
+                if (index !== -1) inventory.value[index] = updatedItem;
+                else inventory.value.push(updatedItem);
+                return updatedItem;
+            })
+            .catch(error => {
+                errors.value.push(error);
+                throw error;
+            });
+    }
+
+    /**
      * Updates the minimum stock threshold on a product's existing inventory record.
      *
      * Business rule: minimumStock must be a non-negative integer. Every
@@ -728,6 +765,7 @@ const useProductStore = defineStore('product', () => {
         updateProduct,
         deleteProduct,
         registerStockIntake,
+        adjustStock,
         updateMinimumStock,
         createBatchForProduct
     };

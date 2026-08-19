@@ -127,6 +127,19 @@ export class ProductApi extends BaseApi {
     }
 
     /**
+     * Manually adjusts a product's stock in one warehouse — shrinkage,
+     * breakage, theft, or a physical count correction (I25). Delta is
+     * signed: negative removes units, positive adds them. A reason is
+     * always required by the backend.
+     * @param {number|string} productId
+     * @param {{warehouseId: number, delta: number, reason: string}} resource
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    adjustStock(productId, resource) {
+        return this.http.post(`${inventoriesEndpointPath}/${productId}/adjustment`, resource);
+    }
+
+    /**
      * Updates a product's minimum stock threshold via the backend's
      * dedicated command endpoint (PATCH /inventories/{productId}/minimum-stock).
      * There is no generic PATCH /inventories/{id} on the real backend.
