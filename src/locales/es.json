@@ -429,6 +429,7 @@
     "toast-duplicate-barcode": "Ese código de barras ya está registrado en otro producto.",
     "toast-invalid-expiration": "El producto se guardó, pero no se pudo registrar el precio de costo ni la fecha de vencimiento porque esa fecha ya pasó. Edítalo para corregirla.",
     "toast-warehouse-required": "Selecciona un almacén para registrar el stock inicial.",
+    "error-expiration-date": "La fecha de vencimiento no puede ser anterior a hoy. El producto no podrá registrarse hasta que la fecha sea válida.",
     "scan-modal-title": "Escanear código de barras",
     "scan-modal-hint": "Escaneá con el lector o escribí el código y presioná Enter",
     "scan-modal-placeholder": "Código de barras",

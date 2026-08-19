@@ -598,6 +598,21 @@ function saveProductFromModal() {
   }
   productModalErrors.value = { basePrice: '' };
 
+  // The date input's `:min` attribute only stops the picker widget — typing
+  // a past date directly (or a browser that doesn't enforce `min` on native
+  // constraint validation for a non-<form> submit, as found in testing on
+  // desktop) still reaches here. Catching it before persistProductFromModal
+  // matters more than usual: creating a product is 3 separate backend calls
+  // (product, then stock intake, then the batch that actually holds cost +
+  // expiration), and only the last one validates the date server-side — by
+  // then the product and its stock are already committed, so a rejected
+  // batch used to leave a half-saved product with no cost/expiration and a
+  // confusing error, instead of never being created at all.
+  if (productModalForm.value.expirationDate && productModalForm.value.expirationDate < todayIsoDate.value) {
+    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.error-expiration-date'), life: 4500 });
+    return;
+  }
+
   // Every new product needs a real warehouse, even with 0 initial stock —
   // registerStockIntake is now always called on creation (see its own
   // comment: it persists minimumStock via a 0-quantity intake instead of
