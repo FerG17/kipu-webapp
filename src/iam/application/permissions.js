@@ -60,3 +60,13 @@ export function canEditBusinessProfile(position) {
 export function canEditCustomers(position) {
     return position === 'ADMIN';
 }
+
+/** X4 M4: cancelling a sale — admin only (it reverses stock and revenue and is irreversible; a cashier used to be able to cancel any sale). */
+export function canCancelSales(position) {
+    return position === 'ADMIN';
+}
+
+/** X4 A5: reverting a registered installment payment — admin only, same reasoning as canCancelSales. */
+export function canRevertInstallmentPayments(position) {
+    return position === 'ADMIN';
+}

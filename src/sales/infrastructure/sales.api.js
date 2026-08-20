@@ -70,6 +70,24 @@ export class SalesApi extends BaseApi {
     }
 
     /**
+     * Total revenue (Paid sales' totals plus installments actually
+     * collected on credit sales — never a credit sale's own total), optionally
+     * scoped to a date range. Admin+Cashier (unlike the Dashboard KPI, which
+     * is Admin-only) — the source SalesStatsBar reads instead of recomputing
+     * the figure itself (see GetTotalRevenueByBusinessIdQuery).
+     * @param {string} [dateFrom]
+     * @param {string} [dateTo]
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    getSalesRevenue(dateFrom, dateTo) {
+        const params = new URLSearchParams();
+        if (dateFrom) params.set('dateFrom', dateFrom);
+        if (dateTo)   params.set('dateTo', dateTo);
+        const query = params.toString();
+        return this.http.get(`${salesEndpointPath}/revenue${query ? `?${query}` : ''}`);
+    }
+
+    /**
      * Creates a sale atomically with all of its lines embedded.
      * The backend validates stock, decrements it, and persists the sale
      * already PAID in one request (CreateSaleCommand) — there is no
@@ -197,5 +215,15 @@ export class SalesApi extends BaseApi {
      */
     registerInstallmentPayment(id) {
         return this.http.post(`${paymentPlansEndpointPath}/${id}/register-payment`);
+    }
+
+    /**
+     * Reverts the most recently registered payment on a plan — Admin only
+     * server-side (see PaymentPlansController.RevertInstallmentPayment).
+     * @param {number|string} id - Payment plan identifier.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    revertInstallmentPayment(id) {
+        return this.http.post(`${paymentPlansEndpointPath}/${id}/revert-last-payment`);
     }
 }
