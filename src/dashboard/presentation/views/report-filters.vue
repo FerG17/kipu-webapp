@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, toRefs } from 'vue';
 import { useRouter }     from 'vue-router';
 import { useI18n }       from 'vue-i18n';
+import { useToast }      from 'primevue/usetoast';
 import useDashboardStore from '../../application/dashboard.store.js';
 import useProductStore, { parseLocalDate } from '../../../product/application/product.store.js';
 import useIamStore       from '../../../iam/application/iam.store.js';
@@ -22,6 +23,7 @@ import { toDateLocale }  from '../../../shared/presentation/date-locale.js';
 
 const { t, locale } = useI18n();
 const router         = useRouter();
+const toast          = useToast();
 const dashboardStore = useDashboardStore();
 const productStore   = useProductStore();
 const iamStore       = useIamStore();
@@ -163,11 +165,15 @@ const downloadingIds = ref(new Set());
 function handleDownload(reportId, format) {
   downloadingIds.value = new Set(downloadingIds.value).add(reportId);
   const download = format === 'pdf' ? downloadReportPdf(reportId) : downloadReportExcel(reportId);
-  download.catch(() => {}).finally(() => {
-    const next = new Set(downloadingIds.value);
-    next.delete(reportId);
-    downloadingIds.value = next;
-  });
+  download
+      .catch(() => {
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('reports.toast-download-error'), life: 4500 });
+      })
+      .finally(() => {
+        const next = new Set(downloadingIds.value);
+        next.delete(reportId);
+        downloadingIds.value = next;
+      });
 }
 
 /**

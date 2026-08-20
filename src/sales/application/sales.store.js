@@ -81,6 +81,14 @@ const useSalesStore = defineStore('sales', () => {
     const customersLoaded = ref(false);
 
     /**
+     * Set when the last fetchCustomers() call failed — lets a view tell a
+     * real error apart from "this business genuinely has no customers yet"
+     * instead of both rendering the same empty state.
+     * @type {import('vue').Ref<Error|null>}
+     */
+    const customersError = ref(null);
+
+    /**
      * Pending (not fully paid) payment plans — for the whole business, or
      * narrowed to one customer via fetchPendingPaymentPlans(customerId).
      * @type {import('vue').Ref<import('../domain/model/payment-plan.entity.js').PaymentPlan[]>}
@@ -227,11 +235,17 @@ const useSalesStore = defineStore('sales', () => {
      * @returns {void}
      */
     function fetchCustomers() {
-        salesApi.getCustomers().then(response => {
-            warnIfTruncated(response, 'Clientes');
-            customers.value   = CustomerAssembler.toEntitiesFromResponse(response);
-            customersLoaded.value = true;
-        });
+        customersError.value = null;
+        salesApi.getCustomers()
+            .then(response => {
+                warnIfTruncated(response, 'Clientes');
+                customers.value   = CustomerAssembler.toEntitiesFromResponse(response);
+                customersLoaded.value = true;
+            })
+            .catch(error => {
+                customersError.value = error;
+                customersLoaded.value = true;
+            });
     }
 
     // ─── POS Session ──────────────────────────────────────────────────────────
@@ -625,6 +639,7 @@ const useSalesStore = defineStore('sales', () => {
         salesLoaded,
         salesError,
         customersLoaded,
+        customersError,
         paymentPlans,
         paymentPlansLoaded,
         // Computed

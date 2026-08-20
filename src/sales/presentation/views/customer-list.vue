@@ -380,9 +380,20 @@ onMounted(() => {
         </div>
       </div>
 
+      <!-- Error state (a real fetch failure, not "no customers yet") -->
+      <div
+          v-if="salesStore.customersError"
+          class="flex flex-column align-items-center justify-content-center py-12 text-center"
+      >
+        <i class="pi pi-lock mb-2" style="font-size: 2.25rem; color: var(--status-critical-fg);" />
+        <p class="m-0" style="color: var(--text-faint); font-size: 0.88rem;">
+          {{ t('customers.error-loading') }}
+        </p>
+      </div>
+
       <!-- Empty state -->
       <div
-          v-if="filteredCustomers.length === 0"
+          v-else-if="filteredCustomers.length === 0"
           class="flex flex-column align-items-center justify-content-center py-12 text-center"
       >
         <i class="pi pi-users mb-2" style="font-size: 2.25rem; color: var(--text-faint);" />

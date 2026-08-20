@@ -298,9 +298,9 @@ async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, t
     description:   ''
   });
 
-  showPaymentModal.value = false;
-
   if (result.success) {
+    showPaymentModal.value = false;
+
     // The backend already decremented inventory server-side as part of
     // confirming the sale (SaleRegisteredEvent -> Product's stock decrement) —
     // refresh from that authoritative state rather than recomputing it here.
@@ -347,7 +347,12 @@ async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, t
       toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('pos.warning-total-mismatch'), life: 8000 });
     }
   } else {
+    // The payment modal stays open on failure (see the success branch above,
+    // which is the only place that closes it) — the banner below the search
+    // bar would otherwise render invisibly behind the modal's backdrop, so
+    // the failure also gets a toast, which renders above it.
     showStockError(result.errorDetail ?? t('pos.error-confirm-failed'));
+    toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: result.errorDetail ?? t('pos.error-confirm-failed'), life: 6000 });
 
     // A rejected sale (most commonly a 409: stock changed since the cart was
     // built, or the product got deactivated mid-session) means the POS's
