@@ -213,7 +213,13 @@ function formatCurrency(amount) {
 function handleConfirm() {
   if (!canConfirm.value || props.saving) return;
   emit('confirm', {
-    paymentMethod:     selectedMethod.value,
+    // X4 A10: nothing is collected now on a credit sale, so the method
+    // actually clicked in the selector below (almost always still CASH,
+    // its default) must never reach the backend as-is — that's what made a
+    // credit sale's history show "Efectivo" and get summed as same-day cash
+    // revenue. CREDIT is a real Sale.Status now (see the backend's
+    // SalePaymentMethod), not just a PaymentPlan attached after the fact.
+    paymentMethod:     sellOnCredit.value ? PaymentMethod.CREDIT : selectedMethod.value,
     cashGiven:         selectedMethod.value === PaymentMethod.CASH ? cashGiven.value : props.total,
     customerId:        selectedCustomerId.value ? parseInt(selectedCustomerId.value) : null,
     sellOnCredit:      sellOnCredit.value,
@@ -310,31 +316,39 @@ function handleConfirm() {
         </div>
       </div>
 
-      <!-- Method selector -->
-      <p class="m-0 mb-2" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
-        {{ t('pos.payment-modal-method-label') }}
-      </p>
-      <div class="grid mb-4">
-        <div
-            v-for="config in methodConfigs"
-            :key="config.value"
-            class="col-3"
-        >
-          <button
-              class="w-full flex flex-column align-items-center gap-1 border-round-xl py-3"
-              :style="{
-                            border: `2px solid ${selectedMethod === config.value ? config.color : 'var(--border)'}`,
-                            backgroundColor: selectedMethod === config.value ? config.background : 'var(--surface)',
-                            color: selectedMethod === config.value ? config.color : 'var(--text-muted)',
-                            cursor: 'pointer'
-                        }"
-              @click="selectedMethod = config.value"
+      <!-- Method selector — hidden on credit: nothing is collected now, so
+           picking a method here would be meaningless and, worse, used to be
+           what got sent to the backend as the sale's real payment method
+           (see handleConfirm's note on this exact bug). -->
+      <template v-if="!sellOnCredit">
+        <p class="m-0 mb-2" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
+          {{ t('pos.payment-modal-method-label') }}
+        </p>
+        <div class="grid mb-4">
+          <div
+              v-for="config in methodConfigs"
+              :key="config.value"
+              class="col-3"
           >
-            <i :class="config.icon" style="font-size: 1.1rem;" />
-            <span style="font-size: 0.65rem; font-weight: 600;">{{ t(config.labelKey) }}</span>
-          </button>
+            <button
+                class="w-full flex flex-column align-items-center gap-1 border-round-xl py-3"
+                :style="{
+                              border: `2px solid ${selectedMethod === config.value ? config.color : 'var(--border)'}`,
+                              backgroundColor: selectedMethod === config.value ? config.background : 'var(--surface)',
+                              color: selectedMethod === config.value ? config.color : 'var(--text-muted)',
+                              cursor: 'pointer'
+                          }"
+                @click="selectedMethod = config.value"
+            >
+              <i :class="config.icon" style="font-size: 1.1rem;" />
+              <span style="font-size: 0.65rem; font-weight: 600;">{{ t(config.labelKey) }}</span>
+            </button>
+          </div>
         </div>
-      </div>
+      </template>
+      <p v-else class="m-0 mb-4" style="font-size: 0.78rem; color: var(--text-muted);">
+        {{ t('pos.payment-modal-credit-no-method') }}
+      </p>
 
       <!-- Cash input (only for CASH method, and only when actually collecting
            cash now — a credit sale collects nothing upfront). -->

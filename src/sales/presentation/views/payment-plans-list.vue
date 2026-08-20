@@ -4,7 +4,10 @@ import { useI18n }  from 'vue-i18n';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue';
 import useSalesStore from '../../application/sales.store.js';
+import useIamStore   from '../../../iam/application/iam.store.js';
+import { canRevertInstallmentPayments } from '../../../iam/application/permissions.js';
 import { SaleStatus } from '../../domain/model/sale.entity.js';
+import { toDateLocale } from '../../../shared/presentation/date-locale.js';
 
 /**
  * PaymentPlansList view for the Sales & POS Management bounded context.
@@ -18,10 +21,20 @@ import { SaleStatus } from '../../domain/model/sale.entity.js';
  * @view PaymentPlansList
  */
 
-const { t }        = useI18n();
+const { t, locale } = useI18n();
 const toast         = useToast();
 const confirm        = useConfirm();
 const salesStore     = useSalesStore();
+const iamStore       = useIamStore();
+
+/** X4 A5: reverting a registered payment — admin only. */
+const canRevert = computed(() => canRevertInstallmentPayments(iamStore.currentUserPosition));
+
+/** @type {import('vue').Ref<number|null>} Id of the plan whose payment history is expanded, or null. */
+const expandedPlanId = ref(null);
+
+/** @type {import('vue').Ref<number|null>} Id of the plan whose last payment is being reverted, for its button's spinner. */
+const revertingPlanId = ref(null);
 
 /** @type {import('vue').Ref<string>} Text in the customer-name search input. */
 const searchQuery = ref('');
@@ -42,7 +55,11 @@ const newPlanSaleId = ref('');
 const newPlanInstallments = ref('2');
 
 /**
- * Sales that can have a NEW payment plan attached: paid, tied to a real
+ * Sales that can have a payment plan attached (or re-attached, after a
+ * partial failure — see pos-screen.vue's handlePaymentConfirm, which already
+ * creates the plan automatically right after a CREDIT sale, but can leave one
+ * missing if that second call fails): sold on credit (the backend rejects
+ * attaching a plan to anything else — SaleIsNotACreditSale), tied to a real
  * customer (a plan needs someone to collect the debt from), and without an
  * already-pending plan. This is a best-effort client-side filter for the
  * picker — salesStore.paymentPlans only tracks PENDING plans (see the view's
@@ -54,7 +71,7 @@ const newPlanInstallments = ref('2');
 const eligibleSales = computed(() => {
   const pendingSaleIds = new Set(salesStore.paymentPlans.map(plan => plan.saleId));
   return salesStore.sales.filter(sale =>
-      sale.status === SaleStatus.PAID && sale.customerId && !pendingSaleIds.has(sale.id));
+      sale.status === SaleStatus.CREDIT && sale.customerId && !pendingSaleIds.has(sale.id));
 });
 
 /** @type {import('vue').ComputedRef<boolean>} Whether the create-plan form is ready to submit. */
@@ -133,25 +150,24 @@ function saleTotalForPlan(plan) {
 
 /**
  * Splits a total into `count` installment amounts that sum back to it
- * exactly (in cents) — a naive `total / count` can drop or misplace
- * fractions of a cent, so every installment gets the same floored amount
- * except the last, which absorbs whatever's left over.
+ * exactly — mirrors the backend's own calculation
+ * (PaymentPlanCommandService.Handle(RegisterInstallmentPaymentCommand):
+ * round-to-nearest-cent per installment, remainder folded into the last
+ * one) so this preview never disagrees with what actually gets recorded.
  * @param {number} total
  * @param {number} count
  * @returns {number[]}
  */
 function splitIntoInstallments(total, count) {
-  const totalCents = Math.round(total * 100);
-  const baseCents = Math.floor(totalCents / count);
-  const lastCents = totalCents - baseCents * (count - 1);
-  return Array.from({ length: count }, (_, index) =>
-      (index === count - 1 ? lastCents : baseCents) / 100
-  );
+  const base = Math.round((total / count) * 100) / 100;
+  const last = Math.round((total - base * (count - 1)) * 100) / 100;
+  return Array.from({ length: count }, (_, index) => index === count - 1 ? last : base);
 }
 
 /**
- * Amount of the plan's next unpaid installment — purely informational, the
- * backend tracks installment counts only, not individual amounts.
+ * Amount of the plan's next unpaid installment. Once that installment is
+ * actually registered, the real amount lives in `plan.payments` instead —
+ * this is only a preview of what registering it next would produce.
  * @param {import('../../domain/model/payment-plan.entity.js').PaymentPlan} plan
  * @returns {string}
  */
@@ -203,10 +219,71 @@ function confirmRegisterPayment(plan) {
   });
 }
 
+/** Toggles a plan's payment-history panel. */
+function toggleHistory(plan) {
+  expandedPlanId.value = expandedPlanId.value === plan.id ? null : plan.id;
+}
+
+/**
+ * Who registered/reversed a payment — "Tú" for the signed-in user, the
+ * resolved name when it's loaded (GET /users is Admin-only, so a cashier
+ * viewing another cashier's payment won't have it), or a numbered fallback.
+ * @param {number} userId
+ * @returns {string}
+ */
+function userLabel(userId) {
+  if (iamStore.currentUser && userId === iamStore.currentUser.id) return t('payment-plans.you');
+  const user = iamStore.getUserById(userId);
+  return user ? `${user.name} ${user.lastName}` : t('payment-plans.unknown-user', { id: userId });
+}
+
+/**
+ * Formats an ISO date string as a short locale date + time.
+ * @param {string} dateString
+ * @returns {string}
+ */
+function formatDateTime(dateString) {
+  return new Date(dateString).toLocaleString(toDateLocale(locale.value), {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
+  });
+}
+
+/**
+ * Prompts for confirmation, then reverts a plan's most recently registered
+ * payment (X4 A5) — undoes exactly one payment, not the whole plan.
+ * @param {import('../../domain/model/payment-plan.entity.js').PaymentPlan} plan
+ */
+function confirmRevertPayment(plan) {
+  confirm.require({
+    message: t('payment-plans.confirm-revert-body', { customer: customerNameForPlan(plan) }),
+    header:  t('payment-plans.confirm-revert-header'),
+    icon:    'pi pi-exclamation-triangle',
+    accept:  () => {
+      revertingPlanId.value = plan.id;
+      salesStore.revertInstallmentPayment(plan.id)
+          .then(() => {
+            toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('payment-plans.toast-revert-success'), life: 3500 });
+          })
+          .catch(() => {
+            toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('payment-plans.toast-revert-error'), life: 4500 });
+          })
+          .finally(() => {
+            revertingPlanId.value = null;
+          });
+    }
+  });
+}
+
 onMounted(() => {
   if (!salesStore.paymentPlansLoaded) salesStore.fetchPendingPaymentPlans();
   if (!salesStore.salesLoaded)        salesStore.fetchSales();
   if (!salesStore.customersLoaded)    salesStore.fetchCustomers();
+  // GET /users is Admin-only — only fetched for an Admin (who can also
+  // revert a payment and so actually needs to identify who registered each
+  // one); a cashier keeps the numbered fallback in userLabel() above.
+  if (canRevert.value && !iamStore.usersLoaded && iamStore.currentUser) {
+    iamStore.fetchUsers(iamStore.currentUser.businessId);
+  }
 });
 </script>
 
@@ -275,9 +352,8 @@ onMounted(() => {
           </tr>
           </thead>
           <tbody>
+          <template v-for="plan in filteredPlans" :key="plan.id">
           <tr
-              v-for="plan in filteredPlans"
-              :key="plan.id"
               style="border-bottom: 1px solid var(--surface-alt);"
           >
             <td class="px-4 py-3" style="font-size: 0.82rem; font-weight: 600; color: var(--text);">
@@ -302,17 +378,72 @@ onMounted(() => {
               {{ installmentAmountLabel(plan) }}
             </td>
             <td class="px-4 py-3">
-              <button
-                  class="flex align-items-center gap-2 border-round-lg px-3 py-2"
-                  style="background-color: var(--brand); color: var(--surface); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
-                  :disabled="registeringPlanId === plan.id"
-                  @click="confirmRegisterPayment(plan)"
-              >
-                <i :class="registeringPlanId === plan.id ? 'pi pi-spin pi-spinner' : 'pi pi-check'" style="font-size: 0.8rem;" />
-                <span>{{ t('payment-plans.btn-register-payment') }}</span>
-              </button>
+              <div class="flex align-items-center gap-2">
+                <button
+                    class="flex align-items-center gap-2 border-round-lg px-3 py-2"
+                    style="background-color: var(--brand); color: var(--surface); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
+                    :disabled="registeringPlanId === plan.id"
+                    @click="confirmRegisterPayment(plan)"
+                >
+                  <i :class="registeringPlanId === plan.id ? 'pi pi-spin pi-spinner' : 'pi pi-check'" style="font-size: 0.8rem;" />
+                  <span>{{ t('payment-plans.btn-register-payment') }}</span>
+                </button>
+                <button
+                    v-if="plan.payments.length > 0"
+                    class="border-round-lg px-2 py-2"
+                    style="background: none; border: 1px solid var(--border); cursor: pointer;"
+                    :title="t('payment-plans.btn-history')"
+                    @click="toggleHistory(plan)"
+                >
+                  <i
+                      class="pi pi-history"
+                      style="font-size: 0.78rem; color: var(--text-muted);"
+                  />
+                </button>
+              </div>
             </td>
           </tr>
+
+          <!-- Payment history panel -->
+          <tr v-if="expandedPlanId === plan.id" :key="`${plan.id}-history`" style="background-color: var(--surface-alt);">
+            <td colspan="5" class="px-4 py-3">
+              <p class="m-0 mb-2" style="font-size: 0.7rem; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em;">
+                {{ t('payment-plans.history-title') }}
+              </p>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <div
+                    v-for="payment in [...plan.payments].reverse()"
+                    :key="payment.id"
+                    class="flex align-items-center justify-content-between"
+                    style="font-size: 0.78rem;"
+                    :style="{ opacity: payment.isReversed ? 0.55 : 1 }"
+                >
+                  <span :style="{ color: 'var(--text-muted)', textDecoration: payment.isReversed ? 'line-through' : 'none' }">
+                    {{ formatDateTime(payment.paidAt) }} — {{ userLabel(payment.paidByUserId) }}
+                  </span>
+                  <div class="flex align-items-center gap-2">
+                    <span :style="{ fontWeight: 600, color: payment.isReversed ? 'var(--text-faint)' : 'var(--text)', textDecoration: payment.isReversed ? 'line-through' : 'none' }">
+                      {{ formatCurrency(payment.amount) }}
+                    </span>
+                    <span v-if="payment.isReversed" style="font-size: 0.68rem; color: var(--status-critical-fg);">
+                      {{ t('payment-plans.reverted-tag') }}
+                    </span>
+                    <button
+                        v-else-if="canRevert && plan.lastReversiblePayment && plan.lastReversiblePayment.id === payment.id"
+                        class="border-round-lg px-2 py-1"
+                        style="background-color: var(--status-critical-bg); color: var(--status-critical-fg); font-size: 0.68rem; font-weight: 600; border: none; cursor: pointer;"
+                        :disabled="revertingPlanId === plan.id"
+                        @click="confirmRevertPayment(plan)"
+                    >
+                      <i :class="revertingPlanId === plan.id ? 'pi pi-spin pi-spinner' : 'pi pi-undo'" style="font-size: 0.7rem;" />
+                      {{ t('payment-plans.btn-revert') }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+          </template>
           </tbody>
         </table>
       </div>
@@ -343,15 +474,62 @@ onMounted(() => {
           </div>
           <div class="flex align-items-center justify-content-between">
             <span style="font-size: 0.75rem; color: var(--text-muted);">{{ installmentAmountLabel(plan) }} {{ t('payment-plans.per-installment') }}</span>
-            <button
-                class="flex align-items-center gap-2 border-round-lg px-3 py-2"
-                style="background-color: var(--brand); color: var(--surface); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
-                :disabled="registeringPlanId === plan.id"
-                @click="confirmRegisterPayment(plan)"
+            <div class="flex align-items-center gap-2">
+              <button
+                  v-if="plan.payments.length > 0"
+                  class="border-round-lg px-2 py-2"
+                  style="background: none; border: 1px solid var(--border); cursor: pointer;"
+                  :title="t('payment-plans.btn-history')"
+                  @click="toggleHistory(plan)"
+              >
+                <i class="pi pi-history" style="font-size: 0.78rem; color: var(--text-muted);" />
+              </button>
+              <button
+                  class="flex align-items-center gap-2 border-round-lg px-3 py-2"
+                  style="background-color: var(--brand); color: var(--surface); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
+                  :disabled="registeringPlanId === plan.id"
+                  @click="confirmRegisterPayment(plan)"
+              >
+                <i :class="registeringPlanId === plan.id ? 'pi pi-spin pi-spinner' : 'pi pi-check'" style="font-size: 0.8rem;" />
+                <span>{{ t('payment-plans.btn-register-payment') }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Payment history panel -->
+          <div v-if="expandedPlanId === plan.id" class="mt-3 pt-3" style="border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px;">
+            <p class="m-0" style="font-size: 0.68rem; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em;">
+              {{ t('payment-plans.history-title') }}
+            </p>
+            <div
+                v-for="payment in [...plan.payments].reverse()"
+                :key="payment.id"
+                class="flex align-items-center justify-content-between"
+                style="font-size: 0.75rem;"
+                :style="{ opacity: payment.isReversed ? 0.55 : 1 }"
             >
-              <i :class="registeringPlanId === plan.id ? 'pi pi-spin pi-spinner' : 'pi pi-check'" style="font-size: 0.8rem;" />
-              <span>{{ t('payment-plans.btn-register-payment') }}</span>
-            </button>
+              <span :style="{ color: 'var(--text-muted)', textDecoration: payment.isReversed ? 'line-through' : 'none' }">
+                {{ formatDateTime(payment.paidAt) }} — {{ userLabel(payment.paidByUserId) }}
+              </span>
+              <div class="flex align-items-center gap-2">
+                <span :style="{ fontWeight: 600, color: payment.isReversed ? 'var(--text-faint)' : 'var(--text)', textDecoration: payment.isReversed ? 'line-through' : 'none' }">
+                  {{ formatCurrency(payment.amount) }}
+                </span>
+                <span v-if="payment.isReversed" style="font-size: 0.66rem; color: var(--status-critical-fg);">
+                  {{ t('payment-plans.reverted-tag') }}
+                </span>
+                <button
+                    v-else-if="canRevert && plan.lastReversiblePayment && plan.lastReversiblePayment.id === payment.id"
+                    class="border-round-lg px-2 py-1"
+                    style="background-color: var(--status-critical-bg); color: var(--status-critical-fg); font-size: 0.66rem; font-weight: 600; border: none; cursor: pointer;"
+                    :disabled="revertingPlanId === plan.id"
+                    @click="confirmRevertPayment(plan)"
+                >
+                  <i :class="revertingPlanId === plan.id ? 'pi pi-spin pi-spinner' : 'pi pi-undo'" style="font-size: 0.68rem;" />
+                  {{ t('payment-plans.btn-revert') }}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

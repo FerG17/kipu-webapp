@@ -3,19 +3,26 @@
  * within the Sales & POS Management bounded context.
  *
  * Business rules:
- * - PAID:      A sale is always created already PAID — the backend has no
+ * - PAID:      Collected in full at checkout — the backend has no
  *              draft/OPEN state (CreateSaleCommand validates stock, persists
  *              and decrements inventory atomically in one request). The
  *              in-progress cart being built in the POS screen before that
  *              request is sent is tracked separately by the store
  *              (currentSale being non-null), not by this status.
+ * - CREDIT:    Sold on installments (PaymentMethod.CREDIT) — nothing is
+ *              collected at checkout. Stays CREDIT for the sale's whole
+ *              life, even once fully paid off; see PaymentPlan for what's
+ *              actually been collected against it.
  * - CANCELLED: Sale was voided after payment; no stock change is reverted here
- *              (handled by the store layer).
+ *              (handled by the store layer). Cancelling a CREDIT sale does
+ *              NOT refund whatever installments were already collected —
+ *              it only stops further ones (no refund flow exists).
  *
  * @enum {string}
  */
 export const SaleStatus = Object.freeze({
     PAID:      'PAID',
+    CREDIT:    'CREDIT',
     CANCELLED: 'CANCELLED'
 });
 
@@ -25,18 +32,22 @@ export const SaleStatus = Object.freeze({
  *
  * Business rules:
  * - A sale can only be marked PAID when a valid PaymentMethod is selected.
- * - CASH:  Physical currency; change must be calculated by the presenter.
- * - CARD:  Credit or debit card terminal.
- * - YAPE:  QR-based mobile wallet (Banco de Crédito del Perú).
- * - PLIN:  QR-based mobile wallet (BBVA / Scotiabank / Interbank).
+ * - CASH:   Physical currency; change must be calculated by the presenter.
+ * - CARD:   Credit or debit card terminal.
+ * - YAPE:   QR-based mobile wallet (Banco de Crédito del Perú).
+ * - PLIN:   QR-based mobile wallet (BBVA / Scotiabank / Interbank).
+ * - CREDIT: Nothing collected now — the sale is born SaleStatus.CREDIT
+ *           instead of PAID (see Sale.isCredit) and a PaymentPlan gets
+ *           attached to it right after (see PaymentModal's sellOnCredit).
  *
  * @enum {string}
  */
 export const PaymentMethod = Object.freeze({
-    CASH: 'CASH',
-    CARD: 'CARD',
-    YAPE: 'YAPE',
-    PLIN: 'PLIN'
+    CASH:   'CASH',
+    CARD:   'CARD',
+    YAPE:   'YAPE',
+    PLIN:   'PLIN',
+    CREDIT: 'CREDIT'
 });
 
 import { SaleDetail }  from './sale-detail.entity.js';
@@ -98,11 +109,19 @@ export class Sale {
     }
 
     /**
-     * Returns true when the sale has been successfully paid.
+     * Returns true when the sale has been successfully paid (in full, at checkout).
      * @returns {boolean}
      */
     get isPaid() {
         return this.status === SaleStatus.PAID;
+    }
+
+    /**
+     * Returns true when the sale was sold on installments — see SaleStatus.CREDIT.
+     * @returns {boolean}
+     */
+    get isCredit() {
+        return this.status === SaleStatus.CREDIT;
     }
 
     /**

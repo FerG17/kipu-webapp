@@ -5,6 +5,8 @@ import { useToast }     from 'primevue/usetoast';
 import useSalesStore    from '../../application/sales.store.js';
 import useProductStore  from '../../../product/application/product.store.js';
 import useAlertsStore   from '../../../alerts/application/alerts.store.js';
+import useIamStore      from '../../../iam/application/iam.store.js';
+import { canCancelSales } from '../../../iam/application/permissions.js';
 import { SaleStatus }   from '../../domain/model/sale.entity.js';
 import { toDateLocale } from '../../../shared/presentation/date-locale.js';
 
@@ -28,6 +30,10 @@ const toast        = useToast();
 const salesStore   = useSalesStore();
 const productStore = useProductStore();
 const alertsStore  = useAlertsStore();
+const iamStore     = useIamStore();
+
+/** X4 M4: cancelling a sale is now Admin only — a cashier used to be able to cancel any sale, including one that wasn't theirs. */
+const canCancel = computed(() => canCancelSales(iamStore.currentUserPosition));
 
 // ─── UI state ──────────────────────────────────────────────────────────────
 
@@ -134,6 +140,7 @@ const filteredSales = computed(() => {
 const statusFilters = [
   { value: 'ALL',                   labelKey: 'sales.filter-all'       },
   { value: SaleStatus.PAID,         labelKey: 'sales.filter-paid'      },
+  { value: SaleStatus.CREDIT,       labelKey: 'sales.filter-credit'    },
   { value: SaleStatus.CANCELLED,    labelKey: 'sales.filter-cancelled' }
 ];
 
@@ -164,25 +171,28 @@ function getProductName(productId) {
 /**
  * Returns the badge style config for a sale.
  *
- * Sale.status is PAID as soon as checkout succeeds (stock is decremented
- * atomically with creation — see the backend's SaleStatus doc comment), which
- * for a credit sale means "the transaction went through", not "fully paid
- * off". There's no PaymentMethod value for "credit" (PaymentMethod is only
- * CASH/CARD/YAPE/PLIN — the method itself, not whether it's on installments)
- * — a credit sale is identified purely by having a PaymentPlan attached, via
- * a separate command after the sale (see payment-modal.vue's sellOnCredit).
- * Cross-referencing the pending-plans list avoids showing "Completada"
- * while a sale is still on an open plan, regardless of its payment method.
+ * X4 A10 fix: a credit sale now has its OWN status (SaleStatus.CREDIT,
+ * PaymentMethod.CREDIT) instead of being born PAID and only distinguishable
+ * by whether a PaymentPlan happened to be attached — which is what let a
+ * credit sale get labeled "Completada"/tagged Efectivo in the first place.
+ * salesStore.paymentPlans only tracks PENDING plans (see
+ * payment-plans-list.vue's doc comment), so a CREDIT sale whose plan is
+ * already fully paid off won't be found there — it still reads as "A
+ * crédito" rather than a wrong "Completada", just without the progress
+ * detail an open plan gets.
  * @param {import('../../domain/model/sale.entity.js').Sale} sale
  * @returns {{ labelKey: string, color: string, background: string }}
  */
 function getStatusConfig(sale) {
-  if (sale.status === SaleStatus.PAID) {
-    const hasPendingInstallments = salesStore.paymentPlans.some(plan => plan.saleId === sale.id);
-    if (hasPendingInstallments) {
+  if (sale.status === SaleStatus.CREDIT) {
+    const plan = salesStore.paymentPlans.find(plan => plan.saleId === sale.id);
+    if (plan && !plan.isCancelled) {
       return { labelKey: 'sales.status-pending-installments', color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)' };
     }
-    return { labelKey: 'sales.status-paid',      color: 'var(--status-ok-fg)', background: 'var(--status-ok-bg)' };
+    return { labelKey: 'sales.status-credit', color: 'var(--brand)', background: 'var(--brand-soft)' };
+  }
+  if (sale.status === SaleStatus.PAID) {
+    return { labelKey: 'sales.status-paid', color: 'var(--status-ok-fg)', background: 'var(--status-ok-bg)' };
   }
   if (sale.status === SaleStatus.CANCELLED) {
     return { labelKey: 'sales.status-cancelled', color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)' };
@@ -197,10 +207,11 @@ function getStatusConfig(sale) {
  */
 function getMethodConfig(method) {
   const configs = {
-    CASH: { color: 'var(--status-ok-fg)', background: 'var(--status-ok-bg)' },
-    YAPE: { color: '#7C3AED', background: '#EDE9FE' },
-    PLIN: { color: 'var(--brand)', background: '#CFFAFE' },
-    CARD: { color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)' }
+    CASH:   { color: 'var(--status-ok-fg)', background: 'var(--status-ok-bg)' },
+    YAPE:   { color: '#7C3AED', background: '#EDE9FE' },
+    PLIN:   { color: 'var(--brand)', background: '#CFFAFE' },
+    CARD:   { color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)' },
+    CREDIT: { color: 'var(--brand)', background: 'var(--brand-soft)' }
   };
   return configs[method] || { color: 'var(--text-muted)', background: 'var(--surface-alt)' };
 }
@@ -454,7 +465,7 @@ onMounted(() => {
               <td class="px-4 py-3">
                 <div class="flex align-items-center gap-2">
                   <button
-                      v-if="sale.status !== SaleStatus.CANCELLED"
+                      v-if="sale.status !== SaleStatus.CANCELLED && canCancel"
                       class="border-round-lg px-2 py-1"
                       :disabled="cancellingSaleId === sale.id"
                       style="background-color: var(--status-critical-bg); color: var(--status-critical-fg); font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
@@ -617,7 +628,7 @@ onMounted(() => {
 
           <!-- Cancel action -->
           <button
-              v-if="sale.status !== SaleStatus.CANCELLED"
+              v-if="sale.status !== SaleStatus.CANCELLED && canCancel"
               class="w-full mt-3 border-round-lg py-2"
               :disabled="cancellingSaleId === sale.id"
               style="background-color: var(--status-critical-bg); color: var(--status-critical-fg); font-size: 0.78rem; font-weight: 600; border: none; cursor: pointer;"

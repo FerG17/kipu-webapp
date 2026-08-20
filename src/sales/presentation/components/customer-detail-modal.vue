@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useI18n }  from 'vue-i18n';
 import { toDateLocale } from '../../../shared/presentation/date-locale.js';
+import useSalesStore from '../../application/sales.store.js';
 
 /**
  * CustomerDetailModal component for the Sales & POS Management bounded context.
@@ -37,6 +38,7 @@ const emit = defineEmits([
 ]);
 
 const { t, locale } = useI18n();
+const salesStore     = useSalesStore();
 
 /**
  * Two-letter avatar initials derived from the customer's full name.
@@ -53,24 +55,46 @@ const avatarInitials = computed(() =>
 );
 
 /**
- * Total number of completed (PAID) sales for this customer.
+ * Total number of sales for this customer, paid in full or on credit —
+ * a credit sale is still a real purchase even though nothing was
+ * necessarily collected upfront (X4: it used to only count PAID, silently
+ * dropping every credit sale from a customer's own history).
  * @type {import('vue').ComputedRef<number>}
  */
 const totalPurchases = computed(() =>
     props.sales.filter(
-        sale => sale.customerId === props.customer.id && sale.status === 'PAID'
+        sale => sale.customerId === props.customer.id && (sale.status === 'PAID' || sale.status === 'CREDIT')
     ).length
 );
 
 /**
- * Total amount spent by this customer across all paid sales.
+ * Total amount actually collected from this customer: paid-in-full sales'
+ * totals, plus installments collected on their still-pending credit sales
+ * (salesStore.paymentPlans only tracks PENDING plans — see
+ * payment-plans-list.vue's doc comment — so a credit sale of theirs that's
+ * already fully paid off isn't reflected here; the business-wide, always-
+ * accurate figure lives in GET /sales/revenue, this is a best-effort
+ * per-customer approximation from what's already loaded client-side).
  * @type {import('vue').ComputedRef<number>}
  */
-const totalSpent = computed(() =>
-    props.sales
-        .filter(sale => sale.customerId === props.customer.id && sale.status === 'PAID')
-        .reduce((sum, sale) => sum + sale.subtotal, 0)
-);
+const totalSpent = computed(() => {
+  const paidTotal = props.sales
+      .filter(sale => sale.customerId === props.customer.id && sale.status === 'PAID')
+      .reduce((sum, sale) => sum + sale.subtotal, 0);
+
+  const creditSaleIds = new Set(
+      props.sales
+          .filter(sale => sale.customerId === props.customer.id && sale.status === 'CREDIT')
+          .map(sale => sale.id)
+  );
+  const collectedInstallments = salesStore.paymentPlans
+      .filter(plan => creditSaleIds.has(plan.saleId))
+      .flatMap(plan => plan.payments)
+      .filter(payment => !payment.isReversed)
+      .reduce((sum, payment) => sum + payment.amount, 0);
+
+  return paidTotal + collectedInstallments;
+});
 
 /**
  * Formats an ISO date string as a short locale date (DD/MM/YYYY).

@@ -203,6 +203,22 @@ const useSalesStore = defineStore('sales', () => {
     }
 
     /**
+     * Total revenue for an optional date range, straight from the backend's
+     * one true calculation (GetTotalRevenueByBusinessIdQuery) — Paid sales'
+     * totals plus installments actually collected on credit sales. Never
+     * derive this client-side from `sales`/`paymentPlans`: that was exactly
+     * how A10 happened (a credit sale's full total counted as revenue the
+     * moment it was created, in a second calculation that quietly diverged
+     * from the backend's).
+     * @param {string} [dateFrom] - 'yyyy-mm-dd'.
+     * @param {string} [dateTo]   - 'yyyy-mm-dd'.
+     * @returns {Promise<number>}
+     */
+    function fetchSalesRevenue(dateFrom, dateTo) {
+        return salesApi.getSalesRevenue(dateFrom, dateTo).then(response => response.data.totalRevenue);
+    }
+
+    /**
      * Loads all customers for the authenticated business and updates local
      * state. Scoped server-side by the JWT, no businessId parameter needed
      * or accepted.
@@ -575,6 +591,29 @@ const useSalesStore = defineStore('sales', () => {
             });
     }
 
+    /**
+     * Reverts the most recently registered payment on a plan (X4 A5) —
+     * Admin only, enforced server-side. A previously-fully-paid plan that
+     * drops out of paidInstallments === totalInstallments becomes pending
+     * again, so it needs to be (re-)inserted into the local list, not just
+     * updated in place.
+     * @param {number|string} planId
+     * @returns {Promise<import('../domain/model/payment-plan.entity.js').PaymentPlan>}
+     */
+    function revertInstallmentPayment(planId) {
+        return salesApi.revertInstallmentPayment(planId)
+            .then(response => {
+                const updatedPlan = PaymentPlanAssembler.toEntityFromResource(response.data);
+                const index = paymentPlans.value.findIndex(plan => plan.id === updatedPlan.id);
+                if (index !== -1) {
+                    paymentPlans.value[index] = updatedPlan;
+                } else {
+                    paymentPlans.value.push(updatedPlan);
+                }
+                return updatedPlan;
+            });
+    }
+
     return {
         // State
         sales,
@@ -595,6 +634,7 @@ const useSalesStore = defineStore('sales', () => {
         // Fetch
         fetchSales,
         fetchSalesInRange,
+        fetchSalesRevenue,
         fetchCustomers,
         fetchSaleDetailsForSale,
         // POS session
@@ -613,7 +653,8 @@ const useSalesStore = defineStore('sales', () => {
         fetchPendingPaymentPlans,
         fetchPaymentPlanBySale,
         createPaymentPlan,
-        registerInstallmentPayment
+        registerInstallmentPayment,
+        revertInstallmentPayment
     };
 });
 
