@@ -52,6 +52,14 @@ const useAlertsStore = defineStore('alerts', () => {
     const alertsLoaded = ref(false);
 
     /**
+     * Set when the last fetchAlerts() call failed — lets the view tell a
+     * real error apart from "this business genuinely has no alerts" instead
+     * of both rendering the same "sin alertas" empty state.
+     * @type {import('vue').Ref<Error|null>}
+     */
+    const alertsError = ref(null);
+
+    /**
      * Alert rules, one per real backend AlertType — LOW_STOCK and
      * OUT_OF_STOCK only ever expose `active` (their threshold is each
      * product's own minimumStock, not configurable here); EXPIRATION also
@@ -192,6 +200,7 @@ const useAlertsStore = defineStore('alerts', () => {
      */
     function fetchAlerts() {
         alertsLoaded.value = false;
+        alertsError.value  = null;
         return Promise.all([alertsApi.getActiveAlerts(), alertsApi.getAlertHistory()])
             .then(([activeResponse, historyResponse]) => {
                 warnIfTruncated(historyResponse, 'Historial de alertas');
@@ -200,7 +209,8 @@ const useAlertsStore = defineStore('alerts', () => {
                 alerts.value       = [...active, ...history];
                 alertsLoaded.value = true;
             })
-            .catch(() => {
+            .catch(error => {
+                alertsError.value  = error;
                 alertsLoaded.value = true;
             });
     }
@@ -317,6 +327,7 @@ const useAlertsStore = defineStore('alerts', () => {
     return {
         alerts,
         alertsLoaded,
+        alertsError,
         alertRules,
         alertRulesLoaded,
         alertsCount,

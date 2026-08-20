@@ -72,18 +72,35 @@ const dateFilteredSales = ref(null);
 /** @type {import('vue').Ref<boolean>} Whether a date-range fetch is in flight. */
 const loadingDateFilter = ref(false);
 
+/**
+ * Guards against out-of-order responses: if the cashier changes the date
+ * range again before an in-flight fetch resolves, the earlier request's
+ * result must not overwrite what the later one returns just because it
+ * happens to land second.
+ * @type {number}
+ */
+let dateFilterRequestId = 0;
+
 watch([dateFrom, dateTo], ([from, to]) => {
+  const requestId = ++dateFilterRequestId;
+
   if (!from && !to) {
     dateFilteredSales.value = null;
     return;
   }
   loadingDateFilter.value = true;
   salesStore.fetchSalesInRange(from || undefined, to || undefined)
-      .then(result => { dateFilteredSales.value = result; })
+      .then(result => {
+        if (requestId !== dateFilterRequestId) return;
+        dateFilteredSales.value = result;
+      })
       .catch(() => {
+        if (requestId !== dateFilterRequestId) return;
         toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('sales.toast-date-filter-error'), life: 4500 });
       })
-      .finally(() => { loadingDateFilter.value = false; });
+      .finally(() => {
+        if (requestId === dateFilterRequestId) loadingDateFilter.value = false;
+      });
 });
 
 /**
@@ -286,12 +303,25 @@ async function handleCancelSale(sale) {
       return;
     }
 
-    await productStore.fetchInventory();
-    productStore.invalidateStockMovements();
-    // Restoring stock can resolve a LOW_STOCK/OUT_OF_STOCK alert — refresh
-    // so the sidebar badge drops immediately instead of staying stale.
-    alertsStore.fetchAlerts();
+    // The store replaces the entry in its own `sales` cache, but not in this
+    // view's separate `dateFilteredSales` array when a date filter is
+    // active (see its doc comment) — mutate the exact object the table is
+    // currently reading from directly, so the row reflects the cancellation
+    // regardless of which source is active.
+    sale.status = SaleStatus.CANCELLED;
     toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('sales.toast-cancel-success'), life: 3500 });
+
+    try {
+      await productStore.fetchInventory();
+      productStore.invalidateStockMovements();
+      // Restoring stock can resolve a LOW_STOCK/OUT_OF_STOCK alert — refresh
+      // so the sidebar badge drops immediately instead of staying stale.
+      alertsStore.fetchAlerts();
+    } catch {
+      // The cancellation itself already succeeded (and was already
+      // confirmed above) — a failed refresh here only means inventory/
+      // alerts will look stale until the next natural reload.
+    }
   } finally {
     cancellingSaleId.value = null;
   }

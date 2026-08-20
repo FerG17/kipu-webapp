@@ -20,6 +20,7 @@ const productStore = useProductStore();
 const {
   alerts,
   alertsLoaded,
+  alertsError,
   alertRules,
   activeAlertsCount,
   criticalActiveCount,
@@ -82,6 +83,16 @@ const selectedAlert = ref(null);
 // ─── Rule edit state ───────────────────────────────────────────────────────────
 const editingRuleType  = ref(null);
 const editingThreshold = ref('');
+
+/**
+ * The rule type currently being toggled, or null. `rule.active` in the
+ * store only flips once the request actually succeeds (see
+ * alerts.store.js#toggleAlertRule), so the switch never has to be visually
+ * rolled back — this just blocks a double-click and drives the error toast
+ * when the request fails.
+ * @type {import('vue').Ref<string|null>}
+ */
+const togglingRuleType = ref(null);
 
 // ─── Config maps ───────────────────────────────────────────────────────────────
 const typeConfig = {
@@ -232,6 +243,23 @@ function handleDiscardBatch() {
 function startEditRule(rule) {
   editingRuleType.value  = rule.type;
   editingThreshold.value = String(rule.threshold);
+}
+
+/**
+ * Toggles a rule's enabled state, guarding against double-clicks and
+ * reporting a failure instead of leaving it unexplained.
+ * @param {string} type
+ */
+function handleToggleRule(type) {
+  if (togglingRuleType.value) return;
+  togglingRuleType.value = type;
+  toggleAlertRule(type)
+      .catch(() => {
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('alerts.toast-rule-toggle-error'), life: 4500 });
+      })
+      .finally(() => {
+        togglingRuleType.value = null;
+      });
 }
 
 function saveRuleThreshold(type) {
@@ -424,7 +452,11 @@ function formatDateTime(isoDate) {
             </tr>
             </tbody>
           </table>
-          <div v-if="filteredAlerts.length === 0" class="alerts-empty">
+          <div v-if="alertsError" class="alerts-empty">
+            <i class="pi pi-lock alerts-empty-icon" style="color: var(--status-critical-fg);" />
+            <p class="alerts-empty-text">{{ t('alerts.error-loading') }}</p>
+          </div>
+          <div v-else-if="filteredAlerts.length === 0" class="alerts-empty">
             <i class="pi pi-bell-slash alerts-empty-icon" />
             <p class="alerts-empty-text">{{ t('alerts.no-results') }}</p>
             <p v-if="statusFilter === 'ACTIVE' && typeFilter === 'ALL'" class="alerts-empty-sub">{{ t('alerts.no-results-sub') }}</p>
@@ -476,7 +508,11 @@ function formatDateTime(isoDate) {
                             </span>
             </div>
           </button>
-          <div v-if="filteredAlerts.length === 0" class="alerts-empty">
+          <div v-if="alertsError" class="alerts-empty">
+            <i class="pi pi-lock alerts-empty-icon" style="color: var(--status-critical-fg);" />
+            <p class="alerts-empty-text">{{ t('alerts.error-loading') }}</p>
+          </div>
+          <div v-else-if="filteredAlerts.length === 0" class="alerts-empty">
             <i class="pi pi-bell-slash alerts-empty-icon" />
             <p class="alerts-empty-text">{{ t('alerts.no-results') }}</p>
           </div>
@@ -506,7 +542,13 @@ function formatDateTime(isoDate) {
                   <p class="alerts-rule-desc">{{ t(rule.descKey) }}</p>
                 </div>
               </div>
-              <button v-if="canManageRules" class="alerts-rule-toggle" :style="{ backgroundColor: rule.active ? 'var(--brand)' : 'var(--text-faint)' }" @click="toggleAlertRule(rule.type)">
+              <button
+                  v-if="canManageRules"
+                  class="alerts-rule-toggle"
+                  :style="{ backgroundColor: rule.active ? 'var(--brand)' : 'var(--text-faint)', opacity: togglingRuleType === rule.type ? 0.6 : 1 }"
+                  :disabled="togglingRuleType === rule.type"
+                  @click="handleToggleRule(rule.type)"
+              >
                 <span class="alerts-rule-toggle-thumb" :style="{ left: rule.active ? '22px' : '2px' }" />
               </button>
             </div>

@@ -70,6 +70,22 @@ const useDashboardStore = defineStore('dashboard', () => {
      */
     const salesByDay = ref([]);
 
+    /**
+     * True once fetchSalesByDay has resolved (success or failure) at least
+     * once — the weekly chart used to show its loading spinner forever for
+     * a genuinely empty week or a failed fetch, since `salesByDay.length`
+     * was the only signal it had.
+     * @type {import('vue').Ref<boolean>}
+     */
+    const salesByDayLoaded = ref(false);
+
+    /**
+     * Set when the last fetchSalesByDay() call failed for a reason other
+     * than the already-tracked dashboardForbidden.
+     * @type {import('vue').Ref<Error|null>}
+     */
+    const salesByDayError = ref(null);
+
     /** @type {import('vue').Ref<Array>} */
     const topStockProducts = ref([]);
     /** @type {import('vue').Ref<boolean>} */
@@ -112,6 +128,7 @@ const useDashboardStore = defineStore('dashboard', () => {
      * @param {string} [dateTo]   - 'yyyy-mm-dd'; server defaults to today.
      */
     function fetchSalesByDay(dateFrom, dateTo) {
+        salesByDayError.value = null;
         return dashboardApi.getSalesByDay(dateFrom, dateTo)
             .then(response => {
                 const days = response.data instanceof Array ? response.data : [];
@@ -128,10 +145,13 @@ const useDashboardStore = defineStore('dashboard', () => {
                     ...entry,
                     barHeightPercent: maxAmount > 0 ? Math.round((entry.totalAmount / maxAmount) * 100) : 0
                 }));
+                salesByDayLoaded.value  = true;
                 dashboardForbidden.value = false;
             })
             .catch(error => {
+                salesByDayLoaded.value = true;
                 if (isForbidden(error)) dashboardForbidden.value = true;
+                else salesByDayError.value = error;
             });
     }
 
@@ -212,6 +232,8 @@ const useDashboardStore = defineStore('dashboard', () => {
         kpisLoaded,
         dashboardForbidden,
         salesByDay,
+        salesByDayLoaded,
+        salesByDayError,
         topStockProducts,
         topStockLoaded,
         reports,

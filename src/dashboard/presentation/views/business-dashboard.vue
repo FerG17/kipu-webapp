@@ -21,6 +21,8 @@ const {
   kpisLoaded,
   dashboardForbidden,
   salesByDay,
+  salesByDayLoaded,
+  salesByDayError,
   topStockProducts,
   topStockLoaded
 } = toRefs(dashboardStore);
@@ -428,8 +430,18 @@ const quickActions = computed(() => [
             <div class="chart-axis"/>
           </div>
 
-          <div v-else class="panel__loading">
+          <div v-else-if="!salesByDayLoaded" class="panel__loading">
             <i class="pi pi-spin pi-spinner"/>
+          </div>
+
+          <div v-else-if="salesByDayError" class="panel__empty">
+            <i class="pi pi-lock" style="color: var(--status-critical-fg);"/>
+            <p class="m-0">{{ t('dashboard.weekly-movements-error') }}</p>
+          </div>
+
+          <div v-else class="panel__empty">
+            <i class="pi pi-chart-bar"/>
+            <p class="m-0">{{ t('dashboard.weekly-movements-empty') }}</p>
           </div>
         </div>
       </div>
@@ -744,6 +756,20 @@ const quickActions = computed(() => [
   min-height: 120px;
   color: var(--brand);
   font-size: 1.4rem;
+}
+.panel__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 120px;
+  color: var(--text-faint);
+  font-size: 0.85rem;
+  text-align: center;
+}
+.panel__empty i {
+  font-size: 1.6rem;
 }
 
 /* ── Link button ────────────────────────────────────────────────────── */
