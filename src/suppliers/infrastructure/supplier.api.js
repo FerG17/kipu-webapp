@@ -34,13 +34,17 @@ export class SupplierApi extends BaseApi {
     // ─── Supplier operations ──────────────────────────────────────────────────
 
     /**
-     * Fetches all suppliers for the authenticated business. Scoped
-     * server-side by the JWT — SuppliersController.GetSuppliers has no
-     * query parameters at all.
+     * Fetches suppliers for the authenticated business. Scoped server-side
+     * by the JWT. Active only by default (X4 M11) — a deactivated supplier
+     * used to stay in every listing/picker forever with no way to tell it
+     * apart from an active one. Pass includeInactive=true for the supplier
+     * management page itself, which needs to show (and offer to reactivate)
+     * inactive suppliers too.
+     * @param {boolean} [includeInactive=false]
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getSuppliers() {
-        return this.#suppliersEndpoint.getAll();
+    getSuppliers(includeInactive = false) {
+        return this.http.get(`${suppliersEndpointPath}${includeInactive ? '?includeInactive=true' : ''}`);
     }
 
     /**
@@ -84,6 +88,15 @@ export class SupplierApi extends BaseApi {
      */
     deactivateSupplier(id) {
         return this.#suppliersEndpoint.delete(id);
+    }
+
+    /**
+     * X4 M11: undoes deactivateSupplier — there was no way back from it before.
+     * @param {number|string} id
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    reactivateSupplier(id) {
+        return this.http.patch(`${suppliersEndpointPath}/${id}/activate`);
     }
 
     // ─── Purchase order operations ────────────────────────────────────────────

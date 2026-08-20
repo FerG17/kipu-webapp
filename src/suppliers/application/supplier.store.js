@@ -108,12 +108,17 @@ const useSupplierStore = defineStore('supplier', () => {
     // ─── Commands ──────────────────────────────────────────────────────────────
 
     /**
-     * Fetches all suppliers for the authenticated business. Scoped
-     * server-side by the JWT, no businessId parameter needed or accepted.
+     * Fetches all suppliers for the authenticated business, active and
+     * inactive alike — this store is the single source both the supplier
+     * management page (which needs to show and reactivate inactive ones)
+     * and every picker (product form, purchase order form) read from; the
+     * pickers already filter to `.isActive` themselves (X4 M11), so there's
+     * no need for two separate fetches/caches here. Scoped server-side by
+     * the JWT, no businessId parameter needed or accepted.
      * @returns {Promise<void>}
      */
     function fetchSuppliers() {
-        return supplierApi.getSuppliers()
+        return supplierApi.getSuppliers(true)
             .then(response => {
                 suppliers.value       = SupplierAssembler.toEntitiesFromResponse(response);
                 suppliersLoaded.value = true;
@@ -205,6 +210,22 @@ const useSupplierStore = defineStore('supplier', () => {
         if (!existingSupplier) return Promise.reject(new Error(`Supplier #${numericId} not found.`));
 
         return supplierApi.deactivateSupplier(numericId)
+            .then(response => {
+                const updatedSupplier = SupplierAssembler.toEntityFromResource(response.data);
+                const index = suppliers.value.findIndex(supplier => supplier.id === numericId);
+                if (index !== -1) suppliers.value[index] = updatedSupplier;
+                return updatedSupplier;
+            });
+    }
+
+    /**
+     * X4 M11: undoes deactivateSupplier — there was no way back from it before.
+     * @param {number|string} supplierId
+     * @returns {Promise<import('../domain/model/supplier.entity.js').Supplier>}
+     */
+    function reactivateSupplier(supplierId) {
+        const numericId = parseInt(supplierId);
+        return supplierApi.reactivateSupplier(numericId)
             .then(response => {
                 const updatedSupplier = SupplierAssembler.toEntityFromResource(response.data);
                 const index = suppliers.value.findIndex(supplier => supplier.id === numericId);
@@ -339,6 +360,7 @@ const useSupplierStore = defineStore('supplier', () => {
         addSupplier,
         updateSupplier,
         deactivateSupplier,
+        reactivateSupplier,
         createPurchaseOrder,
         updatePurchaseOrderStatus
     };

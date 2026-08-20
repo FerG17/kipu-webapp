@@ -732,13 +732,25 @@ function persistProductFromModal(resolvedCategory) {
 
   savingProduct.value = true;
   const savePromise = editingProduct.value
-      ? updateProduct(productEntity)
-          .then(() => updateMinimumStock(editingProduct.value.id, minimumStock))
-          .then(() => {
-            if (expirationDate) {
-              return createBatchForProduct({ productId: editingProduct.value.id, expiration: expirationDate, purchasePrice });
-            }
-          })
+      ? updateProduct(productEntity).then(() => {
+        // X4 M19: updateMinimumStock and the batch/expiration save are
+        // independent writes to different entities — chaining them
+        // sequentially meant a rejected updateMinimumStock (e.g. editing a
+        // product with no inventory record anywhere yet) skipped
+        // createBatchForProduct entirely, silently dropping whatever
+        // expiration date the admin just typed even though the name/price
+        // update above had already committed. Promise.allSettled attempts
+        // both regardless of the other's outcome.
+        const minimumStockPromise = updateMinimumStock(editingProduct.value.id, minimumStock);
+        const batchPromise = expirationDate
+            ? createBatchForProduct({ productId: editingProduct.value.id, expiration: expirationDate, purchasePrice })
+            : Promise.resolve();
+
+        return Promise.allSettled([minimumStockPromise, batchPromise]).then(results => {
+          const failure = results.find(result => result.status === 'rejected');
+          if (failure) throw failure.reason;
+        });
+      })
       : addProduct(productEntity).then(createdProduct => {
         // Always create the inventory record, even with 0 initial stock, so
         // minimumStock has somewhere to persist (see registerStockIntake).
