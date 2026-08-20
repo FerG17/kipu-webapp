@@ -304,6 +304,12 @@ function receiveOrder() {
             // patch state from; a real refresh is needed for all three.
             productStore.fetchInventory();
             productStore.fetchBatches();
+            // X4 M20: receiving an order books a real StockMovement per line
+            // server-side, but the cached list here was never told — an
+            // admin visiting Inventario → Movimientos right after receiving
+            // an order saw it missing until an unrelated refresh happened to
+            // invalidate it, or a full page reload.
+            productStore.invalidateStockMovements();
             alertsStore.fetchAlerts();
           })
           .catch(() => {

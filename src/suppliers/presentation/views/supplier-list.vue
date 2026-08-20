@@ -17,10 +17,13 @@ const iamStore      = useIamStore();
 const productStore  = useProductStore();
 
 const { suppliers, suppliersLoaded } = toRefs(supplierStore);
-const { fetchSuppliers, addSupplier, updateSupplier, deactivateSupplier } = supplierStore;
+const { fetchSuppliers, addSupplier, updateSupplier, deactivateSupplier, reactivateSupplier } = supplierStore;
 
 const savingSupplier      = ref(false);
 const deactivatingSupplier = ref(false);
+
+/** @type {import('vue').Ref<number|null>} Id of the supplier currently being reactivated (X4 M11), for its button's disabled/label state. */
+const reactivatingSupplierId = ref(null);
 
 // ─── Search & filter state ─────────────────────────────────────────────────────
 
@@ -340,6 +343,28 @@ function confirmDeactivation() {
       })
       .finally(() => {
         deactivatingSupplier.value = false;
+      });
+}
+
+/**
+ * X4 M11: reactivates a deactivated supplier — no confirmation dialog,
+ * mirroring product-list.vue's own handleActivateProduct (undoing a
+ * deactivation is the low-risk direction; only deactivating itself asks
+ * for confirmation, above).
+ * @param {import('../../domain/model/supplier.entity.js').Supplier} supplier
+ */
+function handleReactivateSupplier(supplier) {
+  reactivatingSupplierId.value = supplier.id;
+  reactivateSupplier(supplier.id)
+      .then(() => {
+        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.toast-reactivate-success', { name: supplier.fullName }), life: 3500 });
+        showDetailModal.value = false;
+      })
+      .catch(() => {
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.toast-reactivate-error'), life: 4500 });
+      })
+      .finally(() => {
+        reactivatingSupplierId.value = null;
       });
 }
 
@@ -796,6 +821,15 @@ function formatCurrency(amount) {
                 @click="initiateDeactivation(detailSupplier)"
             >
               {{ t('suppliers.btn-deactivate') }}
+            </button>
+            <!-- X4 M11: a deactivated supplier used to have no way back — Deactivate() had no Activate() counterpart anywhere in the UI. -->
+            <button
+                v-else
+                class="supplier-modal-btn-save"
+                :disabled="reactivatingSupplierId === detailSupplier.id"
+                @click="handleReactivateSupplier(detailSupplier)"
+            >
+              {{ reactivatingSupplierId === detailSupplier.id ? t('suppliers.modal-saving') : t('suppliers.btn-reactivate') }}
             </button>
             <button
                 class="supplier-modal-btn-cancel"

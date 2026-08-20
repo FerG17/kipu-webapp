@@ -475,19 +475,27 @@ const useProductStore = defineStore('product', () => {
     /**
      * Deletes a product and removes it from local state.
      *
-     * Business rule: deletion is blocked when the product has an inventory record
-     * with currentStock > 0. The promise rejects and no API call is made.
+     * Business rule: deletion is blocked when the product has any stock,
+     * summed across every warehouse it's split into (X4 M23) — this used to
+     * only look at the first matching inventory record, so a product with
+     * zero in one warehouse and real stock in another passed this check even
+     * though the backend's own guard (CannotDeleteWithStock) would still
+     * reject it; the view's own total-stock check happened to catch this
+     * before it reached the API, so it was never actually exploitable from
+     * the UI, but the store's own invariant was still wrong on its own terms.
      *
      * @param {number|string} id
      * @returns {Promise<void>}
      */
     function deleteProduct(id) {
-        const numericId     = parseInt(id);
-        const inventoryItem = inventory.value.find(item => item.productId === numericId);
+        const numericId  = parseInt(id);
+        const totalStock = inventory.value
+            .filter(item => item.productId === numericId)
+            .reduce((sum, item) => sum + item.currentStock, 0);
 
-        if (inventoryItem && inventoryItem.currentStock > 0) {
+        if (totalStock > 0) {
             return Promise.reject(
-                new Error(`Cannot delete product #${numericId}: it has ${inventoryItem.currentStock} units in stock.`)
+                new Error(`Cannot delete product #${numericId}: it has ${totalStock} units in stock.`)
             );
         }
 
@@ -496,8 +504,8 @@ const useProductStore = defineStore('product', () => {
                 const productIndex = products.value.findIndex(product => product.id === numericId);
                 if (productIndex !== -1) products.value.splice(productIndex, 1);
 
-                const inventoryIndex = inventory.value.findIndex(item => item.productId === numericId);
-                if (inventoryIndex !== -1) inventory.value.splice(inventoryIndex, 1);
+                // Every warehouse's record, not just the first — same reasoning as the totalStock check above.
+                inventory.value = inventory.value.filter(item => item.productId !== numericId);
             });
     }
 
