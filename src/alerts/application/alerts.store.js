@@ -54,9 +54,13 @@ const useAlertsStore = defineStore('alerts', () => {
      * Alert rules, one per real backend AlertType — LOW_STOCK and
      * OUT_OF_STOCK only ever expose `active` (their threshold is each
      * product's own minimumStock, not configurable here); EXPIRATION also
-     * exposes an editable `threshold` (days), which governs both the
-     * "expiring soon" and the "already expired" alerts server-side (there is
-     * no separate EXPIRED rule on the backend).
+     * exposes an editable `threshold` (days), governing the "expiring soon"
+     * alert. EXPIRED *is* a real, separately configurable rule on the
+     * backend (AlertExpirationSweepJob.LoadExpirationRules looks it up
+     * independently — toggling it off only silences "already expired"
+     * alerts, EXPIRATION keeps working) — it just has no row here yet,
+     * so it always defaults to enabled (backend's own `?? true` fallback)
+     * with no way to disable it from this screen. Known gap, not fixed here.
      *
      * Populated from the real /alert-rules endpoint on fetchAlertRules — a
      * type with no saved row yet keeps this default (Enabled=true

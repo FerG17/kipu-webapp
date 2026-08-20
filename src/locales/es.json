@@ -711,6 +711,7 @@
     "confirm-delete": "Se eliminará a {name}. Sus ventas y planes de pago existentes no se ven afectados.",
     "toast-delete-success": "Se eliminó a {name}.",
     "toast-delete-error": "No se pudo eliminar el cliente. Verifica tu conexión e intenta de nuevo.",
+    "deleted-suffix": "(cliente eliminado)",
     "detail-title": "Detalle del cliente",
     "detail-since": "Cliente desde",
     "detail-purchases": "Compras totales",

@@ -147,7 +147,8 @@ const statusFilters = [
 function getCustomerName(customerId) {
   if (!customerId) return t('pos.anonymous-customer');
   const customer = salesStore.getCustomerById(customerId);
-  return customer ? customer.fullName : t('pos.unknown-customer');
+  if (!customer) return t('pos.unknown-customer');
+  return customer.isActive ? customer.fullName : `${customer.fullName} ${t('customers.deleted-suffix')}`;
 }
 
 /**

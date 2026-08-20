@@ -21,6 +21,8 @@ export class Customer {
      * @param {string}      [params.phoneNumber='']      - Contact phone number.
      * @param {string}      [params.email='']            - Contact email address (optional).
      * @param {string}      [params.registeredAt='']     - ISO 8601 timestamp of registration.
+     * @param {boolean}     [params.isActive=true]       - False once the customer has been deleted
+     *   (soft delete — the record and its historical sales/payment plans still exist).
      */
     constructor({
                     id             = null,
@@ -29,7 +31,8 @@ export class Customer {
                     documentNumber = '',
                     phoneNumber    = '',
                     email          = '',
-                    registeredAt   = ''
+                    registeredAt   = '',
+                    isActive       = true
                 }) {
         this.id             = id;
         this.businessId     = businessId;
@@ -38,6 +41,7 @@ export class Customer {
         this.phoneNumber    = phoneNumber;
         this.email          = email;
         this.registeredAt   = registeredAt;
+        this.isActive       = isActive;
     }
 
     /**

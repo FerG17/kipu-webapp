@@ -39,6 +39,15 @@ const useSalesStore = defineStore('sales', () => {
     const customers = ref([]);
 
     /**
+     * Customer ids currently being fetched by getCustomerById's background
+     * lookup — prevents firing a duplicate GET /customers/{id} for the same
+     * id while one is already in flight (e.g. the same missing id rendered
+     * in both sales-history.vue and payment-plans-list.vue at once).
+     * @type {Set<number>}
+     */
+    const customerFetchesInFlight = new Set();
+
+    /**
      * The in-progress sale being built in the POS screen.
      * Null when no POS session is active.
      * @type {import('vue').Ref<Sale|null>}
@@ -119,12 +128,38 @@ const useSalesStore = defineStore('sales', () => {
 
     /**
      * Finds a Customer entity by its identifier in the local state.
+     *
+     * `customers` is populated by fetchCustomers() from GET /customers,
+     * which only returns ACTIVE customers — a deleted (soft-deactivated)
+     * customer's id won't be in it, even though their past sales/payment
+     * plans still reference it and still need a name to display (a plan
+     * with money still owed shouldn't show "unknown customer"). On a miss,
+     * this kicks off a background GET /customers/{id} (that endpoint isn't
+     * status-filtered) and caches the result into `customers` once it
+     * resolves — Vue's reactivity re-renders whatever called this the first
+     * time automatically. The first call for a given id still returns
+     * undefined synchronously; callers already render a fallback for that.
      * @param {number|string} id - Customer identifier.
      * @returns {import('../domain/model/customer.entity.js').Customer|undefined}
      */
     function getCustomerById(id) {
         const numericId = parseInt(id);
-        return customers.value.find(customer => customer.id === numericId);
+        const found = customers.value.find(customer => customer.id === numericId);
+        if (found || customerFetchesInFlight.has(numericId)) return found;
+
+        customerFetchesInFlight.add(numericId);
+        salesApi.getCustomerById(numericId)
+            .then(response => {
+                customers.value.push(CustomerAssembler.toEntityFromResource(response.data));
+            })
+            .catch(() => {
+                // Not found (e.g. a stale/invalid id) or a network error — the
+                // caller's existing "unknown customer" fallback stays as-is.
+            })
+            .finally(() => {
+                customerFetchesInFlight.delete(numericId);
+            });
+        return found;
     }
 
     // ─── Fetch Actions ────────────────────────────────────────────────────────

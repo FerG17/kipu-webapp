@@ -102,7 +102,8 @@ function customerNameForPlan(plan) {
   const sale = salesStore.getSaleById(plan.saleId);
   if (!sale || !sale.customerId) return t('pos.anonymous-customer');
   const customer = salesStore.getCustomerById(sale.customerId);
-  return customer ? customer.fullName : t('pos.unknown-customer');
+  if (!customer) return t('pos.unknown-customer');
+  return customer.isActive ? customer.fullName : `${customer.fullName} ${t('customers.deleted-suffix')}`;
 }
 
 /**
@@ -114,7 +115,8 @@ function customerNameForPlan(plan) {
 function customerNameForSale(sale) {
   if (!sale.customerId) return t('pos.anonymous-customer');
   const customer = salesStore.getCustomerById(sale.customerId);
-  return customer ? customer.fullName : t('pos.unknown-customer');
+  if (!customer) return t('pos.unknown-customer');
+  return customer.isActive ? customer.fullName : `${customer.fullName} ${t('customers.deleted-suffix')}`;
 }
 
 /**
