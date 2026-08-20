@@ -39,14 +39,17 @@ export class ProductApi extends BaseApi {
     }
 
     /**
-     * Fetches all products for the authenticated business. Scoped server-side
+     * Fetches products for the authenticated business. Scoped server-side
      * by the JWT — ProductsController.GetProducts has no businessId query
      * parameter at all (a stray `?businessId=` used to be sent here and was
-     * simply ignored by ASP.NET's model binding).
+     * simply ignored by ASP.NET's model binding). GetProducts is now
+     * paginated server-side (X4 S3); pageSize is set to the backend's own
+     * hard cap (200) so this still reads as "the whole catalog" for any
+     * business under that size, same as before pagination existed.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
     getProducts() {
-        return this.#productsEndpoint.getAll();
+        return this.#productsEndpoint.getPage({ pageSize: 200 });
     }
 
     /**
@@ -94,7 +97,7 @@ export class ProductApi extends BaseApi {
      * @returns {Promise<import('axios').AxiosResponse>}
      */
     getAllProductsIncludingInactive() {
-        return this.#productsEndpoint.getAllByParam('includeInactive', true);
+        return this.#productsEndpoint.getPage({ includeInactive: true, pageSize: 200 });
     }
 
     /**
@@ -236,12 +239,12 @@ export class ProductApi extends BaseApi {
     }
 
     /**
-     * Fetches all stock movement records for the authenticated business.
-     * Scoped server-side by the JWT — StockMovementsController has no query
-     * parameters at all.
+     * Fetches stock movement records for the authenticated business.
+     * Scoped server-side by the JWT. Paginated server-side (X4 S3); pageSize
+     * is set to the backend's hard cap (200).
      * @returns {Promise<import('axios').AxiosResponse>}
      */
     getStockMovements() {
-        return this.#stockMovementsEndpoint.getAll();
+        return this.#stockMovementsEndpoint.getPage({ pageSize: 200 });
     }
 }

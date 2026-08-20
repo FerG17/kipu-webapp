@@ -28,6 +28,7 @@ import { computed, ref } from 'vue';
 import { AlertsApi }     from '../infrastructure/alerts.api.js';
 import { AlertAssembler } from '../infrastructure/alert.assembler.js';
 import { AlertStatus, AlertType, AlertSeverity } from '../domain/model/alert.entity.js';
+import { warnIfTruncated } from '../../shared/infrastructure/pagination.js';
 
 const alertsApi = new AlertsApi();
 
@@ -193,6 +194,7 @@ const useAlertsStore = defineStore('alerts', () => {
         alertsLoaded.value = false;
         return Promise.all([alertsApi.getActiveAlerts(), alertsApi.getAlertHistory()])
             .then(([activeResponse, historyResponse]) => {
+                warnIfTruncated(historyResponse, 'Historial de alertas');
                 const active  = AlertAssembler.toEntitiesFromResponse(activeResponse);
                 const history = AlertAssembler.toEntitiesFromResponse(historyResponse);
                 alerts.value       = [...active, ...history];

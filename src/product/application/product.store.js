@@ -23,6 +23,7 @@ import { InventoryItem }            from '../domain/model/inventory-item.entity.
 import { StockMovementAssembler }   from '../infrastructure/stock-movement.assembler.js';
 import { MovementType }             from '../domain/model/stock-movement.entity.js';
 import { ProductStatus }            from '../domain/model/product.entity.js';
+import { warnIfTruncated }          from '../../shared/infrastructure/pagination.js';
 
 const productApi = new ProductApi();
 
@@ -208,6 +209,7 @@ const useProductStore = defineStore('product', () => {
     function fetchProducts() {
         return productApi.getProducts()
             .then(response => {
+                warnIfTruncated(response, 'Productos');
                 products.value       = ProductAssembler.toEntitiesFromResponse(response);
                 productsLoaded.value = true;
             });
@@ -296,6 +298,7 @@ const useProductStore = defineStore('product', () => {
         stockMovementsError.value = null;
         productApi.getStockMovements()
             .then(response => {
+                warnIfTruncated(response, 'Movimientos de stock');
                 const entities = StockMovementAssembler.toEntitiesFromResponse(response);
                 stockMovements.value = entities.sort(
                     (first, second) => new Date(second.registeredAt) - new Date(first.registeredAt)

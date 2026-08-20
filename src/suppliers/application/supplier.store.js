@@ -22,6 +22,7 @@ import { SupplierAssembler }        from '../infrastructure/supplier.assembler.j
 import { todayLocalDateString }     from '../../shared/domain/model/local-date.js';
 import { PurchaseOrderAssembler }   from '../infrastructure/purchase-order.assembler.js';
 import { PurchaseOrder, PurchaseOrderStatus } from '../domain/model/purchase-order.entity.js';
+import { warnIfTruncated }          from '../../shared/infrastructure/pagination.js';
 
 const supplierApi = new SupplierApi();
 
@@ -120,6 +121,7 @@ const useSupplierStore = defineStore('supplier', () => {
     function fetchSuppliers() {
         return supplierApi.getSuppliers(true)
             .then(response => {
+                warnIfTruncated(response, 'Proveedores');
                 suppliers.value       = SupplierAssembler.toEntitiesFromResponse(response);
                 suppliersLoaded.value = true;
             });
@@ -145,7 +147,8 @@ const useSupplierStore = defineStore('supplier', () => {
         return suppliersReady
             .then(() => supplierApi.getPurchaseOrders())
             .then(response => {
-                const rawOrders = Array.isArray(response.data) ? response.data : [];
+                warnIfTruncated(response, 'Órdenes de compra');
+                const rawOrders = Array.isArray(response.data) ? response.data : (response.data?.items ?? []);
                 purchaseOrders.value = rawOrders.map(rawOrder => {
                     const supplierEntity = suppliers.value.find(supplier => supplier.id === rawOrder.supplierId);
                     return PurchaseOrderAssembler.toEntityFromResource({

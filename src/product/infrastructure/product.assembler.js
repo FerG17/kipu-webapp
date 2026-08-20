@@ -22,7 +22,7 @@ export class ProductAssembler {
             console.error(`ProductAssembler error — status: ${response.status}, message: ${response.statusText}`);
             return [];
         }
-        const resources = response.data instanceof Array ? response.data : response.data['products'];
+        const resources = response.data instanceof Array ? response.data : (response.data.items ?? response.data['products']);
         return resources.map(resource => this.toEntityFromResource(resource));
     }
 

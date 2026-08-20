@@ -45,19 +45,16 @@ export class SalesApi extends BaseApi {
     // ─── Sales ────────────────────────────────────────────────────────────────
 
     /**
-     * Fetches all sales for the authenticated business. Scoped server-side
+     * Fetches sales for the authenticated business. Scoped server-side
      * by the JWT — SalesController.GetSales has no businessId query
-     * parameter, only optional dateFrom/dateTo (both 'yyyy-mm-dd').
+     * parameter, only optional dateFrom/dateTo (both 'yyyy-mm-dd'). Paginated
+     * server-side (X4 S3); pageSize is set to the backend's hard cap (200).
      * @param {string} [dateFrom]
      * @param {string} [dateTo]
      * @returns {Promise<import('axios').AxiosResponse>}
      */
     getSales(dateFrom, dateTo) {
-        const params = new URLSearchParams();
-        if (dateFrom) params.set('dateFrom', dateFrom);
-        if (dateTo)   params.set('dateTo', dateTo);
-        const query = params.toString();
-        return query ? this.http.get(`${salesEndpointPath}?${query}`) : this.#salesEndpoint.getAll();
+        return this.#salesEndpoint.getPage({ dateFrom, dateTo, pageSize: 200 });
     }
 
     /**
@@ -125,13 +122,13 @@ export class SalesApi extends BaseApi {
     // ─── Customers ────────────────────────────────────────────────────────────
 
     /**
-     * Fetches all customers for the authenticated business. Scoped
-     * server-side by the JWT — CustomersController.GetCustomers has no
-     * query parameters at all.
+     * Fetches customers for the authenticated business. Scoped server-side
+     * by the JWT. Paginated server-side (X4 S3); pageSize is set to the
+     * backend's hard cap (200).
      * @returns {Promise<import('axios').AxiosResponse>}
      */
     getCustomers() {
-        return this.#customersEndpoint.getAll();
+        return this.#customersEndpoint.getPage({ pageSize: 200 });
     }
 
     /**

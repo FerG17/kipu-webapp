@@ -27,6 +27,7 @@ import { CustomerAssembler }  from '../infrastructure/customer.assembler.js';
 import { PaymentPlanAssembler } from '../infrastructure/payment-plan.assembler.js';
 import { Sale, SaleStatus, PaymentMethod }               from '../domain/model/sale.entity.js';
 import { SaleDetail }         from '../domain/model/sale-detail.entity.js';
+import { warnIfTruncated }    from '../../shared/infrastructure/pagination.js';
 
 const salesApi = new SalesApi();
 
@@ -179,6 +180,7 @@ const useSalesStore = defineStore('sales', () => {
         salesError.value = null;
         salesApi.getSales()
             .then(response => {
+                warnIfTruncated(response, 'Ventas');
                 sales.value        = SaleAssembler.toEntitiesFromResponse(response);
                 salesLoaded.value = true;
             })
@@ -226,6 +228,7 @@ const useSalesStore = defineStore('sales', () => {
      */
     function fetchCustomers() {
         salesApi.getCustomers().then(response => {
+            warnIfTruncated(response, 'Clientes');
             customers.value   = CustomerAssembler.toEntitiesFromResponse(response);
             customersLoaded.value = true;
         });

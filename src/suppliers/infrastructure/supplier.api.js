@@ -39,12 +39,13 @@ export class SupplierApi extends BaseApi {
      * used to stay in every listing/picker forever with no way to tell it
      * apart from an active one. Pass includeInactive=true for the supplier
      * management page itself, which needs to show (and offer to reactivate)
-     * inactive suppliers too.
+     * inactive suppliers too. Paginated server-side (X4 S3); pageSize is set
+     * to the backend's hard cap (200).
      * @param {boolean} [includeInactive=false]
      * @returns {Promise<import('axios').AxiosResponse>}
      */
     getSuppliers(includeInactive = false) {
-        return this.http.get(`${suppliersEndpointPath}${includeInactive ? '?includeInactive=true' : ''}`);
+        return this.#suppliersEndpoint.getPage({ includeInactive, pageSize: 200 });
     }
 
     /**
@@ -102,22 +103,25 @@ export class SupplierApi extends BaseApi {
     // ─── Purchase order operations ────────────────────────────────────────────
 
     /**
-     * Fetches all purchase orders for the authenticated business. Scoped
+     * Fetches purchase orders for the authenticated business. Scoped
      * server-side by the JWT — PurchasesController.GetPurchaseOrders only
      * ever reads an optional `?supplierId=`, never a businessId parameter.
+     * Paginated server-side (X4 S3); pageSize is set to the backend's hard
+     * cap (200).
      * @returns {Promise<import('axios').AxiosResponse>}
      */
     getPurchaseOrders() {
-        return this.#purchasesEndpoint.getAll();
+        return this.#purchasesEndpoint.getPage({ pageSize: 200 });
     }
 
     /**
-     * Fetches all purchase orders for a specific supplier.
+     * Fetches purchase orders for a specific supplier. Paginated server-side
+     * (X4 S3); pageSize is set to the backend's hard cap (200).
      * @param {number|string} supplierId
      * @returns {Promise<import('axios').AxiosResponse>}
      */
     getPurchaseOrdersBySupplier(supplierId) {
-        return this.#purchasesEndpoint.getAllByParam('supplierId', supplierId);
+        return this.#purchasesEndpoint.getPage({ supplierId, pageSize: 200 });
     }
 
     /**
