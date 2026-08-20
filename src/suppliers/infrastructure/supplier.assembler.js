@@ -52,7 +52,7 @@ export class SupplierAssembler {
      * @returns {Supplier[]}
      */
     static toEntitiesFromResponse(response) {
-        const dataArray = Array.isArray(response.data) ? response.data : [];
+        const dataArray = Array.isArray(response.data) ? response.data : (response.data?.items ?? []);
         return dataArray.map(resource => SupplierAssembler.toEntityFromResource(resource));
     }
 

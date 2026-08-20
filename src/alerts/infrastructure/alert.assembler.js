@@ -49,7 +49,7 @@ export class AlertAssembler {
         }
         const resources = response.data instanceof Array
             ? response.data
-            : response.data['alerts'];
+            : (response.data.items ?? response.data['alerts']);
         return resources.map(resource => this.toEntityFromResource(resource));
     }
 }

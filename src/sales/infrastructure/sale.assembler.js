@@ -27,7 +27,7 @@ export class SaleAssembler {
             console.error(`SaleAssembler error — status: ${response.status}, message: ${response.statusText}`);
             return [];
         }
-        const resources = response.data instanceof Array ? response.data : response.data['sales'];
+        const resources = response.data instanceof Array ? response.data : (response.data.items ?? response.data['sales']);
         return resources.map(resource => this.toEntityFromResource(resource));
     }
 }

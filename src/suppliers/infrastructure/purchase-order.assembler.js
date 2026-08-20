@@ -53,7 +53,7 @@ export class PurchaseOrderAssembler {
      * @returns {PurchaseOrder[]}
      */
     static toEntitiesFromResponse(response) {
-        const dataArray = Array.isArray(response.data) ? response.data : [];
+        const dataArray = Array.isArray(response.data) ? response.data : (response.data?.items ?? []);
         return dataArray.map(resource => PurchaseOrderAssembler.toEntityFromResource(resource));
     }
 

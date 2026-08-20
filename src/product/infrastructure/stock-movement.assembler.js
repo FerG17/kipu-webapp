@@ -22,7 +22,7 @@ export class StockMovementAssembler {
             console.error(`StockMovementAssembler error — status: ${response.status}, message: ${response.statusText}`);
             return [];
         }
-        const resources = response.data instanceof Array ? response.data : response.data['stockMovements'];
+        const resources = response.data instanceof Array ? response.data : (response.data.items ?? response.data['stockMovements']);
         return resources.map(resource => this.toEntityFromResource(resource));
     }
 }

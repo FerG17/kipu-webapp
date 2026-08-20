@@ -28,7 +28,7 @@ export class CustomerAssembler {
             console.error(`CustomerAssembler error — status: ${response.status}, message: ${response.statusText}`);
             return [];
         }
-        const resources = response.data instanceof Array ? response.data : response.data['customers'];
+        const resources = response.data instanceof Array ? response.data : (response.data.items ?? response.data['customers']);
         return resources.map(resource => this.toEntityFromResource(resource));
     }
 

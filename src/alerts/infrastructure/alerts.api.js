@@ -34,11 +34,13 @@ export class AlertsApi extends BaseApi {
     }
 
     /**
-     * Fetches resolved alerts (immutable history) for the authenticated business.
+     * Fetches resolved alerts (immutable history) for the authenticated
+     * business. Paginated server-side (X4 S3); pageSize is set to the
+     * backend's hard cap (200).
      * @returns {Promise<import('axios').AxiosResponse>}
      */
     getAlertHistory() {
-        return this.http.get(`${alertsEndpointPath}/history`);
+        return this.http.get(`${alertsEndpointPath}/history`, { params: { pageSize: 200 } });
     }
 
     /**
