@@ -62,6 +62,13 @@ const useIamStore = defineStore('iam', () => {
     const usersLoaded = ref(false);
 
     /**
+     * Whether the last fetchUsers() call failed — lets the Team tab show a
+     * "couldn't load, retry" state instead of spinning forever.
+     * @type {import('vue').Ref<boolean>}
+     */
+    const usersLoadFailed = ref(false);
+
+    /**
      * Whether the role list has been loaded from the API.
      * @type {import('vue').Ref<boolean>}
      */
@@ -153,7 +160,28 @@ const useIamStore = defineStore('iam', () => {
         }
     }
 
+    /**
+     * Re-fetches the current user's own record from the server and
+     * overwrites the locally cached session with it — defense in depth
+     * against a role/status tampered with in localStorage (devtools). The
+     * backend already rejects any real privilege escalation on every
+     * endpoint; this only keeps what the UI *shows* (sidebar, route guard)
+     * in sync so a stale/edited local copy doesn't linger for a whole
+     * session. Best-effort: a network failure here just leaves the cached
+     * session as-is — a genuine auth failure (401) is already handled by
+     * the SESSION_EXPIRED_EVENT listener below.
+     * @returns {void}
+     */
+    function revalidateSession() {
+        if (!currentUser.value) return;
+        iamApi.getUserById(currentUser.value.id).then(response => {
+            currentUser.value = UserAccountAssembler.toEntityFromResource(response.data);
+            persistSession(currentUser.value);
+        }).catch(() => {});
+    }
+
     restoreSession();
+    revalidateSession();
 
     // When BaseApi sees a 401 on a non-auth endpoint (session cookie
     // missing/expired/revoked), it dispatches this event. Wired here (not in
@@ -297,15 +325,21 @@ const useIamStore = defineStore('iam', () => {
 
     /**
      * Loads all user accounts scoped to the given business from the API.
+     * usersLoadFailed lets the Team tab show a "couldn't load, retry" state
+     * instead of spinning forever — usersLoaded is deliberately NOT set on
+     * failure, since that would render as "loaded, zero users" rather than
+     * "failed to load".
      * @param {number|string} businessId
      * @returns {void}
      */
     function fetchUsers(businessId) {
+        usersLoadFailed.value = false;
         iamApi.getUsers(businessId).then(response => {
             users.value      = UserAccountAssembler.toEntitiesFromResponse(response);
             usersLoaded.value = true;
         }).catch(error => {
             errors.value.push(error.message);
+            usersLoadFailed.value = true;
         });
     }
 
@@ -581,17 +615,16 @@ const useIamStore = defineStore('iam', () => {
     }
 
     /**
-     * Deletes a user account and removes it from local state.
+     * Deletes a user account and removes it from local state. Rejects (e.g.
+     * "last active admin") are left for the caller to catch and show as a
+     * toast — same pattern as deactivateUser.
      * @param {UserAccount} userAccount - UserAccount entity to remove.
-     * @returns {void}
+     * @returns {Promise<void>}
      */
-    function deleteUser(userAccount) {
-        iamApi.deleteUser(userAccount.id).then(() => {
-            const index = users.value.findIndex(user => user.id === userAccount.id);
-            if (index !== -1) users.value.splice(index, 1);
-        }).catch(error => {
-            errors.value.push(error.message);
-        });
+    async function deleteUser(userAccount) {
+        await iamApi.deleteUser(userAccount.id);
+        const index = users.value.findIndex(user => user.id === userAccount.id);
+        if (index !== -1) users.value.splice(index, 1);
     }
 
     /**
@@ -625,6 +658,7 @@ const useIamStore = defineStore('iam', () => {
         roles,
         currentBusiness,
         usersLoaded,
+        usersLoadFailed,
         rolesLoaded,
         businessLoaded,
         isAuthenticated,

@@ -4,6 +4,7 @@ import { useI18n }  from 'vue-i18n';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue';
 import useSalesStore from '../../application/sales.store.js';
+import { SaleStatus } from '../../domain/model/sale.entity.js';
 
 /**
  * PaymentPlansList view for the Sales & POS Management bounded context.
@@ -28,6 +29,69 @@ const searchQuery = ref('');
 /** @type {import('vue').Ref<number|null>} Id of the plan currently being paid, for its button's spinner. */
 const registeringPlanId = ref(null);
 
+/** @type {import('vue').Ref<boolean>} Whether the "create plan" modal is open. */
+const showCreateModal = ref(false);
+
+/** @type {import('vue').Ref<boolean>} Whether a create-plan request is in flight. */
+const creatingPlan = ref(false);
+
+/** @type {import('vue').Ref<string>} Id (as string, for the select) of the sale chosen in the create-plan modal. */
+const newPlanSaleId = ref('');
+
+/** @type {import('vue').Ref<string>} Installment count entered in the create-plan modal. */
+const newPlanInstallments = ref('2');
+
+/**
+ * Sales that can have a NEW payment plan attached: paid, tied to a real
+ * customer (a plan needs someone to collect the debt from), and without an
+ * already-pending plan. This is a best-effort client-side filter for the
+ * picker — salesStore.paymentPlans only tracks PENDING plans (see the view's
+ * doc comment), so a sale whose plan was already fully paid off could still
+ * slip through here; the backend's own PaymentPlanAlreadyExists check (see
+ * PaymentPlanCommandService.Handle) is the real guard against that edge case.
+ * @type {import('vue').ComputedRef<Array>}
+ */
+const eligibleSales = computed(() => {
+  const pendingSaleIds = new Set(salesStore.paymentPlans.map(plan => plan.saleId));
+  return salesStore.sales.filter(sale =>
+      sale.status === SaleStatus.PAID && sale.customerId && !pendingSaleIds.has(sale.id));
+});
+
+/** @type {import('vue').ComputedRef<boolean>} Whether the create-plan form is ready to submit. */
+const canConfirmCreate = computed(() =>
+    !!newPlanSaleId.value && (parseInt(newPlanInstallments.value) || 0) >= 2);
+
+/** Opens the create-plan modal with a blank form. */
+function openCreatePlanModal() {
+  newPlanSaleId.value = '';
+  newPlanInstallments.value = '2';
+  showCreateModal.value = true;
+}
+
+/** Closes the create-plan modal (no-op while a request is in flight). */
+function closeCreatePlanModal() {
+  if (creatingPlan.value) return;
+  showCreateModal.value = false;
+}
+
+/** Submits the create-plan form. */
+function confirmCreatePlan() {
+  if (!canConfirmCreate.value || creatingPlan.value) return;
+  creatingPlan.value = true;
+  salesStore.createPaymentPlan(parseInt(newPlanSaleId.value), parseInt(newPlanInstallments.value) || 2)
+      .then(() => {
+        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('payment-plans.toast-create-success'), life: 3500 });
+        showCreateModal.value = false;
+      })
+      .catch(error => {
+        const detail = error.response?.data?.detail ?? t('payment-plans.toast-create-error');
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
+      })
+      .finally(() => {
+        creatingPlan.value = false;
+      });
+}
+
 /**
  * Resolves the customer name for a plan by joining through its sale — the
  * PaymentPlanResource itself carries no customerId, only saleId.
@@ -38,7 +102,21 @@ function customerNameForPlan(plan) {
   const sale = salesStore.getSaleById(plan.saleId);
   if (!sale || !sale.customerId) return t('pos.anonymous-customer');
   const customer = salesStore.getCustomerById(sale.customerId);
-  return customer ? customer.fullName : t('pos.unknown-customer');
+  if (!customer) return t('pos.unknown-customer');
+  return customer.isActive ? customer.fullName : `${customer.fullName} ${t('customers.deleted-suffix')}`;
+}
+
+/**
+ * Resolves the customer name for a raw sale — used by the create-plan
+ * modal's picker, which lists sales rather than plans.
+ * @param {import('../../domain/model/sale.entity.js').Sale} sale
+ * @returns {string}
+ */
+function customerNameForSale(sale) {
+  if (!sale.customerId) return t('pos.anonymous-customer');
+  const customer = salesStore.getCustomerById(sale.customerId);
+  if (!customer) return t('pos.unknown-customer');
+  return customer.isActive ? customer.fullName : `${customer.fullName} ${t('customers.deleted-suffix')}`;
 }
 
 /**
@@ -135,9 +213,12 @@ onMounted(() => {
 <template>
   <div class="flex flex-column h-full overflow-hidden">
 
-    <!-- Header bar: search -->
-    <div class="px-4 py-3" style="border-bottom: 1px solid var(--border);">
-      <div style="position: relative;">
+    <!-- Header bar: search + create plan -->
+    <div
+        class="flex flex-column sm:flex-row sm:align-items-center gap-2 px-4 py-3"
+        style="border-bottom: 1px solid var(--border);"
+    >
+      <div class="flex-1" style="position: relative;">
         <i
             class="pi pi-search"
             style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 0.85rem;"
@@ -152,6 +233,14 @@ onMounted(() => {
             @blur="(e) => e.target.style.borderColor = 'var(--border)'"
         />
       </div>
+      <button
+          class="flex align-items-center gap-2 border-round-lg px-4 py-2 shrink-0"
+          style="background-color: var(--brand); color: var(--surface); font-size: 0.85rem; font-weight: 600; border: none; cursor: pointer;"
+          @click="openCreatePlanModal"
+      >
+        <i class="pi pi-plus" style="font-size: 1rem;" />
+        <span>{{ t('payment-plans.create-btn') }}</span>
+      </button>
     </div>
 
     <!-- Content area -->
@@ -278,6 +367,87 @@ onMounted(() => {
         </p>
       </div>
       </template>
+    </div>
+
+    <!-- Create plan modal -->
+    <div
+        v-if="showCreateModal"
+        class="fixed inset-0 flex align-items-center justify-content-center px-4"
+        style="background-color: rgba(0,0,0,0.35); z-index: 60;"
+        @click.self="closeCreatePlanModal"
+    >
+      <div
+          class="w-full border-round-2xl p-4 shadow-8"
+          style="max-width: 380px; background-color: var(--surface); border: 1px solid var(--border);"
+      >
+        <div class="flex align-items-center justify-content-between mb-4">
+          <h2 class="m-0" style="font-size: 1.05rem; font-weight: 700; color: var(--text);">
+            {{ t('payment-plans.create-modal-title') }}
+          </h2>
+          <button
+              style="background: none; border: none; cursor: pointer; padding: 4px;"
+              :disabled="creatingPlan"
+              @click="closeCreatePlanModal"
+          >
+            <i class="pi pi-times" style="color: var(--text-faint); font-size: 1.1rem;" />
+          </button>
+        </div>
+
+        <div v-if="eligibleSales.length === 0" class="text-center py-4">
+          <i class="pi pi-info-circle mb-2" style="font-size: 1.5rem; color: var(--text-faint);" />
+          <p class="m-0" style="font-size: 0.82rem; color: var(--text-muted);">
+            {{ t('payment-plans.create-modal-no-eligible-sales') }}
+          </p>
+        </div>
+
+        <template v-else>
+          <div class="mb-3">
+            <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
+              {{ t('payment-plans.create-modal-sale-label') }}
+            </label>
+            <select
+                v-model="newPlanSaleId"
+                class="w-full border-round-lg px-3"
+                style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); padding: 10px 12px; outline: none; background: var(--surface);"
+            >
+              <option value="" disabled>{{ t('payment-plans.create-modal-sale-placeholder') }}</option>
+              <option v-for="sale in eligibleSales" :key="sale.id" :value="String(sale.id)">
+                #{{ sale.id }} — {{ customerNameForSale(sale) }} — {{ formatCurrency(sale.totalAmount) }}
+              </option>
+            </select>
+          </div>
+
+          <div class="mb-4">
+            <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
+              {{ t('payment-plans.create-modal-installments-label') }}
+            </label>
+            <input
+                v-model="newPlanInstallments"
+                type="number"
+                min="2"
+                class="w-full border-round-lg px-3"
+                style="border: 1px solid var(--border); font-size: 0.95rem; font-weight: 700; color: var(--brand); padding: 8px 12px; outline: none;"
+            />
+          </div>
+
+          <button
+              class="w-full border-round-xl py-3"
+              :style="{
+                  backgroundColor: (canConfirmCreate && !creatingPlan) ? 'var(--brand)' : 'var(--text-faint)',
+                  color: 'var(--brand-ink)',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  border: 'none',
+                  cursor: (canConfirmCreate && !creatingPlan) ? 'pointer' : 'not-allowed'
+              }"
+              :disabled="!canConfirmCreate || creatingPlan"
+              @click="confirmCreatePlan"
+          >
+            <i v-if="creatingPlan" class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>
+            {{ creatingPlan ? t('payment-plans.create-modal-saving') : t('payment-plans.create-modal-submit') }}
+          </button>
+        </template>
+      </div>
     </div>
   </div>
 </template>

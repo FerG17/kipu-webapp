@@ -1,5 +1,18 @@
-# Vue 3 + Vite
+# Kipu — kipu-webapp
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Frontend for Kipu, a single-tenant warehouse/inventory management webapp: product catalog and stock, point-of-sale, purchase orders, low-stock/expiration alerts, and a sales dashboard. Vue 3 (`<script setup>`) + Vite + Pinia + PrimeVue, talking to the [kipu-platform](../kipu-platform) backend over a JSON REST API.
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+## Setup
+
+```sh
+npm install
+npm run dev      # start the dev server (Vite)
+npm run build    # production build
+npm run preview  # preview a production build locally
+```
+
+The dev server expects the backend from `kipu-platform` running locally. Endpoint configuration lives in `.env.development` (tracked, no secrets — just the API base URL and per-resource paths, e.g. `VITE_BODEGA_API_BASE_URL`). To point at a different backend (e.g. a LAN IP), add a git-ignored `.env.development.local` overriding just the variables you need — Vite merges it on top automatically.
+
+## IDE
+
+[Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (or your IDE's built-in Vue support) is recommended over Vetur.

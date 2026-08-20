@@ -11,7 +11,7 @@ import { Supplier }       from '../../../suppliers/domain/model/supplier.entity.
 import { Product, ProductCategory, ProductStatus } from '../../domain/model/product.entity.js';
 import { toDateLocale }   from '../../../shared/presentation/date-locale.js';
 import { isCustomCategory, orderedCategoryOptions, filterableCategoryOptions } from '../category-options.js';
-import { canWriteInventory } from '../../../iam/application/permissions.js';
+import { canWriteInventory, canAccessSuppliers } from '../../../iam/application/permissions.js';
 import { useModalScrollLock } from '../../../shared/presentation/use-modal-scroll-lock.js';
 import { useTodayLocalDateString } from '../../../shared/presentation/use-today-local-date.js';
 
@@ -80,6 +80,17 @@ const scanInputEl          = ref(null);
  * @type {import('vue').ComputedRef<boolean>}
  */
 const canWrite = computed(() => canWriteInventory(iamStore.currentUserPosition));
+
+/**
+ * Whether the current role is allowed to see supplier identity at all
+ * (mirrors the backend's [Authorize] on GET /suppliers) — a CASHIER reaches
+ * this inventory page (reads are open to everyone) but a supplier lookup for
+ * them would 403, so the supplier column must not even try, and must show a
+ * distinct "not visible to your role" placeholder instead of looking like
+ * "no supplier assigned".
+ * @type {import('vue').ComputedRef<boolean>}
+ */
+const canViewSuppliers = computed(() => canAccessSuppliers(iamStore.currentUserPosition));
 
 /**
  * Filter dropdown options: only the categories actually in use by this
@@ -189,7 +200,7 @@ onMounted(() => {
     });
   }
   if (!productStore.batchesLoaded) fetchBatches();
-  if (!suppliersLoadedRef.value) supplierStore.fetchSuppliers();
+  if (canViewSuppliers.value && !suppliersLoadedRef.value) supplierStore.fetchSuppliers();
 });
 
 /**
@@ -439,7 +450,7 @@ const productModalForm = ref({
   barcode:        ''
 });
 
-const productModalErrors = ref({ basePrice: '' });
+const productModalErrors = ref({ basePrice: '', name: '' });
 
 const supplierMultiselectRef = ref(null);
 
@@ -510,7 +521,7 @@ function openCreateProductModal(prefillBarcode = '') {
     warehouseId: warehouses.value[0] ? String(warehouses.value[0].id) : '',
     barcode: prefillBarcode
   };
-  productModalErrors.value = { basePrice: '' };
+  productModalErrors.value = { basePrice: '', name: '' };
   showAddSupplierInline.value = false;
   showProductModal.value = true;
 }
@@ -577,7 +588,7 @@ function openEditProductModal(product) {
     warehouseId:    '',
     barcode:        product.barcode ?? ''
   };
-  productModalErrors.value = { basePrice: '' };
+  productModalErrors.value = { basePrice: '', name: '' };
   showAddSupplierInline.value = false;
   showProductModal.value = true;
 }
@@ -610,7 +621,13 @@ function findDuplicateProduct(resolvedCategory) {
 }
 
 function saveProductFromModal() {
-  if (!productModalForm.value.name.trim()) return;
+  // Previously a silent no-op — the Save button isn't disabled by a blank
+  // name, so clicking it did nothing with zero feedback.
+  if (!productModalForm.value.name.trim()) {
+    productModalErrors.value = { ...productModalErrors.value, name: t('inventory.error-product-name') };
+    return;
+  }
+  productModalErrors.value = { ...productModalErrors.value, name: '' };
 
   // Server rejects a base price of 0 or less (ProductRuleExtensions.
   // MustBeAMoneyAmount) — validated here too so the field surfaces a clear
@@ -619,10 +636,10 @@ function saveProductFromModal() {
   // '') doesn't slip through as an unintended 0.
   const basePriceValue = parseMoneyInput(productModalForm.value.basePrice);
   if (!(basePriceValue > 0)) {
-    productModalErrors.value = { basePrice: t('inventory.error-base-price') };
+    productModalErrors.value = { ...productModalErrors.value, basePrice: t('inventory.error-base-price') };
     return;
   }
-  productModalErrors.value = { basePrice: '' };
+  productModalErrors.value = { ...productModalErrors.value, basePrice: '' };
 
   // The date input's `:min` attribute only stops the picker widget — typing
   // a past date directly (or a browser that doesn't enforce `min` on native
@@ -879,8 +896,28 @@ watch(() => intakeForm.value.productId, (newProductId) => {
 });
 
 function saveIntake() {
-  const quantity = parseInt(intakeForm.value.quantity);
-  if (!intakeForm.value.productId || !quantity || quantity <= 0) return;
+  // Previously a silent no-op on a missing product/quantity — the button
+  // isn't disabled by either, so clicking it did nothing with zero feedback.
+  if (!intakeForm.value.productId) {
+    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-intake-product-required'), life: 4500 });
+    return;
+  }
+
+  const rawQuantity = intakeForm.value.quantity;
+  const quantity = parseInt(rawQuantity);
+  if (!quantity || quantity <= 0) {
+    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-intake-quantity-required'), life: 4500 });
+    return;
+  }
+
+  // The input is `type="number"` with no `step`, so a decimal like "5.7" is
+  // typeable — parseInt above silently truncated it to 5 with no warning.
+  // Backend quantities are int end-to-end, so this is a real rejection, not
+  // just a rounding nicety.
+  if (Number(rawQuantity) !== quantity) {
+    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-quantity-not-whole'), life: 4500 });
+    return;
+  }
 
   // warehouseId is a non-nullable int on the backend's stock-intake command
   // — submitting without one would otherwise send `null` and fail with an
@@ -1091,9 +1128,27 @@ function openAdjustModal(product) {
 }
 
 function saveAdjustment() {
-  const quantity = parseInt(adjustForm.value.quantity);
-  if (!quantity || quantity <= 0) return;
-  if (!adjustForm.value.warehouseId) return;
+  const rawQuantity = adjustForm.value.quantity;
+  const quantity = parseInt(rawQuantity);
+  if (!quantity || quantity <= 0) {
+    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-intake-quantity-required'), life: 4500 });
+    return;
+  }
+
+  // Same silent-truncation gap as saveIntake — the input allows a decimal
+  // like "3.5", parseInt above would otherwise drop it to 3 with no warning.
+  if (Number(rawQuantity) !== quantity) {
+    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-quantity-not-whole'), life: 4500 });
+    return;
+  }
+
+  // Likely unreachable in practice (a warehouse is always pre-selected once
+  // any exist — see openAdjustModal/adjustableWarehouses), but the Confirm
+  // button's :disabled doesn't cover this case either, so it stays defensive.
+  if (!adjustForm.value.warehouseId) {
+    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-warehouse-required'), life: 4500 });
+    return;
+  }
 
   const delta = adjustForm.value.direction === 'REMOVE' ? -quantity : quantity;
   const presetLabel = t(reasonPresetLabelKeys[adjustForm.value.reasonPreset]);
@@ -1157,6 +1212,9 @@ function saveWarehouse() {
         warehouses.value.push(createdWarehouse);
         selectedWarehouseKey.value = createdWarehouse.id;
         showWarehouseModal.value = false;
+      })
+      .catch(() => {
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-warehouse-add-error'), life: 4500 });
       })
       .finally(() => {
         savingWarehouse.value = false;
@@ -1371,7 +1429,9 @@ function saveWarehouse() {
                   </div>
                   <div>
                     <p class="m-0 product-name">{{ product.name }}</p>
-                    <p class="m-0 mt-1 product-desc">{{ resolveProductSupplierNames(product).join(', ') || '—' }}</p>
+                    <p class="m-0 mt-1 product-desc">
+                      {{ canViewSuppliers ? (resolveProductSupplierNames(product).join(', ') || '—') : t('inventory.supplier-not-visible') }}
+                    </p>
                   </div>
                 </div>
               </td>
@@ -1826,13 +1886,21 @@ function saveWarehouse() {
             <!-- Name -->
             <div>
               <label class="modal-label">{{ t('inventory.modal-field-name') }}</label>
-              <input v-model="productModalForm.name" :placeholder="t('inventory.modal-field-name-placeholder')" class="modal-input"/>
+              <input
+                  v-model="productModalForm.name"
+                  :placeholder="t('inventory.modal-field-name-placeholder')"
+                  maxlength="150"
+                  class="modal-input"
+                  :class="{ 'modal-input-error': productModalErrors.name }"
+                  @input="productModalErrors.name = ''"
+              />
+              <p v-if="productModalErrors.name" class="modal-field-error">{{ productModalErrors.name }}</p>
             </div>
 
             <!-- Barcode (optional — pre-filled when opened from the scan entry point) -->
             <div>
               <label class="modal-label">{{ t('inventory.modal-field-barcode') }}</label>
-              <input v-model="productModalForm.barcode" :placeholder="t('inventory.modal-field-barcode-placeholder')" class="modal-input"/>
+              <input v-model="productModalForm.barcode" :placeholder="t('inventory.modal-field-barcode-placeholder')" maxlength="64" class="modal-input"/>
             </div>
 
             <!-- Category + Supplier (2-col on sm+) -->
@@ -1864,6 +1932,7 @@ function saveWarehouse() {
                   <input
                       v-model="newSupplierName"
                       :placeholder="t('inventory.modal-field-supplier-new-placeholder')"
+                      maxlength="150"
                       class="modal-input"
                       style="flex: 1;"
                       @keyup.enter="confirmAddSupplierInline"
@@ -2093,7 +2162,7 @@ function saveWarehouse() {
           <!-- Note -->
           <div>
             <label class="modal-label">{{ t('inventory.intake-field-note') }}</label>
-            <input v-model="intakeForm.note" :placeholder="t('inventory.intake-field-note-placeholder')" class="modal-input"/>
+            <input v-model="intakeForm.note" :placeholder="t('inventory.intake-field-note-placeholder')" maxlength="500" class="modal-input"/>
           </div>
 
           <!-- Actions -->
@@ -2138,15 +2207,15 @@ function saveWarehouse() {
         <div class="px-5 py-5 flex flex-column gap-4">
           <div>
             <label class="modal-label">{{ t('inventory.warehouse-field-name') }} *</label>
-            <input v-model="warehouseForm.name" :placeholder="t('inventory.warehouse-field-name-placeholder')" class="modal-input"/>
+            <input v-model="warehouseForm.name" :placeholder="t('inventory.warehouse-field-name-placeholder')" maxlength="150" class="modal-input"/>
           </div>
           <div>
             <label class="modal-label">{{ t('inventory.warehouse-field-code') }}</label>
-            <input v-model="warehouseForm.code" :placeholder="t('inventory.warehouse-field-code-placeholder')" class="modal-input"/>
+            <input v-model="warehouseForm.code" :placeholder="t('inventory.warehouse-field-code-placeholder')" maxlength="30" class="modal-input"/>
           </div>
           <div>
             <label class="modal-label">{{ t('inventory.warehouse-field-address') }}</label>
-            <input v-model="warehouseForm.address" :placeholder="t('inventory.warehouse-field-address-placeholder')" class="modal-input"/>
+            <input v-model="warehouseForm.address" :placeholder="t('inventory.warehouse-field-address-placeholder')" maxlength="255" class="modal-input"/>
           </div>
           <div>
             <label class="modal-label">{{ t('inventory.warehouse-field-capacity') }}</label>
@@ -2297,7 +2366,7 @@ function saveWarehouse() {
             <label class="modal-label">
               {{ adjustForm.reasonPreset === 'OTHER' ? t('inventory.adjust-field-reason-detail-required') : t('inventory.adjust-field-reason-detail-optional') }}
             </label>
-            <input v-model="adjustForm.reasonDetail" :placeholder="t('inventory.adjust-field-reason-detail-placeholder')" class="modal-input"/>
+            <input v-model="adjustForm.reasonDetail" :placeholder="t('inventory.adjust-field-reason-detail-placeholder')" maxlength="500" class="modal-input"/>
           </div>
 
           <div class="flex gap-3">

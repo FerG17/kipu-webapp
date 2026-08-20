@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useI18n }           from 'vue-i18n';
 import { useToast }          from 'primevue/usetoast';
+import { useConfirm }        from 'primevue';
 import useSalesStore         from '../../application/sales.store.js';
 import useIamStore           from '../../../iam/application/iam.store.js';
 import CustomerModal         from '../components/customer-modal.vue';
@@ -27,6 +28,7 @@ import { canEditCustomers }  from '../../../iam/application/permissions.js';
 
 const { t, locale } = useI18n();
 const toast      = useToast();
+const confirm    = useConfirm();
 const salesStore = useSalesStore();
 const iamStore   = useIamStore();
 
@@ -153,6 +155,26 @@ function openDetail(customer) {
   selectedCustomer.value = customer;
 }
 
+/**
+ * Confirms and runs a customer deletion (soft delete server-side — the
+ * customer stops appearing here but existing sales/plans keep pointing at
+ * it, see CustomerCommandService.Handle(DeleteCustomerCommand)).
+ * @param {import('../../domain/model/customer.entity.js').Customer} customer
+ */
+function confirmDeleteCustomer(customer) {
+  confirm.require({
+    message: t('customers.confirm-delete', { name: customer.fullName }),
+    header:  t('customers.delete-header'),
+    icon:    'pi pi-exclamation-triangle',
+    accept:  () => salesStore.deleteCustomer(customer.id)
+        .then(() => toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('customers.toast-delete-success', { name: customer.fullName }), life: 3500 }))
+        .catch(error => {
+          const detail = error.response?.data?.detail ?? t('customers.toast-delete-error');
+          toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
+        })
+  });
+}
+
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
 onMounted(() => {
@@ -275,6 +297,15 @@ onMounted(() => {
                   <i class="pi pi-pencil" style="font-size: 0.8rem;" />
                   <span>{{ t('customers.edit-btn') }}</span>
                 </button>
+                <button
+                    v-if="canEdit"
+                    class="flex align-items-center justify-content-center border-round-lg"
+                    style="width: 30px; height: 30px; background-color: var(--status-critical-bg); color: var(--status-critical-fg); border: none; cursor: pointer;"
+                    :title="t('customers.delete-header')"
+                    @click="confirmDeleteCustomer(customer)"
+                >
+                  <i class="pi pi-trash" style="font-size: 0.75rem;" />
+                </button>
               </div>
             </td>
           </tr>
@@ -314,6 +345,14 @@ onMounted(() => {
                 @click="openEditModal(customer)"
             >
               <i class="pi pi-pencil" style="font-size: 0.9rem;" />
+            </button>
+            <button
+                v-if="canEdit"
+                class="flex align-items-center justify-content-center border-round-lg"
+                style="width: 36px; height: 36px; background-color: var(--status-critical-bg); color: var(--status-critical-fg); border: none; cursor: pointer;"
+                @click="confirmDeleteCustomer(customer)"
+            >
+              <i class="pi pi-trash" style="font-size: 0.9rem;" />
             </button>
             <button
                 class="flex align-items-center justify-content-center border-round-lg"

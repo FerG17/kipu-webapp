@@ -39,6 +39,15 @@ const useSalesStore = defineStore('sales', () => {
     const customers = ref([]);
 
     /**
+     * Customer ids currently being fetched by getCustomerById's background
+     * lookup — prevents firing a duplicate GET /customers/{id} for the same
+     * id while one is already in flight (e.g. the same missing id rendered
+     * in both sales-history.vue and payment-plans-list.vue at once).
+     * @type {Set<number>}
+     */
+    const customerFetchesInFlight = new Set();
+
+    /**
      * The in-progress sale being built in the POS screen.
      * Null when no POS session is active.
      * @type {import('vue').Ref<Sale|null>}
@@ -80,9 +89,6 @@ const useSalesStore = defineStore('sales', () => {
     /** @type {import('vue').Ref<boolean>} */
     const paymentPlansLoaded = ref(false);
 
-    /** @type {import('vue').Ref<Error[]>} */
-    const errors = ref([]);
-
     /**
      * Total number of loaded sales.
      * @type {import('vue').ComputedRef<number>}
@@ -122,12 +128,38 @@ const useSalesStore = defineStore('sales', () => {
 
     /**
      * Finds a Customer entity by its identifier in the local state.
+     *
+     * `customers` is populated by fetchCustomers() from GET /customers,
+     * which only returns ACTIVE customers — a deleted (soft-deactivated)
+     * customer's id won't be in it, even though their past sales/payment
+     * plans still reference it and still need a name to display (a plan
+     * with money still owed shouldn't show "unknown customer"). On a miss,
+     * this kicks off a background GET /customers/{id} (that endpoint isn't
+     * status-filtered) and caches the result into `customers` once it
+     * resolves — Vue's reactivity re-renders whatever called this the first
+     * time automatically. The first call for a given id still returns
+     * undefined synchronously; callers already render a fallback for that.
      * @param {number|string} id - Customer identifier.
      * @returns {import('../domain/model/customer.entity.js').Customer|undefined}
      */
     function getCustomerById(id) {
         const numericId = parseInt(id);
-        return customers.value.find(customer => customer.id === numericId);
+        const found = customers.value.find(customer => customer.id === numericId);
+        if (found || customerFetchesInFlight.has(numericId)) return found;
+
+        customerFetchesInFlight.add(numericId);
+        salesApi.getCustomerById(numericId)
+            .then(response => {
+                customers.value.push(CustomerAssembler.toEntityFromResource(response.data));
+            })
+            .catch(() => {
+                // Not found (e.g. a stale/invalid id) or a network error — the
+                // caller's existing "unknown customer" fallback stays as-is.
+            })
+            .finally(() => {
+                customerFetchesInFlight.delete(numericId);
+            });
+        return found;
     }
 
     // ─── Fetch Actions ────────────────────────────────────────────────────────
@@ -151,10 +183,23 @@ const useSalesStore = defineStore('sales', () => {
                 salesLoaded.value = true;
             })
             .catch(error => {
-                errors.value.push(error);
                 salesError.value = error;
                 salesLoaded.value = true;
             });
+    }
+
+    /**
+     * Fetches sales within a date range directly from the server, without
+     * touching the shared `sales`/`salesLoaded` state — other views (Team
+     * stats, Clientes, Cuotas) rely on that cache holding the FULL set, so a
+     * date-scoped result must not overwrite it. Callers (Sales History's
+     * date filter) hold the returned array themselves.
+     * @param {string} [dateFrom] - 'yyyy-mm-dd'.
+     * @param {string} [dateTo]   - 'yyyy-mm-dd'.
+     * @returns {Promise<import('../domain/model/sale.entity.js').Sale[]>}
+     */
+    function fetchSalesInRange(dateFrom, dateTo) {
+        return salesApi.getSales(dateFrom, dateTo).then(response => SaleAssembler.toEntitiesFromResponse(response));
     }
 
     /**
@@ -167,8 +212,6 @@ const useSalesStore = defineStore('sales', () => {
         salesApi.getCustomers().then(response => {
             customers.value   = CustomerAssembler.toEntitiesFromResponse(response);
             customersLoaded.value = true;
-        }).catch(error => {
-            errors.value.push(error);
         });
     }
 
@@ -337,7 +380,6 @@ const useSalesStore = defineStore('sales', () => {
 
             return { success: true, errorKey: null, errorDetail: null, status: null, sale: finalSale };
         } catch (error) {
-            errors.value.push(error);
             // Every failure used to collapse into the same generic "try
             // again" message — 409 (insufficient stock, inactive product)
             // and 404 (product/customer gone) have real, localized backend
@@ -374,10 +416,7 @@ const useSalesStore = defineStore('sales', () => {
     function fetchSaleDetailsForSale(saleId) {
         return salesApi.getSaleDetailsBySale(saleId)
             .then(response => SaleDetailAssembler.toEntitiesFromResponse(response))
-            .catch(error => {
-                errors.value.push(error);
-                return [];
-            });
+            .catch(() => []);
     }
 
     /**
@@ -414,8 +453,7 @@ const useSalesStore = defineStore('sales', () => {
             if (paymentPlansLoaded.value) fetchPendingPaymentPlans();
 
             return { success: true };
-        } catch (error) {
-            errors.value.push(error);
+        } catch {
             return { success: false };
         }
     }
@@ -432,9 +470,6 @@ const useSalesStore = defineStore('sales', () => {
             const newCustomer = CustomerAssembler.toEntityFromResource(response.data);
             customers.value.push(newCustomer);
             return newCustomer;
-        }).catch(error => {
-            errors.value.push(error);
-            throw error;
         });
     }
 
@@ -451,9 +486,6 @@ const useSalesStore = defineStore('sales', () => {
                 customers.value[index] = updatedCustomer;
             }
             return updatedCustomer;
-        }).catch(error => {
-            errors.value.push(error);
-            throw error;
         });
     }
 
@@ -468,9 +500,6 @@ const useSalesStore = defineStore('sales', () => {
             if (index !== -1) {
                 customers.value.splice(index, 1);
             }
-        }).catch(error => {
-            errors.value.push(error);
-            throw error;
         });
     }
 
@@ -489,8 +518,7 @@ const useSalesStore = defineStore('sales', () => {
                 paymentPlans.value = PaymentPlanAssembler.toEntitiesFromResponse(response);
                 paymentPlansLoaded.value = true;
             })
-            .catch(error => {
-                errors.value.push(error);
+            .catch(() => {
                 paymentPlansLoaded.value = true;
             });
     }
@@ -503,10 +531,7 @@ const useSalesStore = defineStore('sales', () => {
     function fetchPaymentPlanBySale(saleId) {
         return salesApi.getPaymentPlanBySale(saleId)
             .then(response => PaymentPlanAssembler.toEntityFromResource(response.data))
-            .catch(error => {
-                if (error.response?.status !== 404) errors.value.push(error);
-                return null;
-            });
+            .catch(() => null);
     }
 
     /**
@@ -526,10 +551,6 @@ const useSalesStore = defineStore('sales', () => {
                 const createdPlan = PaymentPlanAssembler.toEntityFromResource(response.data);
                 paymentPlans.value.push(createdPlan);
                 return createdPlan;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -551,10 +572,6 @@ const useSalesStore = defineStore('sales', () => {
                     paymentPlans.value[index] = updatedPlan;
                 }
                 return updatedPlan;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -568,7 +585,6 @@ const useSalesStore = defineStore('sales', () => {
         customersLoaded,
         paymentPlans,
         paymentPlansLoaded,
-        errors,
         // Computed
         salesCount,
         totalRevenue,
@@ -578,6 +594,7 @@ const useSalesStore = defineStore('sales', () => {
         getCustomerById,
         // Fetch
         fetchSales,
+        fetchSalesInRange,
         fetchCustomers,
         fetchSaleDetailsForSale,
         // POS session

@@ -8,7 +8,7 @@ const { t }    = useI18n();
 const router   = useRouter();
 const iamStore = useIamStore();
 
-const form = ref({ email: '', password: '', rememberMe: false });
+const form = ref({ email: '', password: '' });
 const showPassword = ref(false);
 const localError   = ref('');
 const isLoading    = ref(false);
@@ -167,19 +167,6 @@ function navigateToForgotPassword() { router.push({ name: 'forgot-password' }); 
             </div>
           </div>
 
-          <!-- Remember me -->
-          <div class="flex align-items-center gap-2">
-            <button
-                type="button"
-                class="auth-checkbox flex align-items-center justify-content-center border-round flex-shrink-0"
-                :class="{ 'auth-checkbox--checked': form.rememberMe }"
-                @click="form.rememberMe = !form.rememberMe"
-            >
-              <i v-if="form.rememberMe" class="pi pi-check" style="color: var(--brand-ink); font-size: 0.65rem;"/>
-            </button>
-            <span class="auth-remember-text">{{ t('sign-in.remember-me') }}</span>
-          </div>
-
           <!-- Error -->
           <div v-if="localError" class="auth-error-box flex align-items-center gap-2 p-3 border-round-lg">
             <i class="pi pi-exclamation-circle flex-shrink-0" style="color: var(--status-critical-fg); font-size: 0.9rem;"/>
@@ -293,14 +280,6 @@ function navigateToForgotPassword() { router.push({ name: 'forgot-password' }); 
   transition: color 0.15s;
 }
 .auth-visibility-btn:hover { color: var(--brand); }
-
-.auth-checkbox {
-  width: 20px; height: 20px; border: 1.5px solid var(--border-strong); cursor: pointer;
-  background-color: var(--surface-alt); transition: all 0.2s;
-}
-.auth-checkbox--checked { background-color: var(--brand); border-color: var(--brand); }
-
-.auth-remember-text { color: var(--text-muted); font-size: 0.875rem; }
 
 .auth-error-box { background-color: var(--status-critical-bg); border: 1px solid color-mix(in srgb, var(--status-critical-fg) 30%, transparent); }
 .auth-notice-box { background-color: var(--status-warning-bg); border: 1px solid color-mix(in srgb, var(--status-warning-fg) 30%, transparent); }
