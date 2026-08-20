@@ -236,8 +236,22 @@ function startEditRule(rule) {
 
 function saveRuleThreshold(type) {
   const parsedValue = parseFloat(editingThreshold.value);
-  if (!isNaN(parsedValue) && parsedValue >= 0) updateAlertRuleThreshold(type, parsedValue);
-  editingRuleType.value = null;
+  if (isNaN(parsedValue) || parsedValue < 0) {
+    editingRuleType.value = null;
+    return;
+  }
+  updateAlertRuleThreshold(type, parsedValue)
+      .then(() => {
+        editingRuleType.value = null;
+      })
+      .catch(error => {
+        // Keep the edit box open (with the value the user typed) instead of
+        // silently closing it on a rejected save — a threshold over 365 (or
+        // any other server-side rejection) used to close the box with zero
+        // explanation, as if nothing had happened.
+        const detail = error.response?.data?.detail ?? t('alerts.toast-threshold-error');
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
+      });
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -502,6 +516,8 @@ function formatDateTime(isoDate) {
                 <input
                     v-model="editingThreshold"
                     type="number"
+                    min="0"
+                    max="365"
                     class="alerts-rule-threshold-input"
                     :style="{ borderColor: getTypeConfig(rule.type).color }"
                     @keydown.enter="saveRuleThreshold(rule.type)"

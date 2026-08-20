@@ -551,6 +551,7 @@
     "rule-edit-threshold":      "Edit threshold",
     "rule-save":                "Save",
     "rule-cancel":              "Cancel",
+    "toast-threshold-error":    "Could not save the threshold. Check your connection and try again.",
     "rule-unit-units":          "units",
     "rule-unit-days":           "days",
     "rule-low-stock-name":      "Low stock",

@@ -551,6 +551,7 @@
     "rule-edit-threshold":      "Editar umbral",
     "rule-save":                "Guardar",
     "rule-cancel":              "Cancelar",
+    "toast-threshold-error":    "No se pudo guardar el umbral. Verifica tu conexión e intenta de nuevo.",
     "rule-unit-units":          "unidades",
     "rule-unit-days":           "días",
     "rule-low-stock-name":      "Stock bajo",
