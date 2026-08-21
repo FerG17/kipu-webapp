@@ -446,6 +446,8 @@
     "toast-save-error": "No se pudo guardar el producto. Verifica tu conexión e intenta de nuevo.",
     "toast-duplicate-barcode": "Ese código de barras ya está registrado en otro producto.",
     "toast-invalid-expiration": "El producto se guardó, pero no se pudo registrar el precio de costo ni la fecha de vencimiento porque esa fecha ya pasó. Edítalo para corregirla.",
+    "toast-partial-save-error": "El producto se guardó, pero no se pudo registrar el stock, el precio de costo o la fecha de vencimiento. Revisa el producto e inténtalo de nuevo desde 'Editar'.",
+    "toast-batch-expiration-conflict": "Este producto todavía tiene stock que vence antes que la fecha ingresada. Descarta ese lote primero, o mantén la fecha más próxima, para no perder el rastro del stock que vence pronto.",
     "toast-warehouse-required": "Selecciona un almacén para registrar el stock inicial.",
     "toast-warehouse-add-error": "No se pudo crear el almacén. Verifica tu conexión e intenta de nuevo.",
     "toast-intake-product-required": "Selecciona un producto para registrar el ingreso.",
@@ -705,18 +707,16 @@
   "customer-form": {
     "full-name": "Nombre completo",
     "full-name-placeholder": "Ej: Juan Pérez",
-    "document-number": "Número de documento (DNI / RUC)",
+    "document-number": "Número de documento (DNI / RUC, opcional)",
     "document-placeholder": "Ej: 45123456",
-    "phone-number": "Número de teléfono",
+    "phone-number": "Número de teléfono (opcional)",
     "phone-placeholder": "Ej: 987654321",
     "email": "Correo electrónico (opcional)",
     "email-placeholder": "Ej: cliente\\@gmail.com",
     "cancel": "Cancelar",
     "error-name": "El nombre es obligatorio y debe tener al menos 2 caracteres.",
     "error-document": "El documento debe tener 8 dígitos (DNI) o 11 dígitos (RUC).",
-    "error-document-required": "El número de documento es obligatorio.",
-    "error-phone": "El número de teléfono debe tener 9 dígitos.",
-    "error-phone-required": "El número de teléfono es obligatorio."
+    "error-phone": "El número de teléfono debe tener 9 dígitos."
   },
   "payment-plans": {
     "search-placeholder": "Buscar por cliente...",
