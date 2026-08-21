@@ -96,8 +96,6 @@ const showNewPassword = ref(false);
 
 const showInviteModal = ref(false);
 
-const notificationsEnabled = ref(true);
-
 onMounted(() => {
   const loadUsersIfAllowed = rolesLoaded.value
       ? Promise.resolve()
@@ -277,7 +275,7 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
     <div class="flex align-items-start justify-content-between flex-wrap gap-3">
       <div>
         <h1 class="m-0" style="color: var(--brand); font-size: 1.5rem; font-weight: 700;">{{ t('settings.title') }}</h1>
-        <p class="m-0 mt-1" style="color: var(--text-muted); font-size: 0.82rem;">Gestiona tu perfil, usuarios y preferencias del sistema</p>
+        <p class="m-0 mt-1" style="color: var(--text-muted); font-size: 0.82rem;">{{ t('settings.subtitle') }}</p>
       </div>
       <!-- User avatar chip -->
       <div v-if="iamStore.currentUser" class="flex align-items-center gap-3 px-4 py-2 border-round-xl" style="background-color: var(--surface); border: 1px solid var(--border); box-shadow: 0 1px 4px rgba(0,0,0,0.04);">
@@ -430,7 +428,7 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
       <!-- Loading -->
       <div v-else-if="!usersLoaded" class="flex justify-content-center align-items-center gap-3 py-8">
         <i class="pi pi-spin pi-spinner" style="font-size: 1.3rem; color: var(--brand);"/>
-        <span style="color: var(--text-muted); font-size: 0.88rem;">Cargando usuarios…</span>
+        <span style="color: var(--text-muted); font-size: 0.88rem;">{{ t('settings.loading-users') }}</span>
       </div>
 
       <div v-else>
@@ -569,7 +567,7 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
             <div class="flex align-items-center justify-content-center border-round-xl" style="width: 56px; height: 56px; background-color: var(--surface-alt);">
               <i class="pi pi-users" style="font-size: 1.5rem; color: var(--text-faint);"/>
             </div>
-            <p class="m-0" style="color: var(--text-faint); font-size: 0.88rem;">No hay usuarios registrados</p>
+            <p class="m-0" style="color: var(--text-faint); font-size: 0.88rem;">{{ t('settings.no-users') }}</p>
           </div>
         </div>
       </div>
@@ -618,44 +616,17 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
         </div>
 
         <!-- Language row -->
-        <div class="flex align-items-center justify-content-between py-4" style="border-bottom: 1px solid var(--surface-alt);">
+        <div class="flex align-items-center justify-content-between py-4">
           <div class="flex align-items-center gap-3">
             <div class="flex align-items-center justify-content-center border-round-lg flex-shrink-0" style="width: 40px; height: 40px; background-color: var(--brand-soft);">
               <i class="pi pi-globe" style="color: var(--brand); font-size: 1rem;"/>
             </div>
             <div>
               <p class="m-0" style="color: var(--text); font-weight: 600; font-size: 0.9rem;">{{ t('settings.language-label') }}</p>
-              <p class="m-0 mt-1" style="color: var(--text-muted); font-size: 0.78rem;">Idioma de la interfaz</p>
+              <p class="m-0 mt-1" style="color: var(--text-muted); font-size: 0.78rem;">{{ t('settings.language-desc') }}</p>
             </div>
           </div>
           <language-switcher/>
-        </div>
-
-        <!-- Notifications row -->
-        <div class="flex align-items-start justify-content-between py-4">
-          <div class="flex align-items-start gap-3">
-            <div class="flex align-items-center justify-content-center border-round-lg flex-shrink-0" style="width: 40px; height: 40px;" :style="{ backgroundColor: notificationsEnabled ? 'var(--status-ok-bg)' : 'var(--surface-alt)' }">
-              <i class="pi pi-bell" style="font-size: 1rem;" :style="{ color: notificationsEnabled ? 'var(--status-ok-fg)' : 'var(--text-faint)' }"/>
-            </div>
-            <div style="padding-right: 1rem;">
-              <p class="m-0" style="color: var(--text); font-weight: 600; font-size: 0.9rem;">{{ t('settings.notifications-label') }}</p>
-              <p class="m-0 mt-1" style="color: var(--text-muted); font-size: 0.78rem; line-height: 1.4;">{{ t('settings.notifications-desc') }}</p>
-            </div>
-          </div>
-          <!-- Toggle -->
-          <button
-              type="button"
-              class="flex-shrink-0"
-              style="width: 48px; height: 26px; border-radius: 13px; border: none; cursor: pointer; transition: background-color 0.2s; position: relative; margin-top: 2px;"
-              :style="{ backgroundColor: notificationsEnabled ? 'var(--brand)' : 'var(--text-faint)' }"
-              @click="notificationsEnabled = !notificationsEnabled"
-          >
-            <span
-                class="absolute"
-                style="width: 20px; height: 20px; border-radius: 50%; background-color: var(--surface); top: 3px; transition: left 0.2s; box-shadow: 0 1px 4px rgba(0,0,0,0.25);"
-                :style="{ left: notificationsEnabled ? '25px' : '3px' }"
-            />
-          </button>
         </div>
       </div>
     </div>

@@ -46,9 +46,6 @@ const activeStatusFilter = ref('ALL');
 /** @type {import('vue').Ref<string|null>} The id of the currently expanded sale row. */
 const expandedSaleId = ref(null);
 
-/** @type {import('vue').Ref<number|null>} The id of the sale whose line items are being fetched. */
-const loadingDetailsSaleId = ref(null);
-
 /** @type {import('vue').Ref<number|null>} The id of the sale currently being cancelled, to block double-submit. */
 const cancellingSaleId = ref(null);
 
@@ -260,28 +257,13 @@ function formatCurrency(amount) {
 }
 
 /**
- * Toggles the expanded state of a sale row.
- *
- * `fetchSales()` loads sales without their line items (the mock API doesn't
- * nest them), so `sale.details` is always [] right after the list loads.
- * The first time a row is expanded, its details are fetched lazily and
- * cached on the entity so later toggles don't refetch.
- *
+ * Toggles the expanded state of a sale row. The real backend already embeds
+ * every sale's line items in the /sales response (see sales.store.js#fetchSales),
+ * so this is just a UI toggle — no lazy fetch needed.
  * @param {import('../../domain/model/sale.entity.js').Sale} sale
  */
-async function toggleExpand(sale) {
-  if (expandedSaleId.value === sale.id) {
-    expandedSaleId.value = null;
-    return;
-  }
-
-  expandedSaleId.value = sale.id;
-
-  if (sale.details.length === 0) {
-    loadingDetailsSaleId.value = sale.id;
-    sale.details = await salesStore.fetchSaleDetailsForSale(sale.id);
-    loadingDetailsSaleId.value = null;
-  }
+function toggleExpand(sale) {
+  expandedSaleId.value = expandedSaleId.value === sale.id ? null : sale.id;
 }
 
 /**
@@ -512,17 +494,6 @@ onMounted(() => {
               </td>
             </tr>
 
-            <!-- Loading line items -->
-            <tr
-                v-if="expandedSaleId === sale.id && loadingDetailsSaleId === sale.id"
-                :key="`${sale.id}-loading`"
-                style="background-color: var(--surface-alt);"
-            >
-              <td colspan="7" class="px-6 py-3">
-                <i class="pi pi-spin pi-spinner" style="color: var(--text-faint); font-size: 0.85rem;"/>
-              </td>
-            </tr>
-
             <!-- Expanded detail row -->
             <tr
                 v-if="expandedSaleId === sale.id && sale.details && sale.details.length > 0"
@@ -626,15 +597,6 @@ onMounted(() => {
                 :style="{ transform: expandedSaleId === sale.id ? 'rotate(180deg)' : 'rotate(0deg)' }"
             />
           </button>
-
-          <!-- Loading line items -->
-          <div
-              v-if="expandedSaleId === sale.id && loadingDetailsSaleId === sale.id"
-              class="mt-2 pt-2"
-              style="border-top: 1px solid var(--surface-alt);"
-          >
-            <i class="pi pi-spin pi-spinner" style="color: var(--text-faint); font-size: 0.85rem;"/>
-          </div>
 
           <!-- Expanded items -->
           <div

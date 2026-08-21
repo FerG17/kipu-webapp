@@ -2,7 +2,6 @@ import { BaseApi }      from '../../shared/infrastructure/base-api.js';
 import { BaseEndpoint } from '../../shared/infrastructure/base-endpoint.js';
 
 const salesEndpointPath        = import.meta.env.VITE_SALES_ENDPOINT_PATH;
-const saleDetailsEndpointPath  = import.meta.env.VITE_SALE_DETAILS_ENDPOINT_PATH;
 const customersEndpointPath    = import.meta.env.VITE_CUSTOMERS_ENDPOINT_PATH;
 const paymentPlansEndpointPath = import.meta.env.VITE_PAYMENT_PLANS_ENDPOINT_PATH;
 
@@ -10,7 +9,7 @@ const paymentPlansEndpointPath = import.meta.env.VITE_PAYMENT_PLANS_ENDPOINT_PAT
  * Infrastructure gateway for the Sales & POS Management bounded-context endpoints.
  *
  * Responsibilities:
- * - Wraps all HTTP calls for Sales, SaleDetails, Customers, and PaymentPlans.
+ * - Wraps all HTTP calls for Sales, Customers, and PaymentPlans.
  * - Delegates CRUD to BaseEndpoint instances; one per resource path.
  * - Cancellation is performed via a PATCH/PUT (status update) because
  *   the mock API does not support a dedicated /cancel endpoint.
@@ -23,21 +22,17 @@ export class SalesApi extends BaseApi {
     #salesEndpoint;
 
     /** @type {BaseEndpoint} @private */
-    #saleDetailsEndpoint;
-
-    /** @type {BaseEndpoint} @private */
     #customersEndpoint;
 
     /** @type {BaseEndpoint} @private */
     #paymentPlansEndpoint;
 
     /**
-     * Creates endpoint clients for sales, sale details, customers, and payment plans.
+     * Creates endpoint clients for sales, customers, and payment plans.
      */
     constructor() {
         super();
         this.#salesEndpoint        = new BaseEndpoint(this, salesEndpointPath);
-        this.#saleDetailsEndpoint  = new BaseEndpoint(this, saleDetailsEndpointPath);
         this.#customersEndpoint    = new BaseEndpoint(this, customersEndpointPath);
         this.#paymentPlansEndpoint = new BaseEndpoint(this, paymentPlansEndpointPath);
     }
@@ -104,19 +99,6 @@ export class SalesApi extends BaseApi {
      */
     updateSale(id, resource) {
         return this.#salesEndpoint.update(id, resource);
-    }
-
-    // ─── Sale Details ─────────────────────────────────────────────────────────
-
-    /**
-     * Fetches the lines of a sale. Read-only: a sale's lines are always
-     * created atomically with the sale itself (see createSale) — the
-     * backend has no endpoint to create or delete a line independently.
-     * @param {number|string} saleId - Sale identifier.
-     * @returns {Promise<import('axios').AxiosResponse>}
-     */
-    getSaleDetailsBySale(saleId) {
-        return this.#saleDetailsEndpoint.getAllByParam('saleId', saleId);
     }
 
     // ─── Customers ────────────────────────────────────────────────────────────
