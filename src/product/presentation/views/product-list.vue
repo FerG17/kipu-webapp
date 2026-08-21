@@ -748,7 +748,13 @@ function persistProductFromModal(resolvedCategory) {
 
         return Promise.allSettled([minimumStockPromise, batchPromise]).then(results => {
           const failure = results.find(result => result.status === 'rejected');
-          if (failure) throw failure.reason;
+          if (failure) {
+            // updateProduct above already committed by this point — a
+            // rejected minimumStock/batch write is a partial failure, not
+            // "nothing was saved" (X5 #8).
+            failure.reason.partialProductSave = true;
+            throw failure.reason;
+          }
         });
       })
       : addProduct(productEntity).then(createdProduct => {
@@ -766,6 +772,12 @@ function persistProductFromModal(resolvedCategory) {
               inventoryId: createdInventoryItem ? createdInventoryItem.id : null
             });
           }
+        }).catch(error => {
+          // addProduct above already committed (product + suppliers) by this
+          // point — a failure registering stock/batch afterward must not
+          // read as a total failure (X5 #8).
+          error.partialProductSave = true;
+          throw error;
         });
       });
 
@@ -790,11 +802,23 @@ function persistProductFromModal(resolvedCategory) {
         // were already committed server-side by this point, so the message
         // must not read as a total failure.
         const isInvalidExpiration = error.response?.status === 400 && error.response?.data?.title === 'InvalidExpirationDate';
+        // The product still only tracks one active batch (no per-lot
+        // tracking yet, X5 #2/#9) — the backend blocks pushing its
+        // expiration later while it still has stock, rather than silently
+        // losing track of the nearer-expiring stock.
+        const isBatchExpirationConflict = error.response?.status === 409
+            && error.response?.data?.title === 'BatchExpirationConflict';
+        // Any other failure reached after addProduct/updateProduct already
+        // committed (flagged above) — same "don't read as total failure"
+        // rule, for cases isInvalidExpiration doesn't cover (X5 #8).
+        const isPartialSave = error.partialProductSave === true;
         toast.add({
           severity: 'error',
           summary:  t('common.toast-error-title'),
           detail:   isDuplicateBarcode ? t('inventory.toast-duplicate-barcode')
                    : isInvalidExpiration ? t('inventory.toast-invalid-expiration')
+                   : isBatchExpirationConflict ? t('inventory.toast-batch-expiration-conflict')
+                   : isPartialSave ? t('inventory.toast-partial-save-error')
                    : t('inventory.toast-save-error'),
           life: 4500
         });
@@ -984,8 +1008,20 @@ function saveIntake() {
         // the sidebar badge picks it up right away.
         alertsStore.fetchAlerts();
       })
-      .catch(() => {
-        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-intake-error'), life: 4500 });
+      .catch(error => {
+        // Same guardrail as the product-creation form (X5 #2/#9): the
+        // backend blocks an intake that would push the active batch's
+        // expiration later while it still has stock, instead of silently
+        // losing track of the nearer-expiring stock.
+        const isBatchExpirationConflict = error.response?.status === 409
+            && error.response?.data?.title === 'BatchExpirationConflict';
+        toast.add({
+          severity: 'error',
+          summary:  t('common.toast-error-title'),
+          detail:   isBatchExpirationConflict ? t('inventory.toast-batch-expiration-conflict')
+                   : t('inventory.toast-intake-error'),
+          life: 4500
+        });
       })
       .finally(() => {
         savingIntake.value = false;

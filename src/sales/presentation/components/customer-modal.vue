@@ -11,8 +11,8 @@ import { useI18n }       from 'vue-i18n';
  *
  * Business rules:
  * - fullName is required (minimum 2 characters).
- * - documentNumber is required; must be 8 digits (DNI) or 11 digits (RUC).
- * - phoneNumber is required; must be 9 digits.
+ * - documentNumber is optional; when provided, must be 8 digits (DNI) or 11 digits (RUC).
+ * - phoneNumber is optional; when provided, must be 9 digits.
  * - email is optional.
  *
  * @component CustomerModal
@@ -67,11 +67,7 @@ const fieldErrors = ref({});
  * Used to enable/disable the submit button.
  * @type {import('vue').ComputedRef<boolean>}
  */
-const isFormValid = computed(() =>
-    fullName.value.trim().length >= 2 &&
-    documentNumber.value.trim().length > 0 &&
-    phoneNumber.value.trim().length > 0
-);
+const isFormValid = computed(() => fullName.value.trim().length >= 2);
 
 /**
  * Validates all form fields and populates fieldErrors.
@@ -89,8 +85,6 @@ function validateForm() {
     if (cleaned.length !== 8 && cleaned.length !== 11) {
       fieldErrors.value.documentNumber = t('customer-form.error-document');
     }
-  } else {
-    fieldErrors.value.documentNumber = t('customer-form.error-document-required');
   }
 
   if (phoneNumber.value) {
@@ -98,8 +92,6 @@ function validateForm() {
     if (cleaned.length !== 9) {
       fieldErrors.value.phoneNumber = t('customer-form.error-phone');
     }
-  } else {
-    fieldErrors.value.phoneNumber = t('customer-form.error-phone-required');
   }
 
   return Object.keys(fieldErrors.value).length === 0;
@@ -179,7 +171,7 @@ function handleSave() {
               class="block mb-1"
               style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);"
           >
-            {{ t('customer-form.document-number') }} *
+            {{ t('customer-form.document-number') }}
           </label>
           <input
               v-model="documentNumber"
@@ -201,7 +193,7 @@ function handleSave() {
               class="block mb-1"
               style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);"
           >
-            {{ t('customer-form.phone-number') }} *
+            {{ t('customer-form.phone-number') }}
           </label>
           <input
               v-model="phoneNumber"

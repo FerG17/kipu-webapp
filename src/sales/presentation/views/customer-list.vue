@@ -20,8 +20,8 @@ import { canEditCustomers }  from '../../../iam/application/permissions.js';
  * - CustomerDetailModal for viewing customer details and purchase history.
  *
  * Business rules:
- * - A customer requires a fullName, documentNumber (DNI/RUC), and phoneNumber.
- * - Email is optional.
+ * - A customer requires only a fullName.
+ * - documentNumber (DNI/RUC), phoneNumber, and email are all optional.
  *
  * @view CustomerList
  */
