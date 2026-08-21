@@ -7,15 +7,6 @@
     "alerts": "Alertas",
     "settings": "Configuración"
   },
-  "authoring-phrase": {
-    "intro": "Hecho con",
-    "use": "utilizando",
-    "author": "por el Equipo de Desarrollo de {brand}"
-  },
-  "about": {
-    "title": "Acerca de Kipu",
-    "content": "Kipu es el sistema de gestión de inventario, ventas y proveedores de tu negocio."
-  },
   "home": {
     "title": "Bienvenido a Kipu",
     "content": "Gestiona tu inventario, ventas y proveedores desde un solo lugar.",
@@ -136,6 +127,7 @@
   },
   "settings": {
     "title": "Configuración",
+    "subtitle": "Gestiona tu perfil, usuarios y preferencias del sistema",
     "tab-profile": "Perfil",
     "tab-users": "Usuarios",
     "tab-preferences": "Preferencias",
@@ -177,6 +169,8 @@
     "toast-delete-last-admin-error": "No puedes eliminar al último administrador activo del negocio.",
     "toast-delete-own-account-error": "No puedes eliminar tu propia cuenta.",
     "error-load-users": "No se pudo cargar el equipo. Revisa tu conexión e intenta de nuevo.",
+    "loading-users": "Cargando usuarios…",
+    "no-users": "No hay usuarios registrados",
     "action-deactivate": "Suspender acceso",
     "action-reactivate": "Reactivar acceso",
     "invite-modal-title": "Invitar usuario",
@@ -212,28 +206,22 @@
     "success-password": "Contraseña cambiada exitosamente.",
     "preferences-title": "Preferencias",
     "language-label": "Idioma",
+    "language-desc": "Idioma de la interfaz",
     "theme-label": "Tema",
     "theme-desc": "Elige cómo se ve la aplicación.",
     "theme-light": "Claro",
     "theme-dark": "Oscuro",
-    "theme-system": "Sistema",
-    "notifications-label": "Notificaciones de alertas",
-    "notifications-desc": "Recibe notificaciones cuando se activen alertas de stock o vencimiento."
+    "theme-system": "Sistema"
   },
   "dashboard": {
-    "title": "Dashboard",
-    "subtitle": "Resumen general de tu inventario",
     "total-products": "Total Productos",
     "low-stock": "Stock Bajo",
     "inventory-value": "Valor de Inventario",
     "total-sales": "Ventas Totales",
-    "sales-count": "Ventas",
-    "average-sale": "Venta Promedio",
     "stock-health": "Salud del Stock",
     "greeting-morning": "Buenos días",
     "greeting-afternoon": "Buenas tardes",
     "greeting-evening": "Buenas noches",
-    "generated-at": "Última actualización",
     "refresh": "Actualizar",
     "go-to-reports": "Ir a Reportes",
     "go-to-alerts": "Ver Alertas",
@@ -244,7 +232,6 @@
     "severity-high": "Alta",
     "severity-medium": "Media",
     "severity-low": "Baja",
-    "loading": "Cargando métricas...",
     "dashboard-forbidden-notice": "Tu rol no tiene acceso al Dashboard. Esta sección es exclusiva para administradores.",
     "expiring-soon": "Por Vencer",
     "weekly-movements": "Movimientos de la semana",
@@ -257,7 +244,6 @@
     "weekday-fri": "Vie",
     "weekday-sat": "Sáb",
     "weekday-sun": "Dom",
-    "top-products": "Productos más vendidos",
     "quick-actions": "Acciones rápidas",
     "action-new-product": "Nuevo producto",
     "action-new-product-sub": "Agregar al inventario",
@@ -268,7 +254,6 @@
     "action-alerts-sub": "Revisar alertas activas",
     "action-inventory": "Inventario",
     "action-inventory-sub": "Ver todo el stock",
-    "action-new-movement": "Registrar movimiento",
     "action-view-reports": "Ver reportes",
     "action-view-reports-sub": "Exportar y analizar",
     "top-stock": "Mayor stock",
@@ -278,7 +263,6 @@
   "reports": {
     "title": "Reportes",
     "subtitle": "Genera y exporta reportes del negocio",
-    "back": "Volver",
     "type": "Tipo de Reporte",
     "start-date": "Fecha de inicio (opcional)",
     "end-date": "Fecha de fin (opcional)",
@@ -287,7 +271,6 @@
     "field-supplier": "Proveedor (opcional)",
     "field-supplier-placeholder": "Todos los proveedores",
     "apply": "Generar",
-    "cancel": "Cancelar",
     "type-inventory": "Inventario",
     "type-sales": "Ventas",
     "type-stock-movements": "Entradas y salidas",
@@ -300,14 +283,12 @@
     "no-date-range": "Todo el historial",
     "no-reports": "Aún no hay reportes generados.",
     "error-date-range": "La fecha de inicio no puede ser mayor a la fecha de fin.",
-    "result-title": "Reportes",
     "generated-confirmation-title": "Reporte listo",
     "history-title": "Historial",
     "history-subtitle": "Últimos 90 días",
     "download-excel": "Excel",
     "download-pdf": "PDF",
     "toast-download-error": "No se pudo descargar el reporte. Intenta de nuevo.",
-    "export": "Descargar",
     "generate-card-title": "Generar reporte"
   },
   "inventory": {
@@ -365,8 +346,6 @@
     "stat-expiring": "Por vencer",
     "stat-out": "Sin stock",
     "search-placeholder": "Buscar producto...",
-    "filter-category": "Categoría",
-    "filter-all": "Todos",
     "pill-all": "Todos",
     "pill-low": "Stock bajo",
     "pill-expiring": "Por vencer",
@@ -463,7 +442,6 @@
     "intake-field-note-placeholder": "Ej: Pedido semanal, factura #001",
     "intake-btn": "Registrar ingreso",
     "und": "und.",
-    "expiry-label": "Vence:",
     "toast-save-success": "Producto guardado correctamente",
     "toast-save-error": "No se pudo guardar el producto. Verifica tu conexión e intenta de nuevo.",
     "toast-duplicate-barcode": "Ese código de barras ya está registrado en otro producto.",
@@ -611,12 +589,9 @@
     "cancel-confirm-accept": "Sí, cancelar venta",
     "toast-cancel-success": "Venta cancelada y stock repuesto",
     "toast-cancel-error": "No se pudo cancelar la venta. Intenta de nuevo.",
-    "confirm-cancel": "¿Estás seguro de cancelar la venta #{id}?",
     "cancel-header": "Cancelar Venta"
   },
   "pos": {
-    "title": "Registrar Venta POS",
-    "subtitle": "Registra una venta y actualiza el inventario",
     "search-placeholder": "Buscar producto...",
     "category-all": "Todos",
     "category-dairy": "Lácteos",
@@ -696,8 +671,6 @@
     "warning-total-mismatch": "El total registrado por el servidor no coincide exactamente con el del carrito. Revisa el recibo."
   },
   "customers": {
-    "title": "Clientes",
-    "subtitle": "Gestiona los clientes registrados en tu negocio",
     "search-placeholder": "Buscar por nombre, DNI o teléfono...",
     "register-btn": "Registrar cliente",
     "col-name": "Cliente",

@@ -22,7 +22,6 @@ import { defineStore }  from 'pinia';
 import { computed, ref } from 'vue';
 import { SalesApi }           from '../infrastructure/sales.api.js';
 import { SaleAssembler }      from '../infrastructure/sale.assembler.js';
-import { SaleDetailAssembler } from '../infrastructure/sale-detail.assembler.js';
 import { CustomerAssembler }  from '../infrastructure/customer.assembler.js';
 import { PaymentPlanAssembler } from '../infrastructure/payment-plan.assembler.js';
 import { Sale, SaleStatus, PaymentMethod }               from '../domain/model/sale.entity.js';
@@ -394,13 +393,15 @@ const useSalesStore = defineStore('sales', () => {
                 paymentMethod: paymentMethod,
                 currency:      'PEN',
                 description:   description,
-                // discount isn't part of the backend's sale contract (see
-                // SaleLineResource/CreateSaleCommandValidator) — the POS never
-                // offers it, so it's never sent.
+                // Neither discount nor unitPrice is part of the backend's sale
+                // contract (see SaleLineResource/CreateSaleCommandValidator) —
+                // the POS never offers discount, and a submitted unitPrice was
+                // always silently ignored server-side in favor of the
+                // product's own BasePrice, so it was removed from the wire
+                // shape entirely rather than kept as a decoy.
                 lines: currentSale.value.details.map(detail => ({
                     productId: detail.productId,
-                    quantity:  detail.quantity,
-                    unitPrice: detail.unitPrice
+                    quantity:  detail.quantity
                 })),
                 idempotencyKey: currentSaleIdempotencyKey.value
             };
@@ -436,20 +437,6 @@ const useSalesStore = defineStore('sales', () => {
      */
     function discardCurrentSale() {
         currentSale.value = null;
-    }
-
-    /**
-     * Fetches the persisted SaleDetail lines for a sale.
-     * Needed because sales loaded via fetchSales carry an empty `details`
-     * array (the mock API does not embed line items in the sale resource).
-     *
-     * @param {number|string} saleId
-     * @returns {Promise<SaleDetail[]>}
-     */
-    function fetchSaleDetailsForSale(saleId) {
-        return salesApi.getSaleDetailsBySale(saleId)
-            .then(response => SaleDetailAssembler.toEntitiesFromResponse(response))
-            .catch(() => []);
     }
 
     /**
@@ -654,7 +641,6 @@ const useSalesStore = defineStore('sales', () => {
         fetchSalesInRange,
         fetchSalesRevenue,
         fetchCustomers,
-        fetchSaleDetailsForSale,
         // POS session
         startNewSale,
         addDetailToCurrentSale,

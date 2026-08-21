@@ -7,15 +7,6 @@
     "alerts": "Alerts",
     "settings": "Settings"
   },
-  "authoring-phrase": {
-    "intro": "Made with",
-    "use": "using",
-    "author": "by {brand} Developer Team"
-  },
-  "about": {
-    "title": "About Kipu",
-    "content": "Kipu is your business's inventory, sales and supplier management system."
-  },
   "home": {
     "title": "Welcome to Kipu",
     "content": "Manage your inventory, sales and suppliers all in one place.",
@@ -136,6 +127,7 @@
   },
   "settings": {
     "title": "Settings",
+    "subtitle": "Manage your profile, users and system preferences",
     "tab-profile": "Profile",
     "tab-users": "Users",
     "tab-preferences": "Preferences",
@@ -177,6 +169,8 @@
     "toast-delete-last-admin-error": "You can't delete the business's last active administrator.",
     "toast-delete-own-account-error": "You can't delete your own account.",
     "error-load-users": "Couldn't load the team. Check your connection and try again.",
+    "loading-users": "Loading users…",
+    "no-users": "No users registered",
     "action-deactivate": "Suspend access",
     "action-reactivate": "Restore access",
     "invite-modal-title": "Invite user",
@@ -212,28 +206,22 @@
     "success-password": "Password changed successfully.",
     "preferences-title": "Preferences",
     "language-label": "Language",
+    "language-desc": "Interface language",
     "theme-label": "Theme",
     "theme-desc": "Choose how the app looks.",
     "theme-light": "Light",
     "theme-dark": "Dark",
-    "theme-system": "System",
-    "notifications-label": "Alert notifications",
-    "notifications-desc": "Receive notifications when stock or expiration alerts are triggered."
+    "theme-system": "System"
   },
   "dashboard": {
-    "title": "Dashboard",
-    "subtitle": "General summary of your inventory",
     "total-products": "Total Products",
     "low-stock": "Low Stock",
     "inventory-value": "Inventory Value",
     "total-sales": "Total Sales",
-    "sales-count": "Sales",
-    "average-sale": "Average Sale",
     "stock-health": "Stock Health",
     "greeting-morning": "Good morning",
     "greeting-afternoon": "Good afternoon",
     "greeting-evening": "Good evening",
-    "generated-at": "Last updated",
     "refresh": "Refresh",
     "go-to-reports": "Go to Reports",
     "go-to-alerts": "Go to Alerts",
@@ -244,7 +232,6 @@
     "severity-high": "High",
     "severity-medium": "Medium",
     "severity-low": "Low",
-    "loading": "Loading metrics...",
     "dashboard-forbidden-notice": "Your role doesn't have access to the Dashboard. This section is admin-only.",
     "expiring-soon": "Expiring Soon",
     "weekly-movements": "Weekly Movements",
@@ -257,7 +244,6 @@
     "weekday-fri": "Fri",
     "weekday-sat": "Sat",
     "weekday-sun": "Sun",
-    "top-products": "Top Selling Products",
     "quick-actions": "Quick Actions",
     "action-new-product": "New product",
     "action-new-product-sub": "Add to inventory",
@@ -268,7 +254,6 @@
     "action-alerts-sub": "Review active alerts",
     "action-inventory": "Inventory",
     "action-inventory-sub": "View all stock",
-    "action-new-movement": "Register movement",
     "action-view-reports": "View reports",
     "action-view-reports-sub": "Export and analyze",
     "top-stock": "Highest Stock",
@@ -278,7 +263,6 @@
   "reports": {
     "title": "Reports",
     "subtitle": "Generate and export business reports",
-    "back": "Back",
     "type": "Report Type",
     "start-date": "Start date (optional)",
     "end-date": "End date (optional)",
@@ -287,7 +271,6 @@
     "field-supplier": "Supplier (optional)",
     "field-supplier-placeholder": "All suppliers",
     "apply": "Generate",
-    "cancel": "Cancel",
     "type-inventory": "Inventory",
     "type-sales": "Sales",
     "type-stock-movements": "Stock movements",
@@ -300,14 +283,12 @@
     "no-date-range": "Entire history",
     "no-reports": "No reports generated yet.",
     "error-date-range": "Start date must not be after end date.",
-    "result-title": "Reports",
     "generated-confirmation-title": "Report ready",
     "history-title": "History",
     "history-subtitle": "Last 90 days",
     "download-excel": "Excel",
     "download-pdf": "PDF",
     "toast-download-error": "Could not download the report. Try again.",
-    "export": "Download",
     "generate-card-title": "Generate report"
   },
   "inventory": {
@@ -365,8 +346,6 @@
     "stat-expiring": "Expiring soon",
     "stat-out": "Out of stock",
     "search-placeholder": "Search product...",
-    "filter-category": "Category",
-    "filter-all": "All",
     "pill-all": "All",
     "pill-low": "Low stock",
     "pill-expiring": "Expiring",
@@ -463,7 +442,6 @@
     "intake-field-note-placeholder": "e.g. Weekly order, invoice #001",
     "intake-btn": "Register intake",
     "und": "u.",
-    "expiry-label": "Expires:",
     "toast-save-success": "Product saved successfully",
     "toast-save-error": "Could not save the product. Check your connection and try again.",
     "toast-duplicate-barcode": "That barcode is already registered on another product.",
@@ -611,12 +589,9 @@
     "cancel-confirm-accept": "Yes, cancel sale",
     "toast-cancel-success": "Sale cancelled and stock replenished",
     "toast-cancel-error": "Could not cancel the sale. Try again.",
-    "confirm-cancel": "Are you sure you want to cancel sale #{id}?",
     "cancel-header": "Cancel Sale"
   },
   "pos": {
-    "title": "Register POS Sale",
-    "subtitle": "Register a sale and update inventory",
     "search-placeholder": "Search product...",
     "category-all": "All",
     "category-dairy": "Dairy",
@@ -696,8 +671,6 @@
     "warning-total-mismatch": "The total the server recorded doesn't exactly match the cart's. Double-check the receipt."
   },
   "customers": {
-    "title": "Customers",
-    "subtitle": "Manage your registered customers",
     "search-placeholder": "Search by name, DNI or phone...",
     "register-btn": "Register customer",
     "col-name": "Customer",
