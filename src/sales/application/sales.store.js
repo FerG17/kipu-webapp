@@ -288,7 +288,12 @@ const useSalesStore = defineStore('sales', () => {
         if (!currentSale.value) {
             return { success: false, errorKey: 'pos.error-no-active-sale' };
         }
-        if (!quantity || quantity < 1) {
+        // X5 Bloque D: a weight-sold product's quantity may legitimately be
+        // below 1 (e.g. 0.25 kg) — only "not a positive number" is rejected
+        // here; whether it's allowed to carry a fraction at all is enforced
+        // server-side (Product.UnitOfSale) and, client-side, by the cart UI
+        // only offering a fractional input for a weight-sold product.
+        if (!quantity || quantity <= 0) {
             return { success: false, errorKey: 'pos.error-quantity-invalid' };
         }
         if (quantity > availableStock) {
@@ -333,7 +338,8 @@ const useSalesStore = defineStore('sales', () => {
         if (!currentSale.value) {
             return { success: false, errorKey: 'pos.error-no-active-sale' };
         }
-        if (newQuantity < 1) {
+        // X5 Bloque D — same reasoning as addDetailToCurrentSale above.
+        if (!newQuantity || newQuantity <= 0) {
             return { success: false, errorKey: 'pos.error-quantity-invalid' };
         }
         if (newQuantity > availableStock) {

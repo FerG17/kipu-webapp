@@ -3,7 +3,9 @@
  * Represents a single line item inside a Sale.
  *
  * Business rules:
- * - quantity must be a positive integer greater than zero.
+ * - quantity must be a positive number — a whole number, unless the product
+ *   is marked "se vende por peso" (X5 Bloque D), in which case it may carry
+ *   up to 2 decimal places.
  * - unitPrice must be a number greater than zero.
  * - discount is expressed as a decimal fraction (0.10 = 10%), matching
  *   PurchaseOrderDetail.discount so both modules share one discount format.

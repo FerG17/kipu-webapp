@@ -103,6 +103,16 @@ describe('sales.store', () => {
             expect(store.currentSale.details[0].quantity).toBe(4);
         });
 
+        it('addDetailToCurrentSale — X5 Bloque D: accepts a fractional quantity (weight-sold product)', () => {
+            const store = useSalesStore();
+            store.startNewSale(1);
+
+            const result = store.addDetailToCurrentSale({ productId: 9, quantity: 0.35, unitPrice: 12, availableStock: 5 });
+
+            expect(result).toEqual({ success: true, errorKey: null });
+            expect(store.currentSale.details[0].quantity).toBe(0.35);
+        });
+
         it('updateDetailQuantity changes an existing line within stock', () => {
             const store = useSalesStore();
             store.startNewSale(1);
@@ -124,6 +134,17 @@ describe('sales.store', () => {
             expect(store.updateDetailQuantity({ productId: 7, newQuantity: 11, availableStock: 10 }))
                 .toEqual({ success: false, errorKey: 'pos.error-insufficient-stock' });
             expect(store.currentSale.details[0].quantity).toBe(2);
+        });
+
+        it('updateDetailQuantity — X5 Bloque D: accepts a fractional quantity below 1 (weight-sold product)', () => {
+            const store = useSalesStore();
+            store.startNewSale(1);
+            store.addDetailToCurrentSale({ productId: 9, quantity: 1, unitPrice: 12, availableStock: 5 });
+
+            const result = store.updateDetailQuantity({ productId: 9, newQuantity: 0.25, availableStock: 5 });
+
+            expect(result).toEqual({ success: true, errorKey: null });
+            expect(store.currentSale.details[0].quantity).toBe(0.25);
         });
 
         it('removeDetailFromCurrentSale drops the matching line and leaves the rest', () => {

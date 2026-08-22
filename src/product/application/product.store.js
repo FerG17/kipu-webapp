@@ -573,7 +573,13 @@ const useProductStore = defineStore('product', () => {
             supplier:      resource.supplier ?? '',
             supplierId:    resource.supplierId ?? null,
             note:          resource.note ?? '',
-            minimumStock:  resource.minimumStock != null ? parseInt(resource.minimumStock) || 0 : null
+            // X5 Bloque D: quantity/minimumStock are only ever whole numbers
+            // for a unit-sold product, but Number() (not parseInt, which
+            // truncates) is used here regardless, since the value arriving
+            // here has already been validated/parsed by the caller against
+            // the product's own UnitOfSale — this store shouldn't silently
+            // re-truncate a legitimate fraction for a weight-sold product.
+            minimumStock:  resource.minimumStock != null ? (Number(resource.minimumStock) || 0) : null
         };
 
         return productApi.registerStockIntake(parseInt(resource.productId), intakeResource)
@@ -597,9 +603,13 @@ const useProductStore = defineStore('product', () => {
      * @returns {Promise<import('../domain/model/inventory-item.entity.js').InventoryItem>}
      */
     function adjustStock(productId, warehouseId, delta, reason) {
-        const numericDelta = parseInt(delta);
+        // X5 Bloque D: Number(), not parseInt() — parseInt truncates a
+        // fractional delta (e.g. 2.5 -> 2), which would silently corrupt a
+        // weight-sold product's adjustment. The caller already validated
+        // whether a fraction is allowed for this product.
+        const numericDelta = Number(delta);
         if (!numericDelta) {
-            return Promise.reject(new Error('Stock adjustment delta must be a non-zero integer.'));
+            return Promise.reject(new Error('Stock adjustment delta must be a non-zero amount.'));
         }
         if (!reason || !reason.trim()) {
             return Promise.reject(new Error('Stock adjustment requires a reason.'));
@@ -640,7 +650,7 @@ const useProductStore = defineStore('product', () => {
             return Promise.reject(new Error('No inventory record exists yet for this product.'));
         }
 
-        return productApi.updateMinimumStock(existingItem.productId, { minimumStock: parseInt(minimumStock) })
+        return productApi.updateMinimumStock(existingItem.productId, { minimumStock: Number(minimumStock) })
             .then(response => {
                 const updatedItem = InventoryItemAssembler.toEntityFromResource(response.data);
                 const index = inventory.value.findIndex(item => item.id === updatedItem.id);

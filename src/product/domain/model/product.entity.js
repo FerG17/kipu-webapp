@@ -23,6 +23,17 @@ export const ProductStatus = Object.freeze({
 });
 
 /**
+ * Whether a product is sold in whole units (a can, a bag) or by weight
+ * (rice, cheese — "al peso"). Only WEIGHT products may carry a fractional
+ * quantity in a sale/intake/adjustment (X5 Bloque D).
+ * @enum {string}
+ */
+export const UnitOfSale = Object.freeze({
+    UNIT:   'UNIDAD',
+    WEIGHT: 'PESO'
+});
+
+/**
  * Product entity within the Product & Inventory Management bounded context.
  *
  * Business rules:
@@ -45,6 +56,7 @@ export class Product {
      * @param {string}      [params.status=ProductStatus.ACTIVE]
      * @param {string|null} [params.barcode=null]
      * @param {number[]}    [params.supplierIds=[]] - The suppliers this product can be sourced from (zero or more).
+     * @param {string}      [params.unitOfSale=UnitOfSale.UNIT]
      */
     constructor({
                     id          = null,
@@ -55,7 +67,8 @@ export class Product {
                     basePrice   = 0,
                     status      = ProductStatus.ACTIVE,
                     barcode     = null,
-                    supplierIds = []
+                    supplierIds = [],
+                    unitOfSale  = UnitOfSale.UNIT
                 }) {
         this.id          = id;
         this.businessId  = businessId;
@@ -66,6 +79,7 @@ export class Product {
         this.status      = status;
         this.barcode     = barcode;
         this.supplierIds = supplierIds;
+        this.unitOfSale  = unitOfSale;
     }
 
     /**
@@ -74,5 +88,10 @@ export class Product {
      */
     get isActive() {
         return this.status === ProductStatus.ACTIVE;
+    }
+
+    /** Whether this product allows a fractional quantity (sold "al peso") rather than whole units. */
+    get isSoldByWeight() {
+        return this.unitOfSale === UnitOfSale.WEIGHT;
     }
 }

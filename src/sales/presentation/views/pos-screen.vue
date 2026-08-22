@@ -117,7 +117,8 @@ const enrichedProducts = computed(() =>
             basePrice:      product.basePrice,
             availableStock: availableStock,
             isOutOfStock:   availableStock === 0,
-            isLowStock:     availableStock > 0 && inventoryItem && availableStock <= inventoryItem.minimumStock
+            isLowStock:     availableStock > 0 && inventoryItem && availableStock <= inventoryItem.minimumStock,
+            isSoldByWeight: product.isSoldByWeight
           };
         })
 );
@@ -151,7 +152,8 @@ const cartItems = computed(() => {
       unitPrice:      detail.unitPrice,
       lineTotal:      detail.lineTotal,
       productName:    enriched ? enriched.name       : t('pos.unknown-product'),
-      availableStock: enriched ? enriched.availableStock : 0
+      availableStock: enriched ? enriched.availableStock : 0,
+      isSoldByWeight: enriched ? enriched.isSoldByWeight : false
     };
   });
 });
@@ -234,6 +236,32 @@ function handleQuantityChange({ productId, delta }) {
   const result = salesStore.updateDetailQuantity({
     productId:      productId,
     newQuantity:    newQuantity,
+    availableStock: item.availableStock
+  });
+
+  if (!result.success) {
+    showStockError(t('pos.error-max-stock', { stock: item.availableStock }));
+  }
+}
+
+/**
+ * Handles the set-quantity event emitted by CartPanel — a direct value from
+ * the fractional-quantity input a weight-sold product's line shows instead
+ * of the plain span (X5 Bloque D), as opposed to the +/- buttons' delta.
+ * @param {{ productId: number, quantity: number }} payload
+ */
+function handleSetQuantity({ productId, quantity }) {
+  const item = cartItems.value.find(cartItem => cartItem.productId === productId);
+  if (!item) return;
+
+  if (!quantity || quantity <= 0) {
+    salesStore.removeDetailFromCurrentSale(productId);
+    return;
+  }
+
+  const result = salesStore.updateDetailQuantity({
+    productId:      productId,
+    newQuantity:    quantity,
     availableStock: item.availableStock
   });
 
@@ -598,6 +626,7 @@ onMounted(() => {
           :cart-items="cartItems"
           :total="cartTotal"
           @update-quantity="handleQuantityChange"
+          @set-quantity="handleSetQuantity"
           @remove-item="handleRemoveItem"
           @pay="openPaymentModal"
       />
@@ -633,6 +662,7 @@ onMounted(() => {
             :cart-items="cartItems"
             :total="cartTotal"
             @update-quantity="handleQuantityChange"
+            @set-quantity="handleSetQuantity"
             @remove-item="handleRemoveItem"
             @pay="openPaymentModal"
         />
