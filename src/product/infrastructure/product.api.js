@@ -180,15 +180,6 @@ export class ProductApi extends BaseApi {
     }
 
     /**
-     * Creates a new batch resource for a product.
-     * @param {Object} resource
-     * @returns {Promise<import('axios').AxiosResponse>}
-     */
-    createBatch(resource) {
-        return this.#batchesEndpoint.create(resource);
-    }
-
-    /**
      * Discards a batch whose goods left the shelf (thrown out, returned) —
      * this is what stops an expired batch from alerting forever.
      * @param {number|string} batchId
@@ -196,6 +187,18 @@ export class ProductApi extends BaseApi {
      */
     discardBatch(batchId) {
         return this.http.post(`${batchesEndpointPath}/${batchId}/discard`);
+    }
+
+    /**
+     * Sets/corrects a batch's expiration date after the fact — most useful
+     * right after a purchase order is received, since that intake has no
+     * expiration field of its own and lands the batch with none set.
+     * @param {number|string} batchId
+     * @param {string|null} expiration ISO date string (YYYY-MM-DD), or null to clear it.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    updateBatchExpiration(batchId, expiration) {
+        return this.http.patch(`${batchesEndpointPath}/${batchId}/expiration`, { expiration });
     }
 
     /**

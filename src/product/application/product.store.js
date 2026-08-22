@@ -354,6 +354,25 @@ const useProductStore = defineStore('product', () => {
     }
 
     /**
+     * Sets/corrects a batch's expiration date — most useful right after a
+     * purchase order is received, since that intake has no expiration
+     * field of its own and lands the batch with none set. Also moves it to
+     * its correct FEFO position for free: the server ranks batches by
+     * expiration on every sale, so nothing else needs to change here.
+     * Patches the local copy from the response, same as discardBatch.
+     * @param {number|string} batchId
+     * @param {string|null} expiration ISO date string (YYYY-MM-DD), or null to clear it.
+     * @returns {Promise<void>}
+     */
+    function updateBatchExpiration(batchId, expiration) {
+        return productApi.updateBatchExpiration(batchId, expiration)
+            .then(response => {
+                const index = batches.value.findIndex(batch => batch.id === response.data.id);
+                if (index !== -1) batches.value[index] = response.data;
+            });
+    }
+
+    /**
      * Returns the number of days until the nearest active batch of a product expires.
      *
      * Reads the server-computed `daysToExpiry` already present on every
@@ -630,48 +649,6 @@ const useProductStore = defineStore('product', () => {
             });
     }
 
-    /**
-     * Registers or updates a product's batch (used to track its expiration —
-     * see isProductExpiringSoon / getDaysToNearestExpiry).
-     *
-     * Business rule: this app's product form only captures a single expiration
-     * date per product (no batch selector UI), so if the product already has
-     * an active batch it is updated in place instead of creating another one —
-     * otherwise re-editing a product would pile up batches and the "nearest
-     * expiration" query would keep surfacing the oldest one instead of the
-     * date the user just entered. The real backend's POST /batches already
-     * implements this upsert server-side (CreateOrUpdateBatchCommand) — there
-     * is no PATCH /batches/{id} endpoint, so this always POSTs.
-     *
-     * @param {Object} resource
-     * @param {number} resource.productId
-     * @param {string} resource.expiration - ISO date string (yyyy-mm-dd).
-     * @param {number} [resource.purchasePrice=0]
-     * @param {number|null} [resource.inventoryId=null]
-     * @returns {Promise<void>}
-     */
-    function createBatchForProduct(resource) {
-        const productId = parseInt(resource.productId);
-        const existingBatch = batches.value.find(batch => batch.productId === productId && batch.status === 'ACTIVE');
-
-        const batchResource = {
-            productId,
-            expiration:    resource.expiration,
-            purchasePrice: resource.purchasePrice || 0,
-            inventoryId:   resource.inventoryId ?? existingBatch?.inventoryId ?? null
-        };
-
-        return productApi.createBatch(batchResource)
-            .then(response => {
-                if (existingBatch) {
-                    const index = batches.value.findIndex(batch => batch.id === existingBatch.id);
-                    if (index !== -1) batches.value[index] = response.data;
-                } else {
-                    batches.value.push(response.data);
-                }
-            });
-    }
-
     return {
         products,
         inactiveProducts,
@@ -699,6 +676,7 @@ const useProductStore = defineStore('product', () => {
         fetchInventory,
         fetchBatches,
         discardBatch,
+        updateBatchExpiration,
         fetchStockMovements,
         fetchAllStockMovements,
         invalidateStockMovements,
@@ -710,8 +688,7 @@ const useProductStore = defineStore('product', () => {
         deleteProduct,
         registerStockIntake,
         adjustStock,
-        updateMinimumStock,
-        createBatchForProduct
+        updateMinimumStock
     };
 });
 
