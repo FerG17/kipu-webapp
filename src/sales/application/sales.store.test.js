@@ -292,4 +292,57 @@ describe('sales.store', () => {
             expect(result).toEqual({ success: false });
         });
     });
+
+    describe('registerInstallmentPayment — X5 #5: keeps the matching Sale.isFullyPaid in sync', () => {
+        it('removes the plan from the pending list and marks the matching sale fully paid once complete', async () => {
+            const store = useSalesStore();
+            store.paymentPlans.push({ id: 9, saleId: 5 });
+            store.sales.push({ id: 5, status: SaleStatus.CREDIT, isFullyPaid: false });
+            mockApi.registerInstallmentPayment.mockResolvedValue({
+                data: { id: 9, saleId: 5, totalInstallments: 2, paidInstallments: 2, isFullyPaid: true, isCancelled: false, payments: [] }
+            });
+
+            await store.registerInstallmentPayment(9);
+
+            expect(store.paymentPlans.find(plan => plan.id === 9)).toBeUndefined();
+            expect(store.sales.find(sale => sale.id === 5).isFullyPaid).toBe(true);
+        });
+
+        it('keeps the plan pending and the sale not fully paid when installments remain', async () => {
+            const store = useSalesStore();
+            store.paymentPlans.push({ id: 9, saleId: 5 });
+            store.sales.push({ id: 5, status: SaleStatus.CREDIT, isFullyPaid: false });
+            mockApi.registerInstallmentPayment.mockResolvedValue({
+                data: { id: 9, saleId: 5, totalInstallments: 2, paidInstallments: 1, isFullyPaid: false, isCancelled: false, payments: [] }
+            });
+
+            await store.registerInstallmentPayment(9);
+
+            expect(store.paymentPlans.find(plan => plan.id === 9)).toBeDefined();
+            expect(store.sales.find(sale => sale.id === 5).isFullyPaid).toBe(false);
+        });
+
+        it('does not throw when the matching sale is not loaded locally', async () => {
+            const store = useSalesStore();
+            mockApi.registerInstallmentPayment.mockResolvedValue({
+                data: { id: 9, saleId: 999, totalInstallments: 1, paidInstallments: 1, isFullyPaid: true, isCancelled: false, payments: [] }
+            });
+
+            await expect(store.registerInstallmentPayment(9)).resolves.toBeDefined();
+        });
+    });
+
+    describe('revertInstallmentPayment — X5 #5: the mirror patch when a payment is undone', () => {
+        it('marks the matching sale not fully paid again', async () => {
+            const store = useSalesStore();
+            store.sales.push({ id: 5, status: SaleStatus.CREDIT, isFullyPaid: true });
+            mockApi.revertInstallmentPayment.mockResolvedValue({
+                data: { id: 9, saleId: 5, totalInstallments: 2, paidInstallments: 1, isFullyPaid: false, isCancelled: false, payments: [] }
+            });
+
+            await store.revertInstallmentPayment(9);
+
+            expect(store.sales.find(sale => sale.id === 5).isFullyPaid).toBe(false);
+        });
+    });
 });

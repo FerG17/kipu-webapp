@@ -46,4 +46,27 @@ describe('Sale', () => {
     it('exposes the exact PaymentMethod values the backend accepts', () => {
         expect(Object.values(PaymentMethod)).toEqual(['CASH', 'CARD', 'YAPE', 'PLIN', 'CREDIT']);
     });
+
+    describe('isCompletedCredit', () => {
+        it('is true only for a CREDIT sale that is fully paid', () => {
+            const sale = new Sale({ status: SaleStatus.CREDIT, isFullyPaid: true });
+            expect(sale.isCompletedCredit).toBe(true);
+        });
+
+        it('is false for a CREDIT sale that is not yet fully paid', () => {
+            const sale = new Sale({ status: SaleStatus.CREDIT, isFullyPaid: false });
+            expect(sale.isCompletedCredit).toBe(false);
+        });
+
+        it('is false for a PAID sale even if isFullyPaid were somehow true', () => {
+            const sale = new Sale({ status: SaleStatus.PAID, isFullyPaid: true });
+            expect(sale.isCompletedCredit).toBe(false);
+        });
+
+        it('defaults isFullyPaid to false when the resource omits it', () => {
+            const sale = new Sale({ status: SaleStatus.CREDIT });
+            expect(sale.isFullyPaid).toBe(false);
+            expect(sale.isCompletedCredit).toBe(false);
+        });
+    });
 });

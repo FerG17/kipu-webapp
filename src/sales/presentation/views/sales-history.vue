@@ -189,16 +189,22 @@ function getProductName(productId) {
  * PaymentMethod.CREDIT) instead of being born PAID and only distinguishable
  * by whether a PaymentPlan happened to be attached — which is what let a
  * credit sale get labeled "Completada"/tagged Efectivo in the first place.
- * salesStore.paymentPlans only tracks PENDING plans (see
- * payment-plans-list.vue's doc comment), so a CREDIT sale whose plan is
- * already fully paid off won't be found there — it still reads as "A
- * crédito" rather than a wrong "Completada", just without the progress
- * detail an open plan gets.
+ *
+ * X5 #5 fix: a credit sale used to stay "A crédito" forever even once its
+ * plan was fully paid off, because salesStore.paymentPlans only tracks
+ * PENDING plans (see payment-plans-list.vue's doc comment) — a fully-paid
+ * plan simply isn't in that list to check against. sale.isFullyPaid comes
+ * straight from the backend instead (SaleResource, computed from the
+ * sale's own PaymentPlan regardless of pending/paid), so it's checked
+ * first and reuses the same "Completada" label/color a cash sale gets.
  * @param {import('../../domain/model/sale.entity.js').Sale} sale
  * @returns {{ labelKey: string, color: string, background: string }}
  */
 function getStatusConfig(sale) {
   if (sale.status === SaleStatus.CREDIT) {
+    if (sale.isFullyPaid) {
+      return { labelKey: 'sales.status-paid', color: 'var(--status-ok-fg)', background: 'var(--status-ok-bg)' };
+    }
     const plan = salesStore.paymentPlans.find(plan => plan.saleId === sale.id);
     if (plan && !plan.isCancelled) {
       return { labelKey: 'sales.status-pending-installments', color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)' };

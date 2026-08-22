@@ -577,7 +577,10 @@ const useSalesStore = defineStore('sales', () => {
     /**
      * Registers the payment of one installment on a pending plan and
      * synchronises local state — removing it from the pending list once
-     * fully paid, since this store only tracks pending plans.
+     * fully paid, since this store only tracks pending plans. Also patches
+     * the matching Sale's isFullyPaid (X5 #5) so its badge in
+     * sales-history.vue flips to "Completada" immediately, without waiting
+     * for a fetchSales() the user may not trigger this session.
      * @param {number|string} planId
      * @returns {Promise<import('../domain/model/payment-plan.entity.js').PaymentPlan>}
      */
@@ -591,6 +594,8 @@ const useSalesStore = defineStore('sales', () => {
                 } else if (index !== -1) {
                     paymentPlans.value[index] = updatedPlan;
                 }
+                const sale = sales.value.find(sale => sale.id === updatedPlan.saleId);
+                if (sale) sale.isFullyPaid = updatedPlan.isFullyPaid;
                 return updatedPlan;
             });
     }
@@ -600,7 +605,8 @@ const useSalesStore = defineStore('sales', () => {
      * Admin only, enforced server-side. A previously-fully-paid plan that
      * drops out of paidInstallments === totalInstallments becomes pending
      * again, so it needs to be (re-)inserted into the local list, not just
-     * updated in place.
+     * updated in place. Also patches the matching Sale's isFullyPaid back
+     * to false (X5 #5), the mirror of registerInstallmentPayment's patch.
      * @param {number|string} planId
      * @returns {Promise<import('../domain/model/payment-plan.entity.js').PaymentPlan>}
      */
@@ -614,6 +620,8 @@ const useSalesStore = defineStore('sales', () => {
                 } else {
                     paymentPlans.value.push(updatedPlan);
                 }
+                const sale = sales.value.find(sale => sale.id === updatedPlan.saleId);
+                if (sale) sale.isFullyPaid = updatedPlan.isFullyPaid;
                 return updatedPlan;
             });
     }

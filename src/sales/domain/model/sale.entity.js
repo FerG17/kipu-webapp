@@ -81,6 +81,7 @@ export class Sale {
      * @param {string}         [params.description='']     - Optional free-text note.
      * @param {string}         [params.currency='PEN']     - ISO 4217 currency code; defaults to PEN.
      * @param {SaleDetail[]}   [params.details=[]]         - Line items belonging to this sale.
+     * @param {boolean}        [params.isFullyPaid=false]  - True only for a CREDIT sale whose payment plan has collected every installment (X5 #5); always false otherwise.
      */
     constructor({
                     id            = null,
@@ -92,7 +93,8 @@ export class Sale {
                     date          = '',
                     description   = '',
                     currency      = 'PEN',
-                    details       = []
+                    details       = [],
+                    isFullyPaid   = false
                 }) {
         this.id            = id;
         this.businessId    = businessId;
@@ -106,6 +108,7 @@ export class Sale {
         this.details       = details.map(detail =>
             detail instanceof SaleDetail ? detail : new SaleDetail(detail)
         );
+        this.isFullyPaid   = isFullyPaid;
     }
 
     /**
@@ -122,6 +125,16 @@ export class Sale {
      */
     get isCredit() {
         return this.status === SaleStatus.CREDIT;
+    }
+
+    /**
+     * Returns true when a CREDIT sale's payment plan has collected every
+     * installment — see isFullyPaid. A Paid/Cancelled sale is never
+     * "completed credit" even if isFullyPaid happened to be true.
+     * @returns {boolean}
+     */
+    get isCompletedCredit() {
+        return this.isCredit && this.isFullyPaid;
     }
 
     /**
