@@ -24,20 +24,20 @@ const alertsStore   = useAlertsStore();
 const supplierStore = useSupplierStore();
 
 const { products, productsLoaded, inactiveProducts, inactiveProductsLoaded, inventory, stockMovements, stockMovementsLoaded, stockMovementsError } = toRefs(productStore);
-const { fetchProducts, fetchInventory, fetchBatches, fetchAllStockMovements,
+const { fetchProducts, fetchInventory, fetchBatches, discardBatch, fetchAllStockMovements,
   addProduct, updateProduct, deleteProduct, registerStockIntake, updateMinimumStock,
-  createBatchForProduct, isProductExpiringSoon, isProductExpired,
+  isProductExpiringSoon, isProductExpired,
   fetchInactiveProducts, activateProduct } = productStore;
 
 const { suppliers: allSuppliers, suppliersLoaded: suppliersLoadedRef } = toRefs(supplierStore);
 const { addSupplier } = supplierStore;
 
-// Backend rejects a batch whose expiration date is already in the past
-// (CreateOrUpdateBatchCommand) — caught here too so the date picker itself
-// refuses it instead of letting the request round-trip into a 400 after the
-// product/stock intake have already been committed. Local (not UTC) and
-// reactive so this page, commonly left open all day, doesn't keep rejecting
-// today's own date once local midnight has actually passed.
+// Backend rejects a stock intake whose expiration date is already in the
+// past (RegisterStockIntakeCommand) — caught here too so the date picker
+// itself refuses it instead of letting the request round-trip into a 400
+// after the product/stock intake have already been committed. Local (not
+// UTC) and reactive so this page, commonly left open all day, doesn't keep
+// rejecting today's own date once local midnight has actually passed.
 const todayIsoDate = useTodayLocalDateString();
 
 /**
@@ -72,6 +72,9 @@ const intakeTargetProduct  = ref(null);
 const showScanModal        = ref(false);
 const scanInput            = ref('');
 const scanInputEl          = ref(null);
+const showLotsModal        = ref(false);
+const lotsTargetProduct    = ref(null);
+const discardingBatchId    = ref(null);
 
 /**
  * Whether the current role may create/edit/delete products, register stock
@@ -565,16 +568,15 @@ function handleScanSubmit() {
 function openEditProductModal(product) {
   editingProduct.value = product;
 
-  // Pre-fill cost/expiration from the product's existing active batch so that
-  // leaving these fields untouched doesn't silently reset purchasePrice to 0
-  // (createBatchForProduct updates the active batch in place on save).
-  const activeBatch = productStore.batches.find(
-      batch => batch.productId === product.id && batch.status === 'ACTIVE'
-  );
-
   // A product's custom category (if any) is already one of the dropdown's
   // own options (see categoryModalOptions), so it's selected directly —
   // no need to route through "Otros" + a prefilled text field on edit.
+  //
+  // cost/expirationDate stay blank and unused here (X5 Bloque C): editing a
+  // product no longer touches its lots — a product can have several active
+  // ones now, so there's no single "the batch" left to pre-fill or overwrite.
+  // Adding a new lot happens through "Registrar ingreso"; reviewing existing
+  // ones through the "Lotes" panel.
   productModalForm.value = {
     name:           product.name,
     category:       product.category,
@@ -583,8 +585,8 @@ function openEditProductModal(product) {
     currentStock:   String(resolveCurrentStock(product.id)),
     minimumStock:   String(resolveMinimumStock(product.id)),
     basePrice:      String(product.basePrice),
-    cost:           activeBatch ? String(activeBatch.purchasePrice) : '',
-    expirationDate: activeBatch ? activeBatch.expiration : '',
+    cost:           '',
+    expirationDate: '',
     warehouseId:    '',
     barcode:        product.barcode ?? ''
   };
@@ -732,50 +734,31 @@ function persistProductFromModal(resolvedCategory) {
 
   savingProduct.value = true;
   const savePromise = editingProduct.value
-      ? updateProduct(productEntity).then(() => {
-        // X4 M19: updateMinimumStock and the batch/expiration save are
-        // independent writes to different entities — chaining them
-        // sequentially meant a rejected updateMinimumStock (e.g. editing a
-        // product with no inventory record anywhere yet) skipped
-        // createBatchForProduct entirely, silently dropping whatever
-        // expiration date the admin just typed even though the name/price
-        // update above had already committed. Promise.allSettled attempts
-        // both regardless of the other's outcome.
-        const minimumStockPromise = updateMinimumStock(editingProduct.value.id, minimumStock);
-        const batchPromise = expirationDate
-            ? createBatchForProduct({ productId: editingProduct.value.id, expiration: expirationDate, purchasePrice })
-            : Promise.resolve();
-
-        return Promise.allSettled([minimumStockPromise, batchPromise]).then(results => {
-          const failure = results.find(result => result.status === 'rejected');
-          if (failure) {
-            // updateProduct above already committed by this point — a
-            // rejected minimumStock/batch write is a partial failure, not
-            // "nothing was saved" (X5 #8).
-            failure.reason.partialProductSave = true;
-            throw failure.reason;
-          }
-        });
-      })
+      // X5 Bloque C: editing a product no longer touches its lots (see
+      // openEditProductModal) — updateMinimumStock is the only extra write
+      // left here, so a rejection after updateProduct already committed is
+      // still a partial failure, not "nothing was saved" (X5 #8).
+      ? updateProduct(productEntity).then(() =>
+          updateMinimumStock(editingProduct.value.id, minimumStock).catch(error => {
+            error.partialProductSave = true;
+            throw error;
+          })
+      )
       : addProduct(productEntity).then(createdProduct => {
         // Always create the inventory record, even with 0 initial stock, so
-        // minimumStock has somewhere to persist (see registerStockIntake).
+        // minimumStock has somewhere to persist. Cost/expiration ride along
+        // in the same call (X5 Bloque C collapsed the old two-call "intake,
+        // then separately open a batch" sequence into one) so a new
+        // product's first lot commits atomically with its stock.
         const warehouseId = productModalForm.value.warehouseId ? parseInt(productModalForm.value.warehouseId) : null;
-        const intakePromise = registerStockIntake({ productId: createdProduct.id, quantity: initialStock, minimumStock, warehouseId });
-
-        return intakePromise.then(createdInventoryItem => {
-          if (expirationDate) {
-            return createBatchForProduct({
-              productId:   createdProduct.id,
-              expiration:  expirationDate,
-              purchasePrice,
-              inventoryId: createdInventoryItem ? createdInventoryItem.id : null
-            });
-          }
+        return registerStockIntake({
+          productId: createdProduct.id, quantity: initialStock, minimumStock, warehouseId,
+          purchasePrice: purchasePrice || null,
+          expiration: expirationDate || null
         }).catch(error => {
           // addProduct above already committed (product + suppliers) by this
-          // point — a failure registering stock/batch afterward must not
-          // read as a total failure (X5 #8).
+          // point — a failure registering stock afterward must not read as
+          // a total failure (X5 #8).
           error.partialProductSave = true;
           throw error;
         });
@@ -789,6 +772,11 @@ function persistProductFromModal(resolvedCategory) {
         // server-side (see registerStockIntake) — refresh so "Movimientos"
         // reflects it without requiring a full page reload.
         if (!editingProduct.value) fetchAllStockMovements();
+        // A new product with a cost/expiration just opened its first lot
+        // server-side (X5 Bloque C) — refresh so the "Vencimiento" column
+        // and the "Ver lotes" panel reflect it immediately, without waiting
+        // for whatever next triggers a batches refetch elsewhere.
+        if (!editingProduct.value && (expirationDate || purchasePrice)) fetchBatches();
         // A low/zero initial stock, or a near expiration date, may have
         // created an alert server-side — refresh so the sidebar badge picks
         // it up right away instead of only after visiting Alertas.
@@ -802,12 +790,6 @@ function persistProductFromModal(resolvedCategory) {
         // were already committed server-side by this point, so the message
         // must not read as a total failure.
         const isInvalidExpiration = error.response?.status === 400 && error.response?.data?.title === 'InvalidExpirationDate';
-        // The product still only tracks one active batch (no per-lot
-        // tracking yet, X5 #2/#9) — the backend blocks pushing its
-        // expiration later while it still has stock, rather than silently
-        // losing track of the nearer-expiring stock.
-        const isBatchExpirationConflict = error.response?.status === 409
-            && error.response?.data?.title === 'BatchExpirationConflict';
         // Any other failure reached after addProduct/updateProduct already
         // committed (flagged above) — same "don't read as total failure"
         // rule, for cases isInvalidExpiration doesn't cover (X5 #8).
@@ -817,7 +799,6 @@ function persistProductFromModal(resolvedCategory) {
           summary:  t('common.toast-error-title'),
           detail:   isDuplicateBarcode ? t('inventory.toast-duplicate-barcode')
                    : isInvalidExpiration ? t('inventory.toast-invalid-expiration')
-                   : isBatchExpirationConflict ? t('inventory.toast-batch-expiration-conflict')
                    : isPartialSave ? t('inventory.toast-partial-save-error')
                    : t('inventory.toast-save-error'),
           life: 4500
@@ -931,6 +912,46 @@ watch(() => intakeForm.value.productId, (newProductId) => {
   Object.assign(intakeForm.value, resolveIntakeDefaultsForProduct(newProductId));
 });
 
+/**
+ * X5 Bloque C: a product can have several active lots at once — this is the
+ * read-only view of that ("cuántas unidades corresponde a cada lote, y su
+ * fecha de vencimiento"), earliest-expiring first, same order sales draw
+ * from (FEFO). Read straight from productStore.batches (no separate fetch),
+ * kept fresh by the same triggers that already refresh it after an intake.
+ */
+const productLots = computed(() => {
+  if (!lotsTargetProduct.value) return [];
+  return productStore.batches
+      .filter(batch => batch.productId === lotsTargetProduct.value.id && batch.status === 'ACTIVE')
+      .slice()
+      .sort((first, second) => {
+        if (!first.expiration) return 1;
+        if (!second.expiration) return -1;
+        return first.expiration.localeCompare(second.expiration);
+      });
+});
+
+function openLotsModal(product) {
+  lotsTargetProduct.value = product;
+  showLotsModal.value = true;
+  if (!productStore.batchesLoaded) fetchBatches();
+}
+
+function handleDiscardLot(batch) {
+  discardingBatchId.value = batch.id;
+  discardBatch(batch.id)
+      .then(() => {
+        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-lot-discarded'), life: 3000 });
+        alertsStore.fetchAlerts();
+      })
+      .catch(() => {
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-lot-discard-error'), life: 4500 });
+      })
+      .finally(() => {
+        discardingBatchId.value = null;
+      });
+}
+
 function saveIntake() {
   // Previously a silent no-op on a missing product/quantity — the button
   // isn't disabled by either, so clicking it did nothing with zero feedback.
@@ -1008,18 +1029,11 @@ function saveIntake() {
         // the sidebar badge picks it up right away.
         alertsStore.fetchAlerts();
       })
-      .catch(error => {
-        // Same guardrail as the product-creation form (X5 #2/#9): the
-        // backend blocks an intake that would push the active batch's
-        // expiration later while it still has stock, instead of silently
-        // losing track of the nearer-expiring stock.
-        const isBatchExpirationConflict = error.response?.status === 409
-            && error.response?.data?.title === 'BatchExpirationConflict';
+      .catch(() => {
         toast.add({
           severity: 'error',
           summary:  t('common.toast-error-title'),
-          detail:   isBatchExpirationConflict ? t('inventory.toast-batch-expiration-conflict')
-                   : t('inventory.toast-intake-error'),
+          detail:   t('inventory.toast-intake-error'),
           life: 4500
         });
       })
@@ -1238,6 +1252,7 @@ useModalScrollLock(showIntakeModal);
 useModalScrollLock(showWarehouseModal);
 useModalScrollLock(showInactiveModal);
 useModalScrollLock(showAdjustModal);
+useModalScrollLock(showLotsModal);
 
 function openWarehouseModal() {
   warehouseForm.value = { name: '', code: '', address: '', capacity: 'MEDIUM' };
@@ -1538,6 +1553,14 @@ function saveWarehouse() {
                     <i class="pi pi-sliders-h" style="font-size: 0.9rem;"/>
                   </button>
                   <button
+                      class="p-2 border-round-lg border-none cursor-pointer btn-icon-lots"
+                      :title="t('inventory.btn-view-lots')"
+                      :aria-label="t('inventory.btn-view-lots')"
+                      @click="openLotsModal(product)"
+                  >
+                    <i class="pi pi-list" style="font-size: 0.9rem;"/>
+                  </button>
+                  <button
                       class="p-2 border-round-lg border-none cursor-pointer btn-icon-edit"
                       :title="t('inventory.btn-edit')"
                       :aria-label="t('inventory.btn-edit')"
@@ -1657,6 +1680,13 @@ function saveWarehouse() {
                 @click="openAdjustModal(product)"
             >
               <i class="pi pi-sliders-h" style="font-size: 0.82rem;"/>
+            </button>
+            <button
+                class="flex align-items-center justify-content-center py-2 px-3 border-round-xl cursor-pointer btn-mobile-lots"
+                :aria-label="t('inventory.btn-view-lots')"
+                @click="openLotsModal(product)"
+            >
+              <i class="pi pi-list" style="font-size: 0.82rem;"/>
             </button>
             <button
                 class="flex align-items-center justify-content-center py-2 px-3 border-round-xl cursor-pointer btn-mobile-delete"
@@ -2041,7 +2071,8 @@ function saveWarehouse() {
               </select>
             </div>
 
-            <!-- Precio venta + Precio costo -->
+            <!-- Precio venta (+ Precio costo, solo al crear — un producto existente
+                 puede tener varios lotes con costos distintos; ver "Ver lotes") -->
             <div class="flex flex-column sm:flex-row gap-4">
               <div style="flex: 1;">
                 <label class="modal-label">{{ t('inventory.modal-field-price') }}</label>
@@ -2054,14 +2085,15 @@ function saveWarehouse() {
                 />
                 <p v-if="productModalErrors.basePrice" class="modal-field-error">{{ productModalErrors.basePrice }}</p>
               </div>
-              <div style="flex: 1;">
+              <div v-if="!editingProduct" style="flex: 1;">
                 <label class="modal-label">{{ t('inventory.modal-field-cost') }}</label>
                 <input v-model="productModalForm.cost" type="number" min="0" step="0.01" placeholder="0.00" class="modal-input"/>
               </div>
             </div>
 
-            <!-- Expiration date -->
-            <div>
+            <!-- Expiration date (only when creating — a new lot for an existing
+                 product is added via "Registrar ingreso", not by editing it) -->
+            <div v-if="!editingProduct">
               <label class="modal-label">{{ t('inventory.modal-field-expiration') }}</label>
               <input v-model="productModalForm.expirationDate" type="date" :min="todayIsoDate" class="modal-input"/>
             </div>
@@ -2226,6 +2258,63 @@ function saveWarehouse() {
               <i v-if="savingIntake" class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>
               {{ savingIntake ? t('inventory.modal-saving') : t('inventory.intake-btn') }}
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         MODAL: LOTS (X5 Bloque C) — read-only view of every active batch
+         for one product: how many units, at what expiration, at what cost.
+    ═══════════════════════════════════════════════════════════════ -->
+    <div
+        v-if="showLotsModal"
+        class="fixed inset-0 z-50 flex align-items-end sm:align-items-center justify-content-center modal-overlay"
+        @click.self="showLotsModal = false"
+    >
+      <div class="w-full border-round-t-2xl sm:border-round-2xl overflow-y-auto modal-container-sm">
+        <div class="flex align-items-center justify-content-between px-5 py-4 modal-header">
+          <div class="flex align-items-center gap-3">
+            <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: linear-gradient(135deg, var(--surface-alt), var(--surface-alt));">
+              <i class="pi pi-list" style="color: var(--text-muted); font-size: 0.95rem;"/>
+            </div>
+            <p class="m-0 modal-title">{{ t('inventory.lots-modal-title', { name: lotsTargetProduct?.name ?? '' }) }}</p>
+          </div>
+          <button class="p-2 border-round-lg border-none cursor-pointer btn-modal-close" @click="showLotsModal = false">
+            <i class="pi pi-times" style="font-size: 1rem;"/>
+          </button>
+        </div>
+
+        <div class="px-5 py-5">
+          <div v-if="productLots.length === 0" class="flex flex-column align-items-center py-8 gap-2">
+            <i class="pi pi-inbox" style="font-size: 1.5rem; color: var(--text-faint);"/>
+            <p class="m-0 empty-text">{{ t('inventory.lots-modal-empty') }}</p>
+          </div>
+
+          <div v-else class="flex flex-column gap-3">
+            <div v-for="batch in productLots" :key="batch.id" class="p-3 border-round-xl lot-card">
+              <div class="flex align-items-center justify-content-between gap-2 mb-2">
+                <span
+                    class="lot-expiration"
+                    :style="{ color: batch.isExpired ? 'var(--status-critical-fg)' : batch.isExpiringSoon ? 'var(--status-warning-fg)' : 'var(--text)' }"
+                >
+                  <i class="pi pi-calendar" style="font-size: 0.8rem; margin-right: 0.35rem;"/>
+                  {{ batch.expiration ? parseLocalDate(batch.expiration).toLocaleDateString(toDateLocale(locale), { day: '2-digit', month: '2-digit', year: 'numeric' }) : t('inventory.lots-no-expiration') }}
+                </span>
+                <button
+                    class="py-1 px-3 border-round-lg border-none cursor-pointer btn-lot-discard"
+                    :disabled="discardingBatchId === batch.id"
+                    @click="handleDiscardLot(batch)"
+                >
+                  <i :class="discardingBatchId === batch.id ? 'pi pi-spin pi-spinner' : 'pi pi-trash'" style="font-size: 0.8rem;"/>
+                  {{ t('inventory.btn-discard-lot') }}
+                </button>
+              </div>
+              <div class="flex gap-4 lot-details">
+                <span>{{ t('inventory.lots-remaining', { remaining: batch.remainingQuantity, total: batch.quantity }) }}</span>
+                <span>{{ formatCurrency(batch.purchasePrice) }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2776,6 +2865,16 @@ function saveWarehouse() {
   transform: scale(1.12);
 }
 
+.btn-icon-lots {
+  background: none;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+.btn-icon-lots:hover {
+  background-color: var(--surface-alt);
+  transform: scale(1.12);
+}
+
 .btn-icon-edit {
   background: none;
   color: var(--text-muted);
@@ -2817,6 +2916,36 @@ function saveWarehouse() {
   color: var(--text-faint);
   font-size: 0.9rem;
   font-weight: 500;
+}
+
+.lot-card {
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+
+.lot-expiration {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.lot-details {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.btn-lot-discard {
+  background: none;
+  color: var(--status-critical-fg);
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.btn-lot-discard:hover {
+  background-color: var(--status-critical-bg);
+}
+.btn-lot-discard:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* ── Mobile product cards ────────────────────────────────────── */
@@ -2903,6 +3032,17 @@ function saveWarehouse() {
 }
 .btn-mobile-adjust:hover {
   background-color: var(--status-warning-bg);
+}
+
+.btn-mobile-lots {
+  background: none;
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+.btn-mobile-lots:hover {
+  background-color: var(--surface-alt);
+  border-color: var(--text-faint);
 }
 
 .btn-mobile-delete {

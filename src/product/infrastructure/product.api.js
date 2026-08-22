@@ -180,15 +180,6 @@ export class ProductApi extends BaseApi {
     }
 
     /**
-     * Creates a new batch resource for a product.
-     * @param {Object} resource
-     * @returns {Promise<import('axios').AxiosResponse>}
-     */
-    createBatch(resource) {
-        return this.#batchesEndpoint.create(resource);
-    }
-
-    /**
      * Discards a batch whose goods left the shelf (thrown out, returned) —
      * this is what stops an expired batch from alerting forever.
      * @param {number|string} batchId
