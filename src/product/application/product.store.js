@@ -23,6 +23,7 @@ import { InventoryItem }            from '../domain/model/inventory-item.entity.
 import { StockMovementAssembler }   from '../infrastructure/stock-movement.assembler.js';
 import { MovementType }             from '../domain/model/stock-movement.entity.js';
 import { ProductStatus }            from '../domain/model/product.entity.js';
+import { warnIfTruncated }          from '../../shared/infrastructure/pagination.js';
 
 const productApi = new ProductApi();
 
@@ -43,6 +44,19 @@ const useProductStore = defineStore('product', () => {
 
     /** @type {import('vue').Ref<import('../domain/model/product.entity.js').Product[]>} */
     const products = ref([]);
+
+    /**
+     * Deactivated products only — populated on demand by fetchInactiveProducts,
+     * used by the "reactivate a product" screen. GetProducts excludes these
+     * by default, so they live in a separate ref rather than mixed into
+     * `products` (which every stock/status computation above assumes is
+     * active-only).
+     * @type {import('vue').Ref<import('../domain/model/product.entity.js').Product[]>}
+     */
+    const inactiveProducts = ref([]);
+
+    /** @type {import('vue').Ref<boolean>} */
+    const inactiveProductsLoaded = ref(false);
 
     /** @type {import('vue').Ref<import('../domain/model/inventory-item.entity.js').InventoryItem[]>} */
     const inventory = ref([]);
@@ -65,14 +79,20 @@ const useProductStore = defineStore('product', () => {
     /** @type {import('vue').Ref<boolean>} */
     const stockMovementsLoaded = ref(false);
 
+    /**
+     * Set when the last fetchAllStockMovements call failed (e.g. a CASHIER
+     * hitting the backend's 403 on GET /stock-movements), so the Movimientos
+     * tab can show the real reason instead of an empty state indistinguishable
+     * from "no movements yet".
+     * @type {import('vue').Ref<Error|null>}
+     */
+    const stockMovementsError = ref(null);
+
     /** @type {import('vue').Ref<boolean>} */
     const productsLoaded = ref(false);
 
     /** @type {import('vue').Ref<boolean>} */
     const inventoryLoaded = ref(false);
-
-    /** @type {import('vue').Ref<Error[]>} */
-    const errors = ref([]);
 
     /**
      * Total number of loaded products.
@@ -113,6 +133,21 @@ const useProductStore = defineStore('product', () => {
      */
     function getProductById(id) {
         return products.value.find(product => product.id === parseInt(id));
+    }
+
+    /**
+     * Looks up an active product by its exact barcode, among the products
+     * already loaded for the business (the full catalog is loaded upfront,
+     * see fetchProducts — no dedicated backend lookup endpoint needed).
+     * Used both by the Products scan-in entry point and by the POS screen
+     * when a physical scanner types a code into the search bar.
+     * @param {string} barcode
+     * @returns {import('../domain/model/product.entity.js').Product|undefined}
+     */
+    function getProductByBarcode(barcode) {
+        const trimmed = (barcode ?? '').trim();
+        if (!trimmed) return undefined;
+        return products.value.find(product => product.isActive && product.barcode === trimmed);
     }
 
     /**
@@ -168,29 +203,65 @@ const useProductStore = defineStore('product', () => {
     // ─── Commands ─────────────────────────────────────────────────────────────
 
     /**
-     * Fetches all products for the authenticated business.
-     * @param {number|string} businessId
+     * Fetches all products for the authenticated business — scoped
+     * server-side by the JWT, no businessId parameter needed or accepted.
      */
-    function fetchProducts(businessId) {
-        return productApi.getProducts(businessId)
+    function fetchProducts() {
+        return productApi.getProducts()
             .then(response => {
+                warnIfTruncated(response, 'Productos');
                 products.value       = ProductAssembler.toEntitiesFromResponse(response);
                 productsLoaded.value = true;
-            })
-            .catch(error => errors.value.push(error));
+            });
     }
 
     /**
-     * Fetches all inventory records for the authenticated business.
-     * @param {number|string} businessId
+     * Fetches every deactivated product for the authenticated business, for
+     * the "reactivate a product" screen — GetProducts (fetchProducts)
+     * excludes these by default.
      */
-    function fetchInventory(businessId) {
-        return productApi.getInventory(businessId)
+    function fetchInactiveProducts() {
+        return productApi.getAllProductsIncludingInactive()
+            .then(response => {
+                inactiveProducts.value = ProductAssembler.toEntitiesFromResponse(response)
+                    .filter(product => !product.isActive);
+                inactiveProductsLoaded.value = true;
+            })
+            .catch(() => {
+                inactiveProductsLoaded.value = true;
+            });
+    }
+
+    /**
+     * Reactivates a deactivated product, moving it back from
+     * `inactiveProducts` into `products`.
+     * @param {number|string} id
+     * @returns {Promise<void>}
+     */
+    function activateProduct(id) {
+        const numericId = parseInt(id);
+        return productApi.activateProduct(numericId)
+            .then(() => {
+                const index = inactiveProducts.value.findIndex(product => product.id === numericId);
+                if (index !== -1) inactiveProducts.value.splice(index, 1);
+                // Brings the product back into the main list the same way a
+                // freshly-created one would appear — a targeted local patch
+                // would need to re-derive the full Product from the inactive
+                // copy, which is more fragile than just refetching.
+                return fetchProducts();
+            });
+    }
+
+    /**
+     * Fetches all inventory records for the authenticated business — scoped
+     * server-side by the JWT, no businessId parameter needed or accepted.
+     */
+    function fetchInventory() {
+        return productApi.getInventory()
             .then(response => {
                 inventory.value       = InventoryItemAssembler.toEntitiesFromResponse(response);
                 inventoryLoaded.value = true;
-            })
-            .catch(error => errors.value.push(error));
+            });
     }
 
     /**
@@ -212,8 +283,7 @@ const useProductStore = defineStore('product', () => {
                         registeredAt: batch.expiration
                     })
                 );
-            })
-            .catch(error => errors.value.push(error));
+            });
     }
 
     /**
@@ -222,11 +292,13 @@ const useProductStore = defineStore('product', () => {
      * most-recent-first. Used by the Inventory "Movimientos" tab — callers
      * must re-invoke this after an intake to reflect the new entry, since
      * this store no longer mirrors movements into local state on its own.
-     * @param {number|string} businessId
+     * Scoped server-side by the JWT, no businessId parameter needed or accepted.
      */
-    function fetchAllStockMovements(businessId) {
-        productApi.getStockMovements(businessId)
+    function fetchAllStockMovements() {
+        stockMovementsError.value = null;
+        productApi.getStockMovements()
             .then(response => {
+                warnIfTruncated(response, 'Movimientos de stock');
                 const entities = StockMovementAssembler.toEntitiesFromResponse(response);
                 stockMovements.value = entities.sort(
                     (first, second) => new Date(second.registeredAt) - new Date(first.registeredAt)
@@ -234,9 +306,19 @@ const useProductStore = defineStore('product', () => {
                 stockMovementsLoaded.value = true;
             })
             .catch(error => {
-                errors.value.push(error);
+                stockMovementsError.value = error;
                 stockMovementsLoaded.value = true;
             });
+    }
+
+    /**
+     * Marks the cached stock-movement history as stale without refetching it,
+     * so the next visit to the "Movimientos" tab reloads it lazily instead of
+     * showing what was true before a sale/cancellation happened elsewhere
+     * (Products has no way to know Sales changed stock unless told to).
+     */
+    function invalidateStockMovements() {
+        stockMovementsLoaded.value = false;
     }
 
     /**
@@ -249,53 +331,90 @@ const useProductStore = defineStore('product', () => {
                 batches.value = response.data instanceof Array ? response.data : [];
                 batchesLoaded.value = true;
             })
-            .catch(error => {
-                errors.value.push(error);
+            .catch(() => {
                 batchesLoaded.value = true;
             });
     }
 
     /**
+     * Discards a batch (goods left the shelf) — this is what stops an
+     * expired/expiring batch from alerting forever. Patches the local copy
+     * to INACTIVE from the response instead of a full refetch, so the
+     * "vence en N días" / "vencido" state clears immediately everywhere
+     * batches.value is read from (product list, alert modal).
+     * @param {number|string} batchId
+     * @returns {Promise<void>}
+     */
+    function discardBatch(batchId) {
+        return productApi.discardBatch(batchId)
+            .then(response => {
+                const index = batches.value.findIndex(batch => batch.id === response.data.id);
+                if (index !== -1) batches.value[index] = response.data;
+            });
+    }
+
+    /**
+     * Sets/corrects a batch's expiration date — most useful right after a
+     * purchase order is received, since that intake has no expiration
+     * field of its own and lands the batch with none set. Also moves it to
+     * its correct FEFO position for free: the server ranks batches by
+     * expiration on every sale, so nothing else needs to change here.
+     * Patches the local copy from the response, same as discardBatch.
+     * @param {number|string} batchId
+     * @param {string|null} expiration ISO date string (YYYY-MM-DD), or null to clear it.
+     * @returns {Promise<void>}
+     */
+    function updateBatchExpiration(batchId, expiration) {
+        return productApi.updateBatchExpiration(batchId, expiration)
+            .then(response => {
+                const index = batches.value.findIndex(batch => batch.id === response.data.id);
+                if (index !== -1) batches.value[index] = response.data;
+            });
+    }
+
+    /**
      * Returns the number of days until the nearest active batch of a product expires.
-     * Business rule: only ACTIVE batches are considered; when a product has several,
-     * the soonest expiration date wins. Negative values mean the batch already expired.
+     *
+     * Reads the server-computed `daysToExpiry` already present on every
+     * BatchResource (BatchResourceFromEntityAssembler, backed by the same
+     * ExpirationRules Alerts uses) instead of re-deriving it from
+     * `expiration` client-side — two independent date-math implementations
+     * risk timezone/off-by-one drift from what actually triggers alerts.
+     * Business rule: only ACTIVE batches are considered; when a product has
+     * several, the soonest expiration wins. Negative values mean the batch
+     * already expired.
      *
      * @param {number|string} productId
      * @returns {number|null} Days to the nearest expiration, or null if the product
-     *   has no active batch with an expiration date.
+     *   has no active batch with a computed expiry.
      */
     function getDaysToNearestExpiry(productId) {
         const numericId = parseInt(productId);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
         const activeExpirations = batches.value
-            .filter(batch => batch.productId === numericId && batch.status === 'ACTIVE' && batch.expiration)
-            .map(batch => {
-                const expirationDate = parseLocalDate(batch.expiration);
-                return Math.round((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-            });
+            .filter(batch => batch.productId === numericId && batch.status === 'ACTIVE' && batch.daysToExpiry != null)
+            .map(batch => batch.daysToExpiry);
 
         return activeExpirations.length > 0 ? Math.min(...activeExpirations) : null;
     }
 
     /**
-     * Returns true when a product has an active batch expiring within the given
-     * threshold (default 7 days, matching the Alerts bounded context's EXPIRATION
-     * rule) but NOT already expired — see isProductExpired for that case.
+     * Returns true when a product has an active batch the server flags as
+     * expiring soon (BatchResource.isExpiringSoon, the same rule Alerts
+     * uses) but not already expired — see isProductExpired for that case.
      *
      * @param {number|string} productId
-     * @param {number} [thresholdDays=7]
      * @returns {boolean}
      */
-    function isProductExpiringSoon(productId, thresholdDays = 7) {
-        const daysToExpiry = getDaysToNearestExpiry(productId);
-        return daysToExpiry !== null && daysToExpiry >= 0 && daysToExpiry <= thresholdDays;
+    function isProductExpiringSoon(productId) {
+        const numericId = parseInt(productId);
+        return batches.value.some(batch =>
+            batch.productId === numericId && batch.status === 'ACTIVE' && batch.isExpiringSoon
+        );
     }
 
     /**
-     * Returns true when a product's nearest active batch has already passed
-     * its expiration date (negative days to expiry). Kept distinct from
+     * Returns true when a product has an active batch the server flags as
+     * already expired (BatchResource.isExpired). Kept distinct from
      * isProductExpiringSoon so the UI can tell "will expire soon" apart from
      * "already expired" instead of collapsing both into one bucket.
      *
@@ -303,24 +422,23 @@ const useProductStore = defineStore('product', () => {
      * @returns {boolean}
      */
     function isProductExpired(productId) {
-        const daysToExpiry = getDaysToNearestExpiry(productId);
-        return daysToExpiry !== null && daysToExpiry < 0;
+        const numericId = parseInt(productId);
+        return batches.value.some(batch =>
+            batch.productId === numericId && batch.status === 'ACTIVE' && batch.isExpired
+        );
     }
 
     /**
-     * Fetches warehouses for a business and returns them as a plain array.
-     * Warehouses are not kept in store state because warehouse management
-     * belongs to a separate bounded context.
-     * @param {number|string} businessId
+     * Fetches warehouses for the authenticated business and returns them as
+     * a plain array. Warehouses are not kept in store state because
+     * warehouse management belongs to a separate bounded context. Scoped
+     * server-side by the JWT, no businessId parameter needed or accepted.
      * @returns {Promise<Array>}
      */
-    function fetchWarehousesForBusiness(businessId) {
-        return productApi.getWarehouses(businessId)
+    function fetchWarehousesForBusiness() {
+        return productApi.getWarehouses()
             .then(response => response.data instanceof Array ? response.data : [])
-            .catch(error => {
-                errors.value.push(error);
-                return [];
-            });
+            .catch(() => []);
     }
 
     /**
@@ -332,25 +450,19 @@ const useProductStore = defineStore('product', () => {
      */
     function createWarehouse(resource) {
         return productApi.createWarehouse(resource)
-            .then(response => response.data)
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
-            });
+            .then(response => response.data);
     }
 
     /**
-     * Fetches suppliers for a business and returns them as a plain array.
-     * @param {number|string} businessId
+     * Fetches suppliers for the authenticated business and returns them as
+     * a plain array. Scoped server-side by the JWT, no businessId parameter
+     * needed or accepted.
      * @returns {Promise<Array>}
      */
-    function fetchSuppliersForBusiness(businessId) {
-        return productApi.getSuppliers(businessId)
+    function fetchSuppliersForBusiness() {
+        return productApi.getSuppliers()
             .then(response => response.data instanceof Array ? response.data : [])
-            .catch(error => {
-                errors.value.push(error);
-                return [];
-            });
+            .catch(() => []);
     }
 
     /**
@@ -359,15 +471,11 @@ const useProductStore = defineStore('product', () => {
      * @returns {Promise<import('../domain/model/product.entity.js').Product>}
      */
     function addProduct(product) {
-        return productApi.createProduct(product)
+        return productApi.createProduct(ProductAssembler.toResourceFromEntity(product))
             .then(response => {
                 const createdProduct = ProductAssembler.toEntityFromResource(response.data);
                 products.value.push(createdProduct);
                 return createdProduct;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -377,36 +485,40 @@ const useProductStore = defineStore('product', () => {
      * @returns {Promise<import('../domain/model/product.entity.js').Product>}
      */
     function updateProduct(product) {
-        return productApi.updateProduct(product.id, product)
+        return productApi.updateProduct(product.id, ProductAssembler.toResourceFromEntity(product))
             .then(response => {
                 const updatedProduct = ProductAssembler.toEntityFromResource(response.data);
                 const index = products.value.findIndex(existingProduct => existingProduct.id === updatedProduct.id);
                 if (index !== -1) products.value[index] = updatedProduct;
                 return updatedProduct;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
     /**
      * Deletes a product and removes it from local state.
      *
-     * Business rule: deletion is blocked when the product has an inventory record
-     * with currentStock > 0. An error is pushed and no API call is made.
+     * Business rule: deletion is blocked when the product has any stock,
+     * summed across every warehouse it's split into (X4 M23) — this used to
+     * only look at the first matching inventory record, so a product with
+     * zero in one warehouse and real stock in another passed this check even
+     * though the backend's own guard (CannotDeleteWithStock) would still
+     * reject it; the view's own total-stock check happened to catch this
+     * before it reached the API, so it was never actually exploitable from
+     * the UI, but the store's own invariant was still wrong on its own terms.
      *
      * @param {number|string} id
      * @returns {Promise<void>}
      */
     function deleteProduct(id) {
-        const numericId     = parseInt(id);
-        const inventoryItem = inventory.value.find(item => item.productId === numericId);
+        const numericId  = parseInt(id);
+        const totalStock = inventory.value
+            .filter(item => item.productId === numericId)
+            .reduce((sum, item) => sum + item.currentStock, 0);
 
-        if (inventoryItem && inventoryItem.currentStock > 0) {
-            const error = new Error(`Cannot delete product #${numericId}: it has ${inventoryItem.currentStock} units in stock.`);
-            errors.value.push(error);
-            return Promise.reject(error);
+        if (totalStock > 0) {
+            return Promise.reject(
+                new Error(`Cannot delete product #${numericId}: it has ${totalStock} units in stock.`)
+            );
         }
 
         return productApi.deleteProduct(numericId)
@@ -414,12 +526,8 @@ const useProductStore = defineStore('product', () => {
                 const productIndex = products.value.findIndex(product => product.id === numericId);
                 if (productIndex !== -1) products.value.splice(productIndex, 1);
 
-                const inventoryIndex = inventory.value.findIndex(item => item.productId === numericId);
-                if (inventoryIndex !== -1) inventory.value.splice(inventoryIndex, 1);
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
+                // Every warehouse's record, not just the first — same reasoning as the totalStock check above.
+                inventory.value = inventory.value.filter(item => item.productId !== numericId);
             });
     }
 
@@ -431,31 +539,31 @@ const useProductStore = defineStore('product', () => {
      * collapses what used to be a client-orchestrated "GET, then PUT-or-POST,
      * then separately log a movement" sequence required by the mock API.
      *
-     * Business rule preserved from the mock: a quantity of exactly 0 (product
-     * registered with no initial stock, only a minimumStock threshold) skips
-     * calling the backend entirely — the real InventoryItem simply doesn't
-     * exist yet until the first real intake, since the backend command
-     * requires a positive quantity.
+     * A quantity of exactly 0 (product registered with no initial stock,
+     * only a minimumStock threshold) still calls the backend — the real
+     * command accepts a 0 quantity and creates the InventoryItem anyway
+     * (with 0 stock, minimumStock persisted, no StockMovement recorded).
+     * This used to skip the call entirely on the mistaken assumption the
+     * backend required a positive quantity, which silently dropped the
+     * minimumStock the user had just entered for any brand-new product with
+     * no initial stock.
      *
      * @param {Object} resource
      * @param {number} resource.productId
-     * @param {number} resource.quantity   - 0 skips the call; must be > 0 otherwise.
+     * @param {number} resource.quantity   - Must be a non-negative integer; 0 is valid.
      * @param {number} [resource.warehouseId]
      * @param {number} [resource.minimumStock]
      * @param {number} [resource.purchasePrice]
      * @param {string} [resource.expiration]
      * @param {string} [resource.supplier]
+     * @param {number} [resource.supplierId]
      * @param {string} [resource.note]
      * @returns {Promise<import('../domain/model/inventory-item.entity.js').InventoryItem|null>}
      */
     function registerStockIntake(resource) {
         if (resource.quantity == null || resource.quantity < 0) {
-            const error = new Error('Stock intake quantity must be zero or a positive integer.');
-            errors.value.push(error);
-            return Promise.reject(error);
+            return Promise.reject(new Error('Stock intake quantity must be zero or a positive integer.'));
         }
-
-        if (resource.quantity === 0) return Promise.resolve(null);
 
         const intakeResource = {
             warehouseId:   resource.warehouseId ? parseInt(resource.warehouseId) : null,
@@ -463,6 +571,7 @@ const useProductStore = defineStore('product', () => {
             purchasePrice: resource.purchasePrice ?? null,
             expiration:    resource.expiration ?? null,
             supplier:      resource.supplier ?? '',
+            supplierId:    resource.supplierId ?? null,
             note:          resource.note ?? '',
             minimumStock:  resource.minimumStock != null ? parseInt(resource.minimumStock) || 0 : null
         };
@@ -474,33 +583,62 @@ const useProductStore = defineStore('product', () => {
                 if (index !== -1) inventory.value[index] = updatedItem;
                 else inventory.value.push(updatedItem);
                 return updatedItem;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
+            });
+    }
+
+    /**
+     * Manually adjusts a product's stock in one warehouse — shrinkage,
+     * breakage, theft, or a physical count correction (I25). There is no
+     * other way to move stock outside of a sale/intake/return.
+     * @param {number|string} productId
+     * @param {number|string} warehouseId
+     * @param {number} delta - Signed: negative removes units, positive adds them.
+     * @param {string} reason
+     * @returns {Promise<import('../domain/model/inventory-item.entity.js').InventoryItem>}
+     */
+    function adjustStock(productId, warehouseId, delta, reason) {
+        const numericDelta = parseInt(delta);
+        if (!numericDelta) {
+            return Promise.reject(new Error('Stock adjustment delta must be a non-zero integer.'));
+        }
+        if (!reason || !reason.trim()) {
+            return Promise.reject(new Error('Stock adjustment requires a reason.'));
+        }
+
+        return productApi.adjustStock(parseInt(productId), { warehouseId: parseInt(warehouseId), delta: numericDelta, reason: reason.trim() })
+            .then(response => {
+                const updatedItem = InventoryItemAssembler.toEntityFromResource(response.data);
+                const index = inventory.value.findIndex(item => item.id === updatedItem.id);
+                if (index !== -1) inventory.value[index] = updatedItem;
+                else inventory.value.push(updatedItem);
+                return updatedItem;
             });
     }
 
     /**
      * Updates the minimum stock threshold on a product's existing inventory record.
      *
-     * Business rule: minimumStock must be a non-negative integer. A product with
-     * no inventory record yet (never had a stock intake) has nowhere to persist
-     * this value, so the call resolves without effect — an intake must happen first.
+     * Business rule: minimumStock must be a non-negative integer. Every
+     * product gets an InventoryItem at creation time now (see
+     * registerStockIntake, which no longer skips a 0-quantity intake), so
+     * reaching "no inventory record" here means either inventory hasn't
+     * been fetched yet or this product predates that fix — surfaced as a
+     * real failure instead of a silent no-op, so a threshold the user just
+     * typed doesn't quietly vanish.
      *
      * @param {number|string} productId
      * @param {number} minimumStock
-     * @returns {Promise<import('../domain/model/inventory-item.entity.js').InventoryItem|void>}
+     * @returns {Promise<import('../domain/model/inventory-item.entity.js').InventoryItem>}
      */
     function updateMinimumStock(productId, minimumStock) {
         if (minimumStock == null || Number.isNaN(minimumStock) || minimumStock < 0) {
-            const error = new Error('Minimum stock must be a non-negative integer.');
-            errors.value.push(error);
-            return Promise.reject(error);
+            return Promise.reject(new Error('Minimum stock must be a non-negative integer.'));
         }
 
         const existingItem = inventory.value.find(item => item.productId === parseInt(productId));
-        if (!existingItem) return Promise.resolve();
+        if (!existingItem) {
+            return Promise.reject(new Error('No inventory record exists yet for this product.'));
+        }
 
         return productApi.updateMinimumStock(existingItem.productId, { minimumStock: parseInt(minimumStock) })
             .then(response => {
@@ -508,62 +646,13 @@ const useProductStore = defineStore('product', () => {
                 const index = inventory.value.findIndex(item => item.id === updatedItem.id);
                 if (index !== -1) inventory.value[index] = updatedItem;
                 return updatedItem;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
-            });
-    }
-
-    /**
-     * Registers or updates a product's batch (used to track its expiration —
-     * see isProductExpiringSoon / getDaysToNearestExpiry).
-     *
-     * Business rule: this app's product form only captures a single expiration
-     * date per product (no batch selector UI), so if the product already has
-     * an active batch it is updated in place instead of creating another one —
-     * otherwise re-editing a product would pile up batches and the "nearest
-     * expiration" query would keep surfacing the oldest one instead of the
-     * date the user just entered. The real backend's POST /batches already
-     * implements this upsert server-side (CreateOrUpdateBatchCommand) — there
-     * is no PATCH /batches/{id} endpoint, so this always POSTs.
-     *
-     * @param {Object} resource
-     * @param {number} resource.productId
-     * @param {string} resource.expiration - ISO date string (yyyy-mm-dd).
-     * @param {number} [resource.purchasePrice=0]
-     * @param {number|null} [resource.inventoryId=null]
-     * @returns {Promise<void>}
-     */
-    function createBatchForProduct(resource) {
-        const productId = parseInt(resource.productId);
-        const existingBatch = batches.value.find(batch => batch.productId === productId && batch.status === 'ACTIVE');
-
-        const batchResource = {
-            productId,
-            expiration:    resource.expiration,
-            purchasePrice: resource.purchasePrice || 0,
-            status:        'ACTIVE',
-            inventoryId:   resource.inventoryId ?? existingBatch?.inventoryId ?? null
-        };
-
-        return productApi.createBatch(batchResource)
-            .then(response => {
-                if (existingBatch) {
-                    const index = batches.value.findIndex(batch => batch.id === existingBatch.id);
-                    if (index !== -1) batches.value[index] = response.data;
-                } else {
-                    batches.value.push(response.data);
-                }
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
     return {
         products,
+        inactiveProducts,
+        inactiveProductsLoaded,
         inventory,
         stockMovements,
         batches,
@@ -571,20 +660,26 @@ const useProductStore = defineStore('product', () => {
         inventoryLoaded,
         batchesLoaded,
         stockMovementsLoaded,
-        errors,
+        stockMovementsError,
         productsCount,
         stockStatusCounts,
         getProductById,
+        getProductByBarcode,
         getInventoryByProduct,
         getTotalInventoryForProduct,
         getDaysToNearestExpiry,
         isProductExpiringSoon,
         isProductExpired,
         fetchProducts,
+        fetchInactiveProducts,
+        activateProduct,
         fetchInventory,
         fetchBatches,
+        discardBatch,
+        updateBatchExpiration,
         fetchStockMovements,
         fetchAllStockMovements,
+        invalidateStockMovements,
         fetchWarehousesForBusiness,
         createWarehouse,
         fetchSuppliersForBusiness,
@@ -592,8 +687,8 @@ const useProductStore = defineStore('product', () => {
         updateProduct,
         deleteProduct,
         registerStockIntake,
-        updateMinimumStock,
-        createBatchForProduct
+        adjustStock,
+        updateMinimumStock
     };
 });
 

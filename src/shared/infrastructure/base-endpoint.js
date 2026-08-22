@@ -44,6 +44,19 @@ export class BaseEndpoint {
     }
 
     /**
+     * Fetches a page of a collection endpoint (X4 S3: every collection GET
+     * is now paginated server-side, capped at 200 rows per request). Pass
+     * any combination of `page`, `pageSize`, and the endpoint's own filters
+     * as a single params object. The response body is a paginated envelope:
+     * { items, page, pageSize, totalCount, totalPages }.
+     * @param {Object} [params] - Query parameters, e.g. { pageSize: 200, category }.
+     * @returns {Promise<import('axios').AxiosResponse>} HTTP response with the paginated envelope.
+     */
+    getPage(params = {}) {
+        return this.http.get(this.endpointPath, { params });
+    }
+
+    /**
      * Creates a new resource.
      * @param {Object} resource - Resource payload to persist.
      * @returns {Promise<import('axios').AxiosResponse>} HTTP response with the created resource.

@@ -1,15 +1,15 @@
 import { BaseApi }      from '../../shared/infrastructure/base-api.js';
 import { BaseEndpoint } from '../../shared/infrastructure/base-endpoint.js';
 
-const salesEndpointPath       = import.meta.env.VITE_SALES_ENDPOINT_PATH;
-const saleDetailsEndpointPath = import.meta.env.VITE_SALE_DETAILS_ENDPOINT_PATH;
-const customersEndpointPath   = import.meta.env.VITE_CUSTOMERS_ENDPOINT_PATH;
+const salesEndpointPath        = import.meta.env.VITE_SALES_ENDPOINT_PATH;
+const customersEndpointPath    = import.meta.env.VITE_CUSTOMERS_ENDPOINT_PATH;
+const paymentPlansEndpointPath = import.meta.env.VITE_PAYMENT_PLANS_ENDPOINT_PATH;
 
 /**
  * Infrastructure gateway for the Sales & POS Management bounded-context endpoints.
  *
  * Responsibilities:
- * - Wraps all HTTP calls for Sales, SaleDetails, and Customers.
+ * - Wraps all HTTP calls for Sales, Customers, and PaymentPlans.
  * - Delegates CRUD to BaseEndpoint instances; one per resource path.
  * - Cancellation is performed via a PATCH/PUT (status update) because
  *   the mock API does not support a dedicated /cancel endpoint.
@@ -22,30 +22,34 @@ export class SalesApi extends BaseApi {
     #salesEndpoint;
 
     /** @type {BaseEndpoint} @private */
-    #saleDetailsEndpoint;
-
-    /** @type {BaseEndpoint} @private */
     #customersEndpoint;
 
+    /** @type {BaseEndpoint} @private */
+    #paymentPlansEndpoint;
+
     /**
-     * Creates endpoint clients for sales, sale details, and customers.
+     * Creates endpoint clients for sales, customers, and payment plans.
      */
     constructor() {
         super();
-        this.#salesEndpoint       = new BaseEndpoint(this, salesEndpointPath);
-        this.#saleDetailsEndpoint = new BaseEndpoint(this, saleDetailsEndpointPath);
-        this.#customersEndpoint   = new BaseEndpoint(this, customersEndpointPath);
+        this.#salesEndpoint        = new BaseEndpoint(this, salesEndpointPath);
+        this.#customersEndpoint    = new BaseEndpoint(this, customersEndpointPath);
+        this.#paymentPlansEndpoint = new BaseEndpoint(this, paymentPlansEndpointPath);
     }
 
     // ─── Sales ────────────────────────────────────────────────────────────────
 
     /**
-     * Fetches all sales for a given business.
-     * @param {number|string} businessId - Business identifier.
+     * Fetches sales for the authenticated business. Scoped server-side
+     * by the JWT — SalesController.GetSales has no businessId query
+     * parameter, only optional dateFrom/dateTo (both 'yyyy-mm-dd'). Paginated
+     * server-side (X4 S3); pageSize is set to the backend's hard cap (200).
+     * @param {string} [dateFrom]
+     * @param {string} [dateTo]
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getSales(businessId) {
-        return this.#salesEndpoint.getAllByParam('businessId', businessId);
+    getSales(dateFrom, dateTo) {
+        return this.#salesEndpoint.getPage({ dateFrom, dateTo, pageSize: 200 });
     }
 
     /**
@@ -55,6 +59,24 @@ export class SalesApi extends BaseApi {
      */
     getSaleById(id) {
         return this.#salesEndpoint.getById(id);
+    }
+
+    /**
+     * Total revenue (Paid sales' totals plus installments actually
+     * collected on credit sales — never a credit sale's own total), optionally
+     * scoped to a date range. Admin+Cashier (unlike the Dashboard KPI, which
+     * is Admin-only) — the source SalesStatsBar reads instead of recomputing
+     * the figure itself (see GetTotalRevenueByBusinessIdQuery).
+     * @param {string} [dateFrom]
+     * @param {string} [dateTo]
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    getSalesRevenue(dateFrom, dateTo) {
+        const params = new URLSearchParams();
+        if (dateFrom) params.set('dateFrom', dateFrom);
+        if (dateTo)   params.set('dateTo', dateTo);
+        const query = params.toString();
+        return this.http.get(`${salesEndpointPath}/revenue${query ? `?${query}` : ''}`);
     }
 
     /**
@@ -79,28 +101,16 @@ export class SalesApi extends BaseApi {
         return this.#salesEndpoint.update(id, resource);
     }
 
-    // ─── Sale Details ─────────────────────────────────────────────────────────
-
-    /**
-     * Fetches the lines of a sale. Read-only: a sale's lines are always
-     * created atomically with the sale itself (see createSale) — the
-     * backend has no endpoint to create or delete a line independently.
-     * @param {number|string} saleId - Sale identifier.
-     * @returns {Promise<import('axios').AxiosResponse>}
-     */
-    getSaleDetailsBySale(saleId) {
-        return this.#saleDetailsEndpoint.getAllByParam('saleId', saleId);
-    }
-
     // ─── Customers ────────────────────────────────────────────────────────────
 
     /**
-     * Fetches all customers for a given business.
-     * @param {number|string} businessId - Business identifier.
+     * Fetches customers for the authenticated business. Scoped server-side
+     * by the JWT. Paginated server-side (X4 S3); pageSize is set to the
+     * backend's hard cap (200).
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getCustomers(businessId) {
-        return this.#customersEndpoint.getAllByParam('businessId', businessId);
+    getCustomers() {
+        return this.#customersEndpoint.getPage({ pageSize: 200 });
     }
 
     /**
@@ -139,5 +149,60 @@ export class SalesApi extends BaseApi {
      */
     deleteCustomer(id) {
         return this.#customersEndpoint.delete(id);
+    }
+
+    // ─── Payment Plans ────────────────────────────────────────────────────────
+
+    /**
+     * Attaches a payment plan to an already-existing sale — at most one plan
+     * per sale (the backend 409s otherwise). Deliberately separate from
+     * createSale: this never touches how the sale was created, totaled, or
+     * had its stock decremented.
+     * @param {Object} resource - { saleId, totalInstallments }.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    createPaymentPlan(resource) {
+        return this.#paymentPlansEndpoint.create(resource);
+    }
+
+    /**
+     * Fetches the payment plan for a specific sale. 404 if that sale has none.
+     * @param {number|string} saleId
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    getPaymentPlanBySale(saleId) {
+        return this.http.get(`${paymentPlansEndpointPath}/by-sale/${saleId}`);
+    }
+
+    /**
+     * Fetches pending (not fully paid) payment plans — for the whole
+     * business, or for one customer's sales when customerId is given.
+     * @param {number|string} [customerId]
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    getPendingPaymentPlans(customerId) {
+        return this.http.get(`${paymentPlansEndpointPath}/pending`, {
+            params: customerId ? { customerId } : {}
+        });
+    }
+
+    /**
+     * Registers the payment of one installment — a domain action (POST),
+     * not a field update. {id} is the plan's own id, not the sale's.
+     * @param {number|string} id - Payment plan identifier.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    registerInstallmentPayment(id) {
+        return this.http.post(`${paymentPlansEndpointPath}/${id}/register-payment`);
+    }
+
+    /**
+     * Reverts the most recently registered payment on a plan — Admin only
+     * server-side (see PaymentPlansController.RevertInstallmentPayment).
+     * @param {number|string} id - Payment plan identifier.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    revertInstallmentPayment(id) {
+        return this.http.post(`${paymentPlansEndpointPath}/${id}/revert-last-payment`);
     }
 }

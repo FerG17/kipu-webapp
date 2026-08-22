@@ -34,12 +34,18 @@ export class SupplierApi extends BaseApi {
     // ─── Supplier operations ──────────────────────────────────────────────────
 
     /**
-     * Fetches all suppliers for a given business.
-     * @param {number|string} businessId
+     * Fetches suppliers for the authenticated business. Scoped server-side
+     * by the JWT. Active only by default (X4 M11) — a deactivated supplier
+     * used to stay in every listing/picker forever with no way to tell it
+     * apart from an active one. Pass includeInactive=true for the supplier
+     * management page itself, which needs to show (and offer to reactivate)
+     * inactive suppliers too. Paginated server-side (X4 S3); pageSize is set
+     * to the backend's hard cap (200).
+     * @param {boolean} [includeInactive=false]
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getSuppliers(businessId) {
-        return this.#suppliersEndpoint.getAllByParam('businessId', businessId);
+    getSuppliers(includeInactive = false) {
+        return this.#suppliersEndpoint.getPage({ includeInactive, pageSize: 200 });
     }
 
     /**
@@ -85,24 +91,37 @@ export class SupplierApi extends BaseApi {
         return this.#suppliersEndpoint.delete(id);
     }
 
+    /**
+     * X4 M11: undoes deactivateSupplier — there was no way back from it before.
+     * @param {number|string} id
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    reactivateSupplier(id) {
+        return this.http.patch(`${suppliersEndpointPath}/${id}/activate`);
+    }
+
     // ─── Purchase order operations ────────────────────────────────────────────
 
     /**
-     * Fetches all purchase orders for a given business.
-     * @param {number|string} businessId
+     * Fetches purchase orders for the authenticated business. Scoped
+     * server-side by the JWT — PurchasesController.GetPurchaseOrders only
+     * ever reads an optional `?supplierId=`, never a businessId parameter.
+     * Paginated server-side (X4 S3); pageSize is set to the backend's hard
+     * cap (200).
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getPurchaseOrders(businessId) {
-        return this.#purchasesEndpoint.getAllByParam('businessId', businessId);
+    getPurchaseOrders() {
+        return this.#purchasesEndpoint.getPage({ pageSize: 200 });
     }
 
     /**
-     * Fetches all purchase orders for a specific supplier.
+     * Fetches purchase orders for a specific supplier. Paginated server-side
+     * (X4 S3); pageSize is set to the backend's hard cap (200).
      * @param {number|string} supplierId
      * @returns {Promise<import('axios').AxiosResponse>}
      */
     getPurchaseOrdersBySupplier(supplierId) {
-        return this.#purchasesEndpoint.getAllByParam('supplierId', supplierId);
+        return this.#purchasesEndpoint.getPage({ supplierId, pageSize: 200 });
     }
 
     /**

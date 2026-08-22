@@ -1,12 +1,14 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useI18n }        from 'vue-i18n';
+import { useToast }       from 'primevue/usetoast';
 import CartPanel          from '../components/cart-panel.vue';
 import PaymentModal       from '../components/payment-modal.vue';
 import SaleSuccessModal   from '../components/sale-success-modal.vue';
 import useSalesStore      from '../../application/sales.store.js';
 import useProductStore    from '../../../product/application/product.store.js';
 import useIamStore        from '../../../iam/application/iam.store.js';
+import useAlertsStore     from '../../../alerts/application/alerts.store.js';
 import { PaymentMethod }  from '../../domain/model/sale.entity.js';
 import { isCustomCategory, filterableCategoryOptions } from '../../../product/presentation/category-options.js';
 
@@ -29,9 +31,11 @@ import { isCustomCategory, filterableCategoryOptions } from '../../../product/pr
  */
 
 const { t }        = useI18n();
+const toast        = useToast();
 const salesStore   = useSalesStore();
 const productStore = useProductStore();
 const iamStore     = useIamStore();
+const alertsStore  = useAlertsStore();
 
 // ─── UI state ──────────────────────────────────────────────────────────────
 
@@ -194,6 +198,25 @@ function addProductToCart(product) {
 }
 
 /**
+ * Called on Enter in the search bar — the natural point where the owner's
+ * physical barcode scanner is used at the register (it types the code
+ * followed by Enter into whatever input is focused). If the typed text
+ * matches a product's barcode exactly, that product is added straight to
+ * the cart and the search bar is cleared; otherwise it's left as a normal
+ * name search (already handled live by filteredProducts), no special case.
+ */
+function handleSearchSubmit() {
+  const match = productStore.getProductByBarcode(searchQuery.value);
+  if (!match) return;
+
+  const enrichedMatch = enrichedProducts.value.find(product => product.id === match.id);
+  if (!enrichedMatch) return;
+
+  addProductToCart(enrichedMatch);
+  searchQuery.value = '';
+}
+
+/**
  * Handles the +/- quantity change events emitted by CartPanel.
  * @param {{ productId: number, delta: number }} payload
  */
@@ -251,16 +274,23 @@ function openPaymentModal() {
 
 /**
  * Handles the confirm event from PaymentModal.
- * Persists the sale and shows the success modal on success.
- * @param {{ paymentMethod: string, cashGiven: number, customerId: number|null }} payload
+ * Persists the sale and shows the success modal on success. When the
+ * cashier chose to sell on credit, attaches a payment plan afterward via
+ * its own separate call — never part of confirmSale itself, mirroring how
+ * the backend keeps PaymentPlanCommandService entirely apart from
+ * SaleCommandService.
+ * @param {{ paymentMethod: string, cashGiven: number, customerId: number|null,
+ *           sellOnCredit: boolean, totalInstallments: number|null }} payload
  */
-async function handlePaymentConfirm({ paymentMethod, customerId }) {
+async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, totalInstallments }) {
   if (isSubmitting.value) return;
 
   isSubmitting.value    = true;
-  showPaymentModal.value = false;
 
-  const soldLines = [...cartItems.value];
+  // Captured before confirmSale() clears currentSale (and with it cartTotal)
+  // — this is what the cashier saw and agreed to charge, kept around only to
+  // sanity-check it against what the backend actually persisted.
+  const cartTotalBeforeConfirm = cartTotal.value;
 
   const result = await salesStore.confirmSale({
     paymentMethod: paymentMethod,
@@ -269,20 +299,70 @@ async function handlePaymentConfirm({ paymentMethod, customerId }) {
   });
 
   if (result.success) {
+    showPaymentModal.value = false;
+
     // The backend already decremented inventory server-side as part of
     // confirming the sale (SaleRegisteredEvent -> Product's stock decrement) —
     // refresh from that authoritative state rather than recomputing it here.
+    // The product catalog itself (not just stock counts) is refreshed too,
+    // so a long POS session picks up any price/name change made elsewhere
+    // instead of drifting further from reality with every sale.
     try {
-      const businessId = iamStore.currentUser?.businessId;
-      await productStore.fetchInventory(businessId);
+      await Promise.all([productStore.fetchProducts(), productStore.fetchInventory()]);
+      productStore.invalidateStockMovements();
+      // A sale can push a product below its minimum stock (LOW_STOCK /
+      // OUT_OF_STOCK) — refresh so the sidebar badge reflects it right away
+      // instead of only after the user happens to open Alertas.
+      alertsStore.fetchAlerts();
     } catch (error) {
       showStockError(t('pos.error-stock-deduction-failed'));
     }
 
-    lastSoldLines.value  = soldLines;
-    completedSale.value  = result.sale;
+    if (sellOnCredit && totalInstallments) {
+      try {
+        await salesStore.createPaymentPlan(result.sale.id, totalInstallments);
+        toast.add({ severity: 'success', summary: t('pos.success-title'), detail: t('pos.success-credit-plan-created', { installments: totalInstallments }), life: 4000 });
+      } catch (error) {
+        toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('pos.success-credit-plan-failed'), life: 6000 });
+      }
+    }
+
+    // The receipt is built from the backend's own persisted line items, not
+    // the pre-sale cart snapshot — the cart was only ever a client-side
+    // guess of what confirming would produce; result.sale.details is what
+    // was actually written to the database.
+    lastSoldLines.value = result.sale.details.map(detail => {
+      const product = productStore.getProductById(detail.productId);
+      return {
+        productId:   detail.productId,
+        quantity:    detail.quantity,
+        unitPrice:   detail.unitPrice,
+        lineTotal:   detail.lineTotal,
+        productName: product ? product.name : t('pos.unknown-product')
+      };
+    });
+    completedSale.value = result.sale;
+
+    if (Math.abs(result.sale.totalAmount - cartTotalBeforeConfirm) > 0.01) {
+      toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('pos.warning-total-mismatch'), life: 8000 });
+    }
   } else {
-    showStockError(t('pos.error-confirm-failed'));
+    // The payment modal stays open on failure (see the success branch above,
+    // which is the only place that closes it) — the banner below the search
+    // bar would otherwise render invisibly behind the modal's backdrop, so
+    // the failure also gets a toast, which renders above it.
+    showStockError(result.errorDetail ?? t('pos.error-confirm-failed'));
+    toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: result.errorDetail ?? t('pos.error-confirm-failed'), life: 6000 });
+
+    // A rejected sale (most commonly a 409: stock changed since the cart was
+    // built, or the product got deactivated mid-session) means the POS's
+    // idea of available stock is already stale — refresh it here too, not
+    // only on the success path, so the cashier sees real numbers before
+    // trying again.
+    if (result.status === 409) {
+      productStore.fetchProducts();
+      productStore.fetchInventory();
+    }
   }
 
   isSubmitting.value = false;
@@ -334,10 +414,10 @@ onMounted(() => {
   // Without a businessId the queries would resolve to an empty set yet still
   // flip productsLoaded/inventoryLoaded to true, blocking every later fetch.
   if (!businessId) return;
-  if (!productStore.productsLoaded)  productStore.fetchProducts(businessId);
-  if (!productStore.inventoryLoaded) productStore.fetchInventory(businessId);
+  if (!productStore.productsLoaded)  productStore.fetchProducts();
+  if (!productStore.inventoryLoaded) productStore.fetchInventory();
   if (!salesStore.currentSale)       salesStore.startNewSale(businessId);
-  if (!salesStore.customersLoaded)   salesStore.fetchCustomers(businessId);
+  if (!salesStore.customersLoaded)   salesStore.fetchCustomers();
 });
 </script>
 
@@ -350,22 +430,23 @@ onMounted(() => {
       <!-- Search + category filters -->
       <div
           class="px-4 pt-3 pb-3"
-          style="border-bottom: 1px solid #E2E8F0; display: flex; flex-direction: column; gap: 8px;"
+          style="border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;"
       >
         <!-- Search bar -->
         <div style="position: relative;">
           <i
               class="pi pi-search"
-              style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94A3B8; font-size: 0.85rem;"
+              style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 0.85rem;"
           />
           <input
               v-model="searchQuery"
               type="text"
               :placeholder="t('pos.search-placeholder')"
               class="w-full border-round-lg"
-              style="padding: 8px 12px 8px 36px; border: 1px solid #E2E8F0; font-size: 0.85rem; color: #1E293B; background-color: #F8FAFC; outline: none;"
-              @focus="(e) => e.target.style.borderColor = '#0E7490'"
-              @blur="(e) => e.target.style.borderColor = '#E2E8F0'"
+              style="padding: 8px 12px 8px 36px; border: 1px solid var(--border); font-size: 0.85rem; color: var(--text); background-color: var(--surface-alt); outline: none;"
+              @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+              @blur="(e) => e.target.style.borderColor = 'var(--border)'"
+              @keyup.enter="handleSearchSubmit"
           />
         </div>
 
@@ -380,8 +461,8 @@ onMounted(() => {
               class="border-round-3xl px-3 py-1 shrink-0"
               style="white-space: nowrap; font-size: 0.72rem; font-weight: 600; border: none; cursor: pointer;"
               :style="{
-                            backgroundColor: activeCategory === filter.value ? '#0B3558' : '#F1F5F9',
-                            color:           activeCategory === filter.value ? '#fff'    : '#64748B'
+                            backgroundColor: activeCategory === filter.value ? 'var(--brand)' : 'var(--surface-alt)',
+                            color:           activeCategory === filter.value ? 'var(--brand-ink)'    : 'var(--text-muted)'
                         }"
               @click="activeCategory = filter.value"
           >
@@ -394,29 +475,26 @@ onMounted(() => {
       <div
           v-if="stockErrorMessage"
           class="mx-4 mt-2 flex align-items-center gap-2 border-round-xl px-3 py-2"
-          style="background-color: #FEE2E2; border: 1px solid #FCA5A5;"
+          style="background-color: var(--status-critical-bg); border: 1px solid color-mix(in srgb, var(--status-critical-fg) 35%, transparent);"
       >
-        <i class="pi pi-exclamation-triangle" style="color: #EF4444; font-size: 0.85rem; flex-shrink: 0;" />
-        <p class="m-0" style="font-size: 0.78rem; color: #DC2626;">{{ stockErrorMessage }}</p>
+        <i class="pi pi-exclamation-triangle" style="color: var(--status-critical-fg); font-size: 0.85rem; flex-shrink: 0;" />
+        <p class="m-0" style="font-size: 0.78rem; color: var(--status-critical-fg);">{{ stockErrorMessage }}</p>
       </div>
 
       <!-- Products grid -->
       <div class="flex-1 overflow-y-auto p-4">
-        <div
-            class="grid"
-            style="gap: 10px;"
-        >
+        <div class="grid">
           <div
               v-for="product in filteredProducts"
               :key="product.id"
               class="col-6 md:col-4 xl:col-3"
           >
             <button
-                class="w-full border-round-xl p-3 text-left flex flex-column justify-content-between"
+                class="w-full h-full border-round-xl p-3 text-left flex flex-column justify-content-between"
                 :disabled="product.isOutOfStock"
                 :style="{
-                                border:          `2px solid ${isProductInCart(product.id) ? '#0E7490' : '#E2E8F0'}`,
-                                backgroundColor: product.isOutOfStock ? '#F8FAFC' : isProductInCart(product.id) ? '#F0FDFA' : '#fff',
+                                border:          `2px solid ${isProductInCart(product.id) ? 'var(--brand)' : 'var(--border)'}`,
+                                backgroundColor: product.isOutOfStock ? 'var(--surface-alt)' : isProductInCart(product.id) ? '#F0FDFA' : 'var(--surface)',
                                 cursor:          product.isOutOfStock ? 'not-allowed' : 'pointer',
                                 opacity:         product.isOutOfStock ? 0.6 : 1,
                                 minHeight:       '90px'
@@ -427,8 +505,9 @@ onMounted(() => {
               <div>
                 <p
                     class="m-0 mb-1"
-                    style="font-size: 0.78rem; font-weight: 600; line-height: 1.3;"
-                    :style="{ color: product.isOutOfStock ? '#94A3B8' : '#1E293B' }"
+                    style="font-size: 0.78rem; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;"
+                    :style="{ color: product.isOutOfStock ? 'var(--text-faint)' : 'var(--text)' }"
+                    :title="product.name"
                 >
                   {{ product.name }}
                 </p>
@@ -439,7 +518,7 @@ onMounted(() => {
                 <p
                     class="m-0"
                     style="font-size: 0.95rem; font-weight: 800;"
-                    :style="{ color: isProductInCart(product.id) ? '#0E7490' : '#0B3558' }"
+                    :style="{ color: isProductInCart(product.id) ? 'var(--brand)' : 'var(--brand)' }"
                 >
                   {{ formatCurrency(product.basePrice) }}
                 </p>
@@ -447,12 +526,12 @@ onMounted(() => {
                   <i
                       v-if="product.isLowStock"
                       class="pi pi-exclamation-triangle"
-                      style="color: #D97706; font-size: 0.6rem;"
+                      style="color: var(--status-warning-fg); font-size: 0.6rem;"
                   />
                   <span
                       style="font-size: 0.65rem;"
                       :style="{
-                                            color:      product.isOutOfStock ? '#94A3B8' : product.isLowStock ? '#D97706' : '#94A3B8',
+                                            color:      product.isOutOfStock ? 'var(--text-faint)' : product.isLowStock ? 'var(--status-warning-fg)' : 'var(--text-faint)',
                                             fontWeight: product.isLowStock ? 600 : 400
                                         }"
                   >
@@ -465,7 +544,7 @@ onMounted(() => {
               <div v-if="isProductInCart(product.id)" class="mt-2">
                                 <span
                                     class="border-round-md px-2 py-1"
-                                    style="background-color: #0E7490; color: #fff; font-size: 0.65rem; font-weight: 700;"
+                                    style="background-color: var(--brand); color: var(--surface); font-size: 0.65rem; font-weight: 700;"
                                 >
                                     {{ t('pos.in-cart') }}: {{ cartQuantityFor(product.id) }}
                                 </span>
@@ -478,8 +557,8 @@ onMounted(() => {
               v-if="filteredProducts.length === 0"
               class="col-12 flex flex-column align-items-center justify-content-center py-6 text-center"
           >
-            <i class="pi pi-box mb-2" style="font-size: 2.25rem; color: #CBD5E1;" />
-            <p class="m-0" style="color: #94A3B8; font-size: 0.88rem;">
+            <i class="pi pi-box mb-2" style="font-size: 2.25rem; color: var(--text-faint);" />
+            <p class="m-0" style="color: var(--text-faint); font-size: 0.88rem;">
               {{ t('pos.no-products-found') }}
             </p>
           </div>
@@ -490,11 +569,11 @@ onMounted(() => {
       <div
           v-if="cartItems.length > 0"
           class="lg:hidden px-4 pb-4 pt-2"
-          style="border-top: 1px solid #E2E8F0;"
+          style="border-top: 1px solid var(--border);"
       >
         <button
             class="w-full flex align-items-center justify-content-between border-round-xl px-4 py-3"
-            style="background-color: #0B3558; color: #fff; border: none; cursor: pointer;"
+            style="background-color: var(--brand); color: var(--surface); border: none; cursor: pointer;"
             @click="showMobileCart = true"
         >
           <div class="flex align-items-center gap-2">
@@ -513,7 +592,7 @@ onMounted(() => {
     <!-- ── Desktop: cart sidebar ── -->
     <div
         class="hidden lg:flex flex-column"
-        style="width: 300px; flex-shrink: 0; background-color: #fff; border-left: 1px solid #E2E8F0;"
+        style="width: 300px; flex-shrink: 0; background-color: var(--surface); border-left: 1px solid var(--border);"
     >
       <cart-panel
           :cart-items="cartItems"
@@ -537,19 +616,20 @@ onMounted(() => {
       >
         <div
             class="flex align-items-center justify-content-between px-4 pt-4 pb-3"
-            style="border-bottom: 1px solid #E2E8F0;"
+            style="border-bottom: 1px solid var(--border);"
         >
-          <p class="m-0" style="font-size: 1rem; font-weight: 700; color: #0B3558;">
+          <p class="m-0" style="font-size: 1rem; font-weight: 700; color: var(--brand);">
             {{ t('pos.cart-title') }}
           </p>
           <button
               style="background: none; border: none; cursor: pointer; padding: 4px;"
               @click="showMobileCart = false"
           >
-            <i class="pi pi-times" style="color: #94A3B8; font-size: 1.1rem;" />
+            <i class="pi pi-times" style="color: var(--text-faint); font-size: 1.1rem;" />
           </button>
         </div>
         <cart-panel
+            class="flex-1 min-h-0"
             :cart-items="cartItems"
             :total="cartTotal"
             @update-quantity="handleQuantityChange"
@@ -564,6 +644,7 @@ onMounted(() => {
         v-if="showPaymentModal"
         :total="cartTotal"
         :customers="salesStore.customers"
+        :saving="isSubmitting"
         @confirm="handlePaymentConfirm"
         @cancel="showPaymentModal = false"
     />

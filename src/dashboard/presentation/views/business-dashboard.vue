@@ -5,7 +5,6 @@ import { useI18n }                     from 'vue-i18n';
 import useDashboardStore               from '../../application/dashboard.store.js';
 import useAlertsStore                  from '../../../alerts/application/alerts.store.js';
 import useProductStore                 from '../../../product/application/product.store.js';
-import useSalesStore                   from '../../../sales/application/sales.store.js';
 import useIamStore                     from '../../../iam/application/iam.store.js';
 import { AlertType }                   from '../../../alerts/domain/model/alert.entity.js';
 import { toDateLocale }                from '../../../shared/presentation/date-locale.js';
@@ -15,18 +14,22 @@ const router         = useRouter();
 const dashboardStore = useDashboardStore();
 const alertsStore    = useAlertsStore();
 const productStore   = useProductStore();
-const salesStore     = useSalesStore();
 const iamStore       = useIamStore();
 
 const {
-  liveMetrics,
+  kpis,
+  kpisLoaded,
+  dashboardForbidden,
   salesByDay,
-  errors
+  salesByDayLoaded,
+  salesByDayError,
+  topStockProducts,
+  topStockLoaded
 } = toRefs(dashboardStore);
 
-const { alerts, alertsLoaded, expirationActiveCount } = toRefs(alertsStore);
+const { alerts, alertsLoaded } = toRefs(alertsStore);
 
-const { fetchSalesByDay, refreshMetrics } = dashboardStore;
+const { fetchKpis, fetchSalesByDay, fetchTopStockProducts } = dashboardStore;
 
 const { fetchAlerts } = alertsStore;
 
@@ -54,25 +57,25 @@ onMounted(() => {
   const businessId = iamStore.currentUser?.businessId ?? null;
   if (businessId) {
     fetchAlerts();
-    productStore.fetchWarehousesForBusiness(businessId).then(fetched => {
+    productStore.fetchWarehousesForBusiness().then(fetched => {
       warehouses.value = fetched;
     });
-    if (!salesByDay.value.length)       fetchSalesByDay(businessId);
-    if (!productStore.productsLoaded)   productStore.fetchProducts(businessId);
-    if (!productStore.inventoryLoaded)  productStore.fetchInventory(businessId);
-    if (!salesStore.salesLoaded)        salesStore.fetchSales(businessId);
+    fetchKpis();
+    fetchSalesByDay();
+    fetchTopStockProducts();
   }
 });
 
 /**
- * Re-fetches everything the Panel shows from the server: products/inventory/
- * sales (liveMetrics + Mayor stock), the weekly chart and the alerts.
+ * Re-fetches everything the Panel shows from the server: the 6 KPIs, the
+ * weekly chart, "Mayor stock" and the alerts.
  */
 function handleRefresh() {
   const businessId = iamStore.currentUser?.businessId ?? null;
   if (!businessId) return;
-  refreshMetrics(businessId);
-  fetchSalesByDay(businessId);
+  fetchKpis();
+  fetchSalesByDay();
+  fetchTopStockProducts();
   fetchAlerts();
 }
 
@@ -94,70 +97,58 @@ const activeAlerts = computed(() =>
     alerts.value.filter(alert => alert.status === 'ACTIVE')
 );
 
-/**
- * Count of active EXPIRATION/EXPIRED alerts (used in the "Por Vencer" KPI).
- * Reuses alerts.store.js's own expirationActiveCount so both KPIs (here and
- * on the Alertas screen) always agree on the same number.
- * @type {import('vue').ComputedRef<number>}
- */
-const expiringCount = computed(() =>
-    alertsLoaded.value
-        ? expirationActiveCount.value
-        : null
-);
-
 // ─── KPI card definitions ──────────────────────────────────────────────────
 
 /**
- * Whether the real data liveMetrics is computed from has loaded at least
- * once — used to show a loading state instead of a misleading "0" flash.
+ * Whether kpis has loaded at least once — used to show a loading state
+ * instead of a misleading "0" flash.
  * @type {import('vue').ComputedRef<boolean>}
  */
-const metricsReady = computed(() =>
-    productStore.productsLoaded && productStore.inventoryLoaded && salesStore.salesLoaded
-);
+const metricsReady = computed(() => kpisLoaded.value && kpis.value !== null);
 
 /**
- * The six KPI cards rendered in the top grid.
- * Each card reads from the loaded metrics / alerts state.
+ * The six KPI cards rendered in the top grid, sourced from the real
+ * GET /dashboard/kpis response — the single source of truth for all six,
+ * including "Por vencer" (previously a separate client-side count derived
+ * from the Alerts store, which could disagree with the server's own figure).
  * @type {import('vue').ComputedRef<Array>}
  */
 const kpiCards = computed(() => [
   {
     labelKey:   'dashboard.total-products',
-    value:      metricsReady.value ? liveMetrics.value.totalProducts : null,
+    value:      metricsReady.value ? kpis.value.totalProducts : null,
     icon:       'pi pi-box',
-    iconColor:  '#0E7490',
-    iconBg:     '#E0F2FE',
-    valueColor: '#0B3558'
+    iconColor:  'var(--brand)',
+    iconBg:     'var(--brand-soft)',
+    valueColor: 'var(--brand)'
   },
   {
     labelKey:   'dashboard.low-stock',
-    value:      metricsReady.value ? liveMetrics.value.lowStockProducts : null,
+    value:      metricsReady.value ? kpis.value.lowStockCount : null,
     icon:       'pi pi-exclamation-triangle',
-    iconColor:  '#F97316',
-    iconBg:     '#FFEDD5',
-    valueColor: '#F97316'
+    iconColor:  'var(--status-warning-fg)',
+    iconBg:     'var(--status-warning-bg)',
+    valueColor: 'var(--status-warning-fg)'
   },
   {
     labelKey:   'dashboard.expiring-soon',
-    value:      expiringCount.value,
+    value:      metricsReady.value ? kpis.value.expiringSoonCount : null,
     icon:       'pi pi-calendar-times',
-    iconColor:  '#EF4444',
-    iconBg:     '#FEE2E2',
-    valueColor: '#EF4444'
+    iconColor:  'var(--status-critical-fg)',
+    iconBg:     'var(--status-critical-bg)',
+    valueColor: 'var(--status-critical-fg)'
   },
   {
     labelKey:    'dashboard.inventory-value',
-    value:       metricsReady.value ? formatCurrency(liveMetrics.value.inventoryValue) : null,
+    value:       metricsReady.value ? formatCurrency(kpis.value.inventoryValue) : null,
     icon:        'pi pi-warehouse',
-    iconColor:   '#22C55E',
-    iconBg:      '#DCFCE7',
-    valueColor:  '#22C55E'
+    iconColor:   'var(--status-ok-fg)',
+    iconBg:      'var(--status-ok-bg)',
+    valueColor:  'var(--status-ok-fg)'
   },
   {
     labelKey:   'dashboard.total-sales',
-    value:      metricsReady.value ? formatCurrency(liveMetrics.value.totalSales) : null,
+    value:      metricsReady.value ? formatCurrency(kpis.value.totalSales) : null,
     icon:       'pi pi-shopping-cart',
     iconColor:  '#6366F1',
     iconBg:     '#EEF2FF',
@@ -165,11 +156,11 @@ const kpiCards = computed(() => [
   },
   {
     labelKey:   'dashboard.stock-health',
-    value:      metricsReady.value ? (liveMetrics.value.stockHealthPercentage + '%') : null,
+    value:      metricsReady.value ? (Math.round(kpis.value.stockHealthPercentage) + '%') : null,
     icon:       'pi pi-heart',
-    iconColor:  '#0E7490',
+    iconColor:  'var(--brand)',
     iconBg:     '#CFFAFE',
-    valueColor: '#0B3558'
+    valueColor: 'var(--brand)'
   }
 ]);
 
@@ -196,11 +187,11 @@ function formatDateTime(isoString) {
 }
 
 /** @param {string} severity @returns {string} */
-function alertIconColor(severity)   { return severity === 'HIGH' ? '#EF4444' : '#F97316'; }
+function alertIconColor(severity)   { return severity === 'HIGH' ? 'var(--status-critical-fg)' : 'var(--status-warning-fg)'; }
 /** @param {string} severity @returns {string} */
-function alertBadgeBg(severity)     { return severity === 'HIGH' ? '#FEE2E2' : '#FFEDD5'; }
+function alertBadgeBg(severity)     { return severity === 'HIGH' ? 'var(--status-critical-bg)' : 'var(--status-warning-bg)'; }
 /** @param {string} severity @returns {string} */
-function alertBadgeColor(severity)  { return severity === 'HIGH' ? '#EF4444' : '#F97316'; }
+function alertBadgeColor(severity)  { return severity === 'HIGH' ? 'var(--status-critical-fg)' : 'var(--status-warning-fg)'; }
 /** @param {string} severity @returns {string} */
 function alertSeverityKey(severity) {
   return { HIGH: 'dashboard.severity-high', MEDIUM: 'dashboard.severity-medium', LOW: 'dashboard.severity-low' }[severity]
@@ -262,30 +253,20 @@ const currentUserFirstName = computed(() => {
 });
 
 /**
- * Top 5 products sorted descending by REAL current inventory stock, for the
- * "Mayor stock" panel. This used to be wired to sales quantity (how much of
- * each product had been SOLD), which produced numbers that didn't match
- * Inventario at all and even ranked out-of-stock products highly if they'd
- * sold well in the past — it's now sourced from the same InventoryItem data
- * Inventario itself uses, so the numbers always agree.
- * stockPercent is each product's stock relative to the highest-stocked item.
+ * Top 5 products by real current stock for the "Mayor stock" panel, fetched
+ * from GET /dashboard/top-stock-products (see topStockProducts above) —
+ * mapped to the shape the template already expects (currentStock instead of
+ * the resource's totalStock, plus a client-computed stockPercent relative to
+ * the highest-stocked item in the response).
  * @type {import('vue').ComputedRef<Array>}
  */
-const topStockProducts = computed(() => {
-  const ranked = productStore.products
-      .map(product => ({
-        productId:    product.id,
-        productName:  product.name,
-        currentStock: productStore.getTotalInventoryForProduct(product.id)?.currentStock ?? 0
-      }))
-      .filter(product => product.currentStock > 0)
-      .sort((a, b) => b.currentStock - a.currentStock)
-      .slice(0, 5);
-
-  const maxStock = ranked[0]?.currentStock ?? 0;
-  return ranked.map(product => ({
-    ...product,
-    stockPercent: maxStock > 0 ? Math.round((product.currentStock / maxStock) * 100) : 0
+const topStockDisplay = computed(() => {
+  const maxStock = topStockProducts.value[0]?.totalStock ?? 0;
+  return topStockProducts.value.map(product => ({
+    productId:    product.productId,
+    productName:  product.productName,
+    currentStock: product.totalStock,
+    stockPercent: maxStock > 0 ? Math.round((product.totalStock / maxStock) * 100) : 0
   }));
 });
 
@@ -301,8 +282,8 @@ const quickActions = computed(() => [
     labelKey: 'dashboard.action-new-product',
     subKey:   'dashboard.action-new-product-sub',
     icon:     'pi pi-plus',
-    iconBg:   '#E0F2FE',
-    iconColor:'#0E7490',
+    iconBg:   'var(--brand-soft)',
+    iconColor:'var(--brand)',
     handler:  navigateToNewProduct
   },
   {
@@ -317,16 +298,16 @@ const quickActions = computed(() => [
     labelKey: 'dashboard.action-purchase-order',
     subKey:   'dashboard.action-purchase-order-sub',
     icon:     'pi pi-clipboard',
-    iconBg:   '#FEF3C7',
-    iconColor:'#D97706',
+    iconBg:   'var(--status-warning-bg)',
+    iconColor:'var(--status-warning-fg)',
     handler:  navigateToSuppliers
   },
   {
     labelKey: 'dashboard.go-to-alerts',
     subKey:   'dashboard.action-alerts-sub',
     icon:     'pi pi-bell',
-    iconBg:   '#FEE2E2',
-    iconColor:'#EF4444',
+    iconBg:   'var(--status-critical-bg)',
+    iconColor:'var(--status-critical-fg)',
     handler:  navigateToAlerts
   },
   {
@@ -341,8 +322,8 @@ const quickActions = computed(() => [
     labelKey: 'dashboard.action-view-reports',
     subKey:   'dashboard.action-view-reports-sub',
     icon:     'pi pi-chart-bar',
-    iconBg:   '#F1F5F9',
-    iconColor:'#475569',
+    iconBg:   'var(--surface-alt)',
+    iconColor:'var(--text)',
     handler:  navigateToReports
   }
 ]);
@@ -375,6 +356,14 @@ const quickActions = computed(() => [
         </button>
       </div>
     </div>
+
+    <!-- ── Dashboard access notice ──────────────────────────────────────────── -->
+    <div v-if="dashboardForbidden" class="dashboard-forbidden-notice">
+      <i class="pi pi-lock"/>
+      {{ t('dashboard.dashboard-forbidden-notice') }}
+    </div>
+
+    <template v-else>
 
     <!-- ── 6 KPI Cards ─────────────────────────────────────────────────────── -->
     <div class="kpi-grid mb-2">
@@ -441,8 +430,18 @@ const quickActions = computed(() => [
             <div class="chart-axis"/>
           </div>
 
-          <div v-else class="panel__loading">
+          <div v-else-if="!salesByDayLoaded" class="panel__loading">
             <i class="pi pi-spin pi-spinner"/>
+          </div>
+
+          <div v-else-if="salesByDayError" class="panel__empty">
+            <i class="pi pi-lock" style="color: var(--status-critical-fg);"/>
+            <p class="m-0">{{ t('dashboard.weekly-movements-error') }}</p>
+          </div>
+
+          <div v-else class="panel__empty">
+            <i class="pi pi-chart-bar"/>
+            <p class="m-0">{{ t('dashboard.weekly-movements-empty') }}</p>
           </div>
         </div>
       </div>
@@ -475,7 +474,7 @@ const quickActions = computed(() => [
               <div class="alert-card__body">
                 <p class="alert-card__product">
                   {{ alert.productName ?? t('dashboard.unknown-product') }}
-                  <span v-if="resolveWarehouseName(alert)" style="font-size: 0.72rem; color: #64748B; font-weight: 400;">
+                  <span v-if="resolveWarehouseName(alert)" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 400;">
                     · {{ resolveWarehouseName(alert) }}
                   </span>
                 </p>
@@ -493,7 +492,7 @@ const quickActions = computed(() => [
             </div>
           </div>
 
-          <p v-else class="m-0" style="font-size: 0.88rem; color: #64748B;">
+          <p v-else class="m-0" style="font-size: 0.88rem; color: var(--text-muted);">
             {{ t('dashboard.no-alerts') }}
           </p>
         </div>
@@ -535,9 +534,9 @@ const quickActions = computed(() => [
             </button>
           </div>
 
-          <div v-if="topStockProducts.length" class="flex flex-column gap-3">
+          <div v-if="topStockDisplay.length" class="flex flex-column gap-3">
             <div
-                v-for="stockItem in topStockProducts"
+                v-for="stockItem in topStockDisplay"
                 :key="stockItem.productId"
                 class="stock-row"
             >
@@ -551,23 +550,18 @@ const quickActions = computed(() => [
             </div>
           </div>
 
-          <div v-else-if="!productStore.productsLoaded || !productStore.inventoryLoaded" class="panel__loading">
+          <div v-else-if="!topStockLoaded" class="panel__loading">
             <i class="pi pi-spin pi-spinner"/>
           </div>
 
-          <p v-else class="m-0" style="font-size: 0.88rem; color: #64748B;">
+          <p v-else class="m-0" style="font-size: 0.88rem; color: var(--text-muted);">
             {{ t('dashboard.no-stock-data') }}
           </p>
         </div>
       </div>
     </div>
 
-    <!-- ── Errors ──────────────────────────────────────────────────────────── -->
-    <div v-if="errors.length" class="error-banner mt-3">
-      <i class="pi pi-exclamation-triangle"/>
-      {{ t('errors.occurred') }}: {{ errors.map(error => error.message).join(', ') }}
-    </div>
-
+    </template>
   </div>
 </template>
 
@@ -580,14 +574,14 @@ const quickActions = computed(() => [
 
 /* ── Header date + greeting ─────────────────────────────────────────── */
 .header-date {
-  color: #94A3B8;
+  color: var(--text-faint);
   font-size: 0.75rem;
 }
 @media (min-width: 640px) {
   .header-date { font-size: 0.82rem; }
 }
 .header-greeting {
-  color: #0B3558;
+  color: var(--brand);
   font-size: 1.3rem;
   font-weight: 700;
   line-height: 1.2;
@@ -603,18 +597,18 @@ const quickActions = computed(() => [
   justify-content: center;
   width: 38px;
   height: 38px;
-  border: 1px solid #E2E8F0;
+  border: 1px solid var(--border);
   border-radius: 50%;
-  background: #fff;
-  color: #64748B;
+  background: var(--surface);
+  color: var(--text-muted);
   font-size: 0.9rem;
   cursor: pointer;
   transition: background-color 0.15s, color 0.15s;
   flex-shrink: 0;
 }
 .refresh-btn:hover {
-  background-color: #F1F5F9;
-  color: #0B3558;
+  background-color: var(--surface-alt);
+  color: var(--brand);
 }
 
 /* ── Alert icon button ──────────────────────────────────────────────── */
@@ -625,19 +619,19 @@ const quickActions = computed(() => [
   justify-content: center;
   width: 38px;
   height: 38px;
-  border: 1px solid #E2E8F0;
+  border: 1px solid var(--border);
   border-radius: 50%;
-  background: #fff;
-  color: #64748B;
+  background: var(--surface);
+  color: var(--text-muted);
   font-size: 1rem;
   cursor: pointer;
   transition: background-color 0.15s, color 0.15s;
   flex-shrink: 0;
 }
 .alert-icon-btn:hover {
-  background-color: #FFF7ED;
-  color: #F97316;
-  border-color: #FED7AA;
+  background-color: var(--status-warning-bg);
+  color: var(--status-warning-fg);
+  border-color: var(--status-warning-bg);
 }
 .alert-icon-btn__badge {
   position: absolute;
@@ -647,8 +641,8 @@ const quickActions = computed(() => [
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: #EF4444;
-  color: #fff;
+  background: var(--status-critical-fg);
+  color: var(--brand-ink);
   font-size: 0.6rem;
   font-weight: 700;
   display: flex;
@@ -661,11 +655,11 @@ const quickActions = computed(() => [
 /* 2-col on mobile → 3-col on desktop, matching the product stat-grid standard. */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
 @media (min-width: 1024px) {
-  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+  .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 .kpi-card {
@@ -673,9 +667,10 @@ const quickActions = computed(() => [
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  min-width: 0;
   padding: 1rem;
-  background: #fff;
-  border: 1px solid #E2E8F0;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 0.875rem;
   transition: box-shadow 0.2s, transform 0.2s;
 }
@@ -690,12 +685,13 @@ const quickActions = computed(() => [
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  min-width: 0;
 }
 .kpi-card__label {
   margin: 0;
   font-size: 0.7rem;
   font-weight: 600;
-  color: #64748B;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   line-height: 1.2;
@@ -708,7 +704,7 @@ const quickActions = computed(() => [
   font-size: 1.25rem;
   font-weight: 700;
   line-height: 1.1;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 @media (min-width: 640px) {
   .kpi-card__value { font-size: 1.5rem; }
@@ -717,7 +713,7 @@ const quickActions = computed(() => [
   width: 80px;
   height: 28px;
   border-radius: 6px;
-  background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%);
+  background: linear-gradient(90deg, var(--surface-alt) 25%, var(--border) 50%, var(--surface-alt) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
 }
@@ -742,8 +738,8 @@ const quickActions = computed(() => [
 
 /* ── Panels ─────────────────────────────────────────────────────────── */
 .panel {
-  background: #fff;
-  border: 1px solid #E2E8F0;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 0.875rem;
   padding: 1.25rem;
 }
@@ -751,15 +747,29 @@ const quickActions = computed(() => [
   margin: 0 0 1rem 0;
   font-size: 0.95rem;
   font-weight: 700;
-  color: #0B3558;
+  color: var(--brand);
 }
 .panel__loading {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 120px;
-  color: #0E7490;
+  color: var(--brand);
   font-size: 1.4rem;
+}
+.panel__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 120px;
+  color: var(--text-faint);
+  font-size: 0.85rem;
+  text-align: center;
+}
+.panel__empty i {
+  font-size: 1.6rem;
 }
 
 /* ── Link button ────────────────────────────────────────────────────── */
@@ -769,14 +779,14 @@ const quickActions = computed(() => [
   gap: 0.25rem;
   border: none;
   background: none;
-  color: #0E7490;
+  color: var(--brand);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   padding: 0;
   transition: color 0.15s;
 }
-.link-btn:hover { color: #0B3558; }
+.link-btn:hover { color: var(--brand); }
 
 /* ── Bar chart ──────────────────────────────────────────────────────── */
 .chart-container {
@@ -792,14 +802,14 @@ const quickActions = computed(() => [
   position: absolute;
   left: 0;
   right: 0;
-  border-top: 1px dashed #E2E8F0;
+  border-top: 1px dashed var(--border);
 }
 .chart-grid__label {
   position: absolute;
   left: 0;
   top: -12px;
   font-size: 0.65rem;
-  color: #CBD5E1;
+  color: var(--text-faint);
 }
 .chart-bars {
   display: flex;
@@ -821,7 +831,7 @@ const quickActions = computed(() => [
 }
 .chart-bar-col__amount {
   font-size: 0.55rem;
-  color: #64748B;
+  color: var(--text-muted);
   text-align: center;
   min-height: 1rem;
   white-space: nowrap;
@@ -845,19 +855,19 @@ const quickActions = computed(() => [
 }
 .chart-bar-col__bar {
   width: 100%;
-  background: linear-gradient(180deg, #0E7490 0%, #155E75 100%);
+  background: linear-gradient(180deg, var(--brand) 0%, #155E75 100%);
   border-radius: 4px 4px 0 0;
   min-height: 4px;
   transition: height 0.5s ease;
 }
 .chart-bar-col__label {
   font-size: 0.75rem;
-  color: #94A3B8;
+  color: var(--text-faint);
   font-weight: 500;
 }
 .chart-axis {
   height: 1px;
-  background: #E2E8F0;
+  background: var(--border);
   margin: 0 0.5rem;
 }
 @media (min-width: 640px) {
@@ -870,9 +880,9 @@ const quickActions = computed(() => [
   align-items: flex-start;
   gap: 0.6rem;
   padding: 0.75rem;
-  border: 1px solid #F1F5F9;
+  border: 1px solid var(--surface-alt);
   border-radius: 0.625rem;
-  background: #FAFAFA;
+  background: var(--surface-alt);
 }
 .alert-card__icon {
   font-size: 1rem;
@@ -887,7 +897,7 @@ const quickActions = computed(() => [
   margin: 0;
   font-size: 0.82rem;
   font-weight: 600;
-  color: #1E293B;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -895,7 +905,7 @@ const quickActions = computed(() => [
 .alert-card__message {
   margin: 0.2rem 0 0;
   font-size: 0.73rem;
-  color: #64748B;
+  color: var(--text-muted);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -926,16 +936,16 @@ const quickActions = computed(() => [
   text-align: center;
   gap: 0.5rem;
   padding: 1rem 0.75rem;
-  border: 1px solid #E2E8F0;
+  border: 1px solid var(--border);
   border-radius: 0.875rem;
-  background: #fff;
+  background: var(--surface);
   cursor: pointer;
   transition: box-shadow 0.18s, transform 0.15s, border-color 0.15s;
 }
 .action-card:hover {
   box-shadow: 0 4px 14px rgba(11, 53, 88, 0.09);
   transform: translateY(-2px);
-  border-color: #CBD5E1;
+  border-color: var(--text-faint);
 }
 .action-card:active { transform: translateY(0); }
 .action-card__circle {
@@ -951,12 +961,12 @@ const quickActions = computed(() => [
   margin: 0;
   font-size: 0.83rem;
   font-weight: 700;
-  color: #1E293B;
+  color: var(--text);
 }
 .action-card__sub {
   margin: 0;
   font-size: 0.72rem;
-  color: #94A3B8;
+  color: var(--text-faint);
   line-height: 1.3;
 }
 
@@ -967,7 +977,7 @@ const quickActions = computed(() => [
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid #F1F5F9;
+  border-bottom: 1px solid var(--surface-alt);
 }
 .stock-row:last-child { border-bottom: none; }
 .stock-row__info { overflow: hidden; }
@@ -975,7 +985,7 @@ const quickActions = computed(() => [
   margin: 0;
   font-size: 0.88rem;
   font-weight: 600;
-  color: #1E293B;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -983,7 +993,7 @@ const quickActions = computed(() => [
 .stock-row__qty {
   margin: 0.15rem 0 0;
   font-size: 0.75rem;
-  color: #64748B;
+  color: var(--text-muted);
 }
 .stock-row__badge {
   flex-shrink: 0;
@@ -991,22 +1001,24 @@ const quickActions = computed(() => [
   border-radius: 999px;
   font-size: 0.73rem;
   font-weight: 700;
-  background: #DCFCE7;
-  color: #16A34A;
+  background: var(--status-ok-bg);
+  color: var(--status-ok-fg);
   white-space: nowrap;
 }
 
-/* ── Error banner ───────────────────────────────────────────────────── */
-.error-banner {
+/* ── Sales access notice ────────────────────────────────────────────── */
+.dashboard-forbidden-notice {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border-radius: 0.625rem;
-  background: #FEF2F2;
-  border: 1px solid #FECACA;
-  color: #DC2626;
-  font-size: 0.85rem;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 2.5rem 1.5rem;
+  border-radius: 0.875rem;
+  background: var(--status-warning-bg);
+  border: 1px solid color-mix(in srgb, var(--status-warning-fg) 35%, transparent);
+  color: var(--status-warning-fg);
+  font-size: 0.95rem;
+  text-align: center;
 }
 
 /* ── Shimmer animation ──────────────────────────────────────────────── */

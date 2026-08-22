@@ -39,12 +39,17 @@ export class ProductApi extends BaseApi {
     }
 
     /**
-     * Fetches all products for a given business.
-     * @param {number|string} businessId
+     * Fetches products for the authenticated business. Scoped server-side
+     * by the JWT — ProductsController.GetProducts has no businessId query
+     * parameter at all (a stray `?businessId=` used to be sent here and was
+     * simply ignored by ASP.NET's model binding). GetProducts is now
+     * paginated server-side (X4 S3); pageSize is set to the backend's own
+     * hard cap (200) so this still reads as "the whole catalog" for any
+     * business under that size, same as before pagination existed.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getProducts(businessId) {
-        return this.#productsEndpoint.getAllByParam('businessId', businessId);
+    getProducts() {
+        return this.#productsEndpoint.getPage({ pageSize: 200 });
     }
 
     /**
@@ -86,12 +91,33 @@ export class ProductApi extends BaseApi {
     }
 
     /**
-     * Fetches all inventory records for a given business.
-     * @param {number|string} businessId
+     * Fetches every product for the business, active and inactive alike —
+     * GetProducts only returns active ones by default. Used to build the
+     * "reactivate a deactivated product" screen.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getInventory(businessId) {
-        return this.#inventoriesEndpoint.getAllByParam('businessId', businessId);
+    getAllProductsIncludingInactive() {
+        return this.#productsEndpoint.getPage({ includeInactive: true, pageSize: 200 });
+    }
+
+    /**
+     * Reactivates a previously deactivated product (undoes DeleteProduct's
+     * soft delete).
+     * @param {number|string} id
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    activateProduct(id) {
+        return this.http.post(`${productsEndpointPath}/${id}/activate`);
+    }
+
+    /**
+     * Fetches all inventory records for the authenticated business. Scoped
+     * server-side by the JWT — InventoriesController only ever reads
+     * `?productId=`, never a businessId query parameter.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    getInventory() {
+        return this.#inventoriesEndpoint.getAll();
     }
 
     /**
@@ -101,6 +127,19 @@ export class ProductApi extends BaseApi {
      */
     getInventoryByProduct(productId) {
         return this.#inventoriesEndpoint.getAllByParam('productId', productId);
+    }
+
+    /**
+     * Manually adjusts a product's stock in one warehouse — shrinkage,
+     * breakage, theft, or a physical count correction (I25). Delta is
+     * signed: negative removes units, positive adds them. A reason is
+     * always required by the backend.
+     * @param {number|string} productId
+     * @param {{warehouseId: number, delta: number, reason: string}} resource
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    adjustStock(productId, resource) {
+        return this.http.post(`${inventoriesEndpointPath}/${productId}/adjustment`, resource);
     }
 
     /**
@@ -141,12 +180,25 @@ export class ProductApi extends BaseApi {
     }
 
     /**
-     * Creates a new batch resource for a product.
-     * @param {Object} resource
+     * Discards a batch whose goods left the shelf (thrown out, returned) —
+     * this is what stops an expired batch from alerting forever.
+     * @param {number|string} batchId
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    createBatch(resource) {
-        return this.#batchesEndpoint.create(resource);
+    discardBatch(batchId) {
+        return this.http.post(`${batchesEndpointPath}/${batchId}/discard`);
+    }
+
+    /**
+     * Sets/corrects a batch's expiration date after the fact — most useful
+     * right after a purchase order is received, since that intake has no
+     * expiration field of its own and lands the batch with none set.
+     * @param {number|string} batchId
+     * @param {string|null} expiration ISO date string (YYYY-MM-DD), or null to clear it.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    updateBatchExpiration(batchId, expiration) {
+        return this.http.patch(`${batchesEndpointPath}/${batchId}/expiration`, { expiration });
     }
 
     /**
@@ -161,12 +213,13 @@ export class ProductApi extends BaseApi {
     }
 
     /**
-     * Fetches all warehouses for a given business.
-     * @param {number|string} businessId
+     * Fetches all warehouses for the authenticated business. Scoped
+     * server-side by the JWT — WarehousesController has no query parameters
+     * at all.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getWarehouses(businessId) {
-        return this.#warehousesEndpoint.getAllByParam('businessId', businessId);
+    getWarehouses() {
+        return this.#warehousesEndpoint.getAll();
     }
 
     /**
@@ -179,21 +232,22 @@ export class ProductApi extends BaseApi {
     }
 
     /**
-     * Fetches all suppliers for a given business.
+     * Fetches all suppliers for the authenticated business.
      * Used to populate the supplier dropdown in the stock intake form.
-     * @param {number|string} businessId
+     * Scoped server-side by the JWT.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getSuppliers(businessId) {
-        return this.#suppliersEndpoint.getAllByParam('businessId', businessId);
+    getSuppliers() {
+        return this.#suppliersEndpoint.getAll();
     }
 
     /**
-     * Fetches all stock movement records for a given business.
-     * @param {number|string} businessId
+     * Fetches stock movement records for the authenticated business.
+     * Scoped server-side by the JWT. Paginated server-side (X4 S3); pageSize
+     * is set to the backend's hard cap (200).
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getStockMovements(businessId) {
-        return this.#stockMovementsEndpoint.getAllByParam('businessId', businessId);
+    getStockMovements() {
+        return this.#stockMovementsEndpoint.getPage({ pageSize: 200 });
     }
 }

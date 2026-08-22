@@ -3,7 +3,8 @@
  *
  * Business rules enforced here:
  * - fetchSuppliers and fetchPurchaseOrders are scoped to the authenticated business.
- * - A supplier cannot be deactivated while it has PENDING or DELAYED purchase orders.
+ * - A supplier cannot be deactivated while it has PENDING or DELAYED purchase
+ *   orders — enforced by the backend (409 Conflict).
  * - A purchase order requires at least one detail line before being submitted.
  * - A purchase order can only transition to RECEIVED or CANCELLED when its current
  *   status is PENDING or DELAYED; attempts on final states are silently rejected.
@@ -18,8 +19,10 @@ import { defineStore }  from 'pinia';
 import { computed, ref } from 'vue';
 import { SupplierApi }              from '../infrastructure/supplier.api.js';
 import { SupplierAssembler }        from '../infrastructure/supplier.assembler.js';
+import { todayLocalDateString }     from '../../shared/domain/model/local-date.js';
 import { PurchaseOrderAssembler }   from '../infrastructure/purchase-order.assembler.js';
 import { PurchaseOrder, PurchaseOrderStatus } from '../domain/model/purchase-order.entity.js';
+import { warnIfTruncated }          from '../../shared/infrastructure/pagination.js';
 
 const supplierApi = new SupplierApi();
 
@@ -36,9 +39,6 @@ const useSupplierStore = defineStore('supplier', () => {
 
     /** @type {import('vue').Ref<boolean>} */
     const purchaseOrdersLoaded = ref(false);
-
-    /** @type {import('vue').Ref<Error[]>} */
-    const errors = ref([]);
 
     // ─── Computed ──────────────────────────────────────────────────────────────
 
@@ -109,17 +109,22 @@ const useSupplierStore = defineStore('supplier', () => {
     // ─── Commands ──────────────────────────────────────────────────────────────
 
     /**
-     * Fetches all suppliers for the authenticated business.
-     * @param {number|string} businessId
+     * Fetches all suppliers for the authenticated business, active and
+     * inactive alike — this store is the single source both the supplier
+     * management page (which needs to show and reactivate inactive ones)
+     * and every picker (product form, purchase order form) read from; the
+     * pickers already filter to `.isActive` themselves (X4 M11), so there's
+     * no need for two separate fetches/caches here. Scoped server-side by
+     * the JWT, no businessId parameter needed or accepted.
      * @returns {Promise<void>}
      */
-    function fetchSuppliers(businessId) {
-        return supplierApi.getSuppliers(businessId)
+    function fetchSuppliers() {
+        return supplierApi.getSuppliers(true)
             .then(response => {
+                warnIfTruncated(response, 'Proveedores');
                 suppliers.value       = SupplierAssembler.toEntitiesFromResponse(response);
                 suppliersLoaded.value = true;
-            })
-            .catch(error => errors.value.push(error));
+            });
     }
 
     /**
@@ -135,16 +140,15 @@ const useSupplierStore = defineStore('supplier', () => {
      * each order's supplierName can be resolved regardless of whether the caller
      * happened to load suppliers first — this view can be reached directly
      * without visiting the Suppliers tab in the same session.
-     *
-     * @param {number|string} businessId
      */
-    function fetchPurchaseOrders(businessId) {
-        const suppliersReady = suppliersLoaded.value ? Promise.resolve() : fetchSuppliers(businessId);
+    function fetchPurchaseOrders() {
+        const suppliersReady = suppliersLoaded.value ? Promise.resolve() : fetchSuppliers();
 
         return suppliersReady
-            .then(() => supplierApi.getPurchaseOrders(businessId))
+            .then(() => supplierApi.getPurchaseOrders())
             .then(response => {
-                const rawOrders = Array.isArray(response.data) ? response.data : [];
+                warnIfTruncated(response, 'Órdenes de compra');
+                const rawOrders = Array.isArray(response.data) ? response.data : (response.data?.items ?? []);
                 purchaseOrders.value = rawOrders.map(rawOrder => {
                     const supplierEntity = suppliers.value.find(supplier => supplier.id === rawOrder.supplierId);
                     return PurchaseOrderAssembler.toEntityFromResource({
@@ -153,8 +157,7 @@ const useSupplierStore = defineStore('supplier', () => {
                     });
                 });
                 purchaseOrdersLoaded.value = true;
-            })
-            .catch(error => errors.value.push(error));
+            });
     }
 
     /**
@@ -169,10 +172,6 @@ const useSupplierStore = defineStore('supplier', () => {
                 const createdSupplier = SupplierAssembler.toEntityFromResource(response.data);
                 suppliers.value.push(createdSupplier);
                 return createdSupplier;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -189,10 +188,6 @@ const useSupplierStore = defineStore('supplier', () => {
                 const index = suppliers.value.findIndex(existingSupplier => existingSupplier.id === updatedSupplier.id);
                 if (index !== -1) suppliers.value[index] = updatedSupplier;
                 return updatedSupplier;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -204,25 +199,16 @@ const useSupplierStore = defineStore('supplier', () => {
      * but silently left the supplier active.
      *
      * Business rule: deactivation is blocked when the supplier has any
-     * PENDING or DELAYED purchase orders.
+     * PENDING or DELAYED purchase orders — enforced backend-side (409,
+     * localized message) since a client-only guard here duplicated that
+     * check with a hardcoded English message and could run against a
+     * `purchaseOrders` list that hadn't loaded yet.
      *
      * @param {number|string} supplierId
      * @returns {Promise<import('../domain/model/supplier.entity.js').Supplier>}
      */
     function deactivateSupplier(supplierId) {
         const numericId      = parseInt(supplierId);
-        const activeOrders   = purchaseOrders.value.filter(order =>
-            order.supplierId === numericId && order.isActionable
-        );
-
-        if (activeOrders.length > 0) {
-            const error = new Error(
-                `Cannot deactivate supplier #${numericId}: it has ${activeOrders.length} active order(s).`
-            );
-            errors.value.push(error);
-            return Promise.reject(error);
-        }
-
         const existingSupplier = suppliers.value.find(supplier => supplier.id === numericId);
         if (!existingSupplier) return Promise.reject(new Error(`Supplier #${numericId} not found.`));
 
@@ -232,10 +218,22 @@ const useSupplierStore = defineStore('supplier', () => {
                 const index = suppliers.value.findIndex(supplier => supplier.id === numericId);
                 if (index !== -1) suppliers.value[index] = updatedSupplier;
                 return updatedSupplier;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
+            });
+    }
+
+    /**
+     * X4 M11: undoes deactivateSupplier — there was no way back from it before.
+     * @param {number|string} supplierId
+     * @returns {Promise<import('../domain/model/supplier.entity.js').Supplier>}
+     */
+    function reactivateSupplier(supplierId) {
+        const numericId = parseInt(supplierId);
+        return supplierApi.reactivateSupplier(numericId)
+            .then(response => {
+                const updatedSupplier = SupplierAssembler.toEntityFromResource(response.data);
+                const index = suppliers.value.findIndex(supplier => supplier.id === numericId);
+                if (index !== -1) suppliers.value[index] = updatedSupplier;
+                return updatedSupplier;
             });
     }
 
@@ -268,9 +266,7 @@ const useSupplierStore = defineStore('supplier', () => {
      */
     function createPurchaseOrder(orderPayload) {
         if (!orderPayload.detailLines || orderPayload.detailLines.length === 0) {
-            const error = new Error('A purchase order requires at least one detail line.');
-            errors.value.push(error);
-            return Promise.reject(error);
+            return Promise.reject(new Error('A purchase order requires at least one detail line.'));
         }
 
         const invalidLines = orderPayload.detailLines.filter(
@@ -278,16 +274,14 @@ const useSupplierStore = defineStore('supplier', () => {
         );
 
         if (invalidLines.length > 0) {
-            const error = new Error('All purchase order lines must have quantity > 0 and unitPrice > 0.');
-            errors.value.push(error);
-            return Promise.reject(error);
+            return Promise.reject(new Error('All purchase order lines must have quantity > 0 and unitPrice > 0.'));
         }
 
         const supplierEntity = suppliers.value.find(supplier => supplier.id === parseInt(orderPayload.supplierId));
 
         const orderResource = {
             supplierId:   parseInt(orderPayload.supplierId),
-            date:         new Date().toISOString().slice(0, 10),
+            date:         todayLocalDateString(),
             expectedDate: orderPayload.expectedDate,
             currency:     'PEN',
             description:  orderPayload.description ?? '',
@@ -314,10 +308,6 @@ const useSupplierStore = defineStore('supplier', () => {
                 });
                 purchaseOrders.value.unshift(createdOrder);
                 return createdOrder;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -338,21 +328,12 @@ const useSupplierStore = defineStore('supplier', () => {
         if (!existingOrder) return Promise.reject(new Error(`Purchase order #${numericId} not found.`));
 
         if (!existingOrder.isActionable) {
-            const error = new Error(
+            return Promise.reject(new Error(
                 `Cannot update purchase order #${numericId}: it is already ${existingOrder.status}.`
-            );
-            errors.value.push(error);
-            return Promise.reject(error);
+            ));
         }
 
-        const resource = PurchaseOrderAssembler.toResourceFromEntity(existingOrder);
-        resource.status = newStatus;
-
-        if (newStatus === PurchaseOrderStatus.RECEIVED) {
-            resource.receivedDate = new Date().toISOString().slice(0, 10);
-        }
-
-        return supplierApi.updatePurchaseOrder(numericId, resource)
+        return supplierApi.updatePurchaseOrder(numericId, { status: newStatus })
             .then(response => {
                 const updatedOrder = PurchaseOrderAssembler.toEntityFromResource({
                     ...response.data,
@@ -362,10 +343,6 @@ const useSupplierStore = defineStore('supplier', () => {
                 const index = purchaseOrders.value.findIndex(order => order.id === numericId);
                 if (index !== -1) purchaseOrders.value[index] = updatedOrder;
                 return updatedOrder;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -374,7 +351,6 @@ const useSupplierStore = defineStore('supplier', () => {
         purchaseOrders,
         suppliersLoaded,
         purchaseOrdersLoaded,
-        errors,
         activeSupplierCount,
         pendingOrderCount,
         pendingOrderTotal,
@@ -387,6 +363,7 @@ const useSupplierStore = defineStore('supplier', () => {
         addSupplier,
         updateSupplier,
         deactivateSupplier,
+        reactivateSupplier,
         createPurchaseOrder,
         updatePurchaseOrderStatus
     };

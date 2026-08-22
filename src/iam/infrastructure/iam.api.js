@@ -72,6 +72,46 @@ export class IamApi extends BaseApi {
     }
 
     /**
+     * Ends the current session server-side: clears the httpOnly session
+     * cookie and revokes the token everywhere (see AuthenticationController).
+     * @returns {Promise<import('axios').AxiosResponse>} 204 No Content.
+     */
+    signOut() {
+        return this.http.post(`${authenticationEndpointPath}/sign-out`);
+    }
+
+    /**
+     * Requests a 6-digit password-reset code by email. Always resolves 200
+     * regardless of whether the email is registered — the backend won't say.
+     * @param {string} email
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    requestPasswordReset(email) {
+        return this.http.post(`${authenticationEndpointPath}/forgot-password`, { email });
+    }
+
+    /**
+     * Checks a reset code without consuming it.
+     * @param {string} email
+     * @param {string} code
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    verifyResetCode(email, code) {
+        return this.http.post(`${authenticationEndpointPath}/verify-reset-code`, { email, code });
+    }
+
+    /**
+     * Sets a new password against an already-verified code.
+     * @param {string} email
+     * @param {string} code
+     * @param {string} newPassword
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    resetPassword(email, code, newPassword) {
+        return this.http.post(`${authenticationEndpointPath}/reset-password`, { email, code, newPassword });
+    }
+
+    /**
      * Fetches all user accounts scoped to the given business.
      * @param {number|string} businessId
      * @returns {Promise<import('axios').AxiosResponse>} User resources for that business.
@@ -129,6 +169,24 @@ export class IamApi extends BaseApi {
      */
     deleteUser(id) {
         return this.#usersEndpoint.delete(id);
+    }
+
+    /**
+     * Suspends a team member's access without deleting the account.
+     * @param {number|string} id - User identifier.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    deactivateUser(id) {
+        return this.http.patch(`${usersEndpointPath}/${id}/deactivate`);
+    }
+
+    /**
+     * Restores a previously suspended team member's access.
+     * @param {number|string} id - User identifier.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    reactivateUser(id) {
+        return this.http.patch(`${usersEndpointPath}/${id}/reactivate`);
     }
 
     /**

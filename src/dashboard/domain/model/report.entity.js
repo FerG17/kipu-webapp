@@ -1,49 +1,55 @@
-import { ReportFilters } from './report-filters.entity.js';
-
 /**
- * Enumeration of the supported report types within the Dashboard & Analytics context.
- * Each type corresponds to a different data dimension of the business.
+ * Enumeration of the report types the real backend actually supports
+ * (ReportsController/Report.Type). "Low stock" and "replenishment" were
+ * frontend-only inventions with no server-side persistence or export —
+ * that data is already covered live by Inventario/Alertas, so they were
+ * dropped rather than adding backend scope for them.
  *
  * @enum {string}
  */
 export const ReportType = Object.freeze({
-    INVENTORY:     'INVENTORY',
-    SALES:         'SALES',
-    LOW_STOCK:     'LOW_STOCK',
-    REPLENISHMENT: 'REPLENISHMENT'
+    SALES:           'SALES',
+    INVENTORY:       'INVENTORY',
+    STOCK_MOVEMENTS: 'STOCK_MOVEMENTS'
 });
 
 /**
- * Report entity within the Dashboard & Analytics bounded context.
- * Represents a generated business report with its type, filters, and metadata.
- *
- * Business rules:
- * - type must be one of the values defined in ReportType.
- * - filters must be a valid ReportFilters instance with a valid date range.
- * - generatedAt is set server-side; the client treats it as read-only after creation.
+ * Report entity within the Dashboard & Analytics bounded context — mirrors
+ * ReportResource exactly (flat fields, no nested filters object): a
+ * persisted report's metadata. Its actual figures are never snapshotted —
+ * both generation and export re-run the same live query server-side.
  *
  * @class Report
  */
 export class Report {
     /**
-     * @param {Object} params - Entity attributes.
-     * @param {number|null}    [params.id=null]           - Report identifier.
-     * @param {number|null}    [params.businessId=null]    - Foreign key of the associated business.
-     * @param {string}         [params.type=ReportType.SALES] - Report type; must match a ReportType value.
-     * @param {ReportFilters}  [params.filters=null]       - Filter criteria applied when generating the report.
-     * @param {string}         [params.generatedAt='']     - ISO 8601 timestamp when the report was generated.
+     * @param {Object}      params
+     * @param {number|null} [params.id=null]
+     * @param {number|null} [params.businessId=null]
+     * @param {string}      [params.type=ReportType.SALES]
+     * @param {string|null} [params.dateFrom=null]   - 'yyyy-mm-dd', only meaningful for SALES/STOCK_MOVEMENTS.
+     * @param {string|null} [params.dateTo=null]     - 'yyyy-mm-dd'.
+     * @param {number|null} [params.productId=null]  - Only meaningful for STOCK_MOVEMENTS.
+     * @param {number|null} [params.supplierId=null] - Only meaningful for STOCK_MOVEMENTS.
+     * @param {string}      [params.generatedAt='']  - ISO 8601 timestamp, set server-side.
      */
     constructor({
                     id          = null,
                     businessId  = null,
                     type        = ReportType.SALES,
-                    filters     = null,
+                    dateFrom    = null,
+                    dateTo      = null,
+                    productId   = null,
+                    supplierId  = null,
                     generatedAt = ''
                 }) {
         this.id          = id;
         this.businessId  = businessId;
         this.type        = type;
-        this.filters     = filters instanceof ReportFilters ? filters : new ReportFilters(filters ?? {});
+        this.dateFrom    = dateFrom;
+        this.dateTo      = dateTo;
+        this.productId   = productId;
+        this.supplierId  = supplierId;
         this.generatedAt = generatedAt;
     }
 }

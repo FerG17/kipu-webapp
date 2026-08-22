@@ -1,11 +1,13 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import LanguageSwitcher from './language-switcher.vue';
 import useIamStore from '../../../iam/application/iam.store.js';
 import useAlertsStore from '../../../alerts/application/alerts.store.js';
+import { AlertStatus } from '../../../alerts/domain/model/alert.entity.js';
 import { roleLabelKey } from '../../../iam/presentation/role-labels.js';
+import { canAccessDashboard, canAccessSales, canAccessSuppliers } from '../../../iam/application/permissions.js';
 
 const { t }      = useI18n();
 const router     = useRouter();
@@ -25,6 +27,20 @@ onMounted(() => {
   if (businessId && !alertsStore.alertsLoaded) {
     alertsStore.fetchAlerts(businessId);
   }
+  if (!iamStore.rolesLoaded) {
+    iamStore.fetchRoles();
+  }
+});
+
+/**
+ * Retries fetchRoles() on every navigation while it hasn't succeeded yet —
+ * layout.vue only mounts once per session, so a transient failure on the
+ * initial load used to leave the sidebar (permission-gated items, role
+ * label) stuck in its degraded fallback state until a manual F5. This
+ * mirrors authentication.guard.js's own retry-on-navigate for the route
+ * check itself.
+ */
+watch(() => route.fullPath, () => {
   if (!iamStore.rolesLoaded) {
     iamStore.fetchRoles();
   }
@@ -62,26 +78,42 @@ function closeSidebar() {
 }
 
 /**
- * Navigation items for the sidebar menu.
+ * All navigation items for the sidebar menu.
  * Each entry maps a translation key, a PrimeIcons class and a route name.
- * The activeAlertCount badge is shown only for the alerts item.
+ * The activeAlertCount badge is shown only for the alerts item. `access`
+ * mirrors the route's own `meta.requiredPermission` guard (see
+ * authentication.guard.js) — a role that can't reach a route shouldn't see
+ * it in the menu either, so both stay in sync against the same predicate.
  */
-const menuItems = [
-  { labelKey: 'option.dashboard',  icon: 'pi pi-th-large',      routeName: 'dashboard'       },
-  { labelKey: 'option.inventory',  icon: 'pi pi-box',           routeName: 'products'        },
-  { labelKey: 'option.sales',      icon: 'pi pi-shopping-cart', routeName: 'pos-screen'      },
-  { labelKey: 'option.suppliers',  icon: 'pi pi-truck',         routeName: 'suppliers'       },
-  { labelKey: 'option.alerts',     icon: 'pi pi-bell',          routeName: 'alerts',         showBadge: true },
-  { labelKey: 'option.settings',   icon: 'pi pi-cog',           routeName: 'settings'        },
+const allMenuItems = [
+  { labelKey: 'option.dashboard',  icon: 'pi pi-th-large',      routeName: 'dashboard',  access: canAccessDashboard },
+  { labelKey: 'option.inventory',  icon: 'pi pi-box',           routeName: 'products'  },
+  { labelKey: 'option.sales',      icon: 'pi pi-shopping-cart', routeName: 'pos-screen', access: canAccessSales     },
+  { labelKey: 'option.suppliers',  icon: 'pi pi-truck',         routeName: 'suppliers',  access: canAccessSuppliers },
+  { labelKey: 'option.alerts',     icon: 'pi pi-bell',          routeName: 'alerts',     showBadge: true },
+  { labelKey: 'option.settings',   icon: 'pi pi-cog',           routeName: 'settings'  },
 ];
 
 /**
- * Number of active (non-resolved) alerts for the sidebar badge.
- * Business rule: only alerts with status !== 'RESOLVED' are counted.
+ * Sidebar items visible to the current role — every item without an
+ * `access` predicate is open to any role (Inventory/Alerts/Settings all
+ * have read access for everyone, per Fase B4's matrix).
+ * @type {import('vue').ComputedRef<Array>}
+ */
+const menuItems = computed(() =>
+    allMenuItems.filter(item => !item.access || item.access(iamStore.currentUserPosition))
+);
+
+/**
+ * Number of active alerts for the sidebar badge. Must match the dashboard's
+ * own "Activas" count (alerts.store.js#activeAlertsCount) — ACKNOWLEDGED is
+ * deliberately excluded (it's a real, distinct status the owner already
+ * acted on), not just "not resolved", or the badge disagrees with the
+ * screen the moment something gets acknowledged.
  * @type {import('vue').ComputedRef<number>}
  */
 const activeAlertCount = computed(() =>
-    alertsStore.alerts.filter(alert => alert.status !== 'RESOLVED').length
+    alertsStore.alerts.filter(alert => alert.status === AlertStatus.ACTIVE).length
 );
 
 /**
@@ -121,159 +153,112 @@ function isActiveRoute(routeName) {
  * a different business — would see stale data until a manual hard refresh.
  * A full reload guarantees every store starts clean, every time.
  */
-function handleSignOut() {
-  iamStore.signOut();
+async function handleSignOut() {
+  // Awaited so the backend sign-out call (clears the httpOnly cookie,
+  // revokes the token) completes before the full-page navigation below can
+  // cut it short.
+  await iamStore.signOut();
   window.location.href = router.resolve({ name: 'sign-in' }).href;
 }
 </script>
 
 <template>
-  <pv-toast/>
+  <pv-toast :breakpoints="{ '576px': { width: '92vw', left: '4vw', right: '4vw' } }"/>
   <pv-confirm-dialog/>
 
-  <div class="flex min-h-screen" style="background-color: #F8FAFC;">
+  <div class="bodega-shell flex min-h-screen">
 
     <!-- ── Mobile top bar ────────────────────────────────────────────── -->
-    <div
-        class="lg:hidden fixed top-0 left-0 right-0 z-50 flex align-items-center justify-content-between px-4"
-        style="height: 56px; background-color: #0B3558; border-bottom: 1px solid rgba(255,255,255,0.08);"
-    >
+    <div class="bodega-topbar lg:hidden fixed top-0 left-0 right-0 z-50 flex align-items-center justify-content-between px-4">
       <div class="flex align-items-center gap-2">
         <button
-            class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
-            style="width: 36px; height: 36px; background: none; color: #FAFAF7;"
+            class="bodega-icon-btn flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
             :aria-label="sidebarOpen ? t('sidebar.close-menu') : t('sidebar.open-menu')"
             :title="sidebarOpen ? t('sidebar.close-menu') : t('sidebar.open-menu')"
             @click="toggleSidebar"
         >
           <i :class="sidebarOpen ? 'pi pi-times' : 'pi pi-bars'" style="font-size: 1.1rem;"/>
         </button>
-        <img src="../../../assets/qullqa_logo.jpeg" alt="Bodega Platform" style="height: 32px; border-radius: 6px;"/>
-        <span style="color: #FAFAF7; font-weight: 700; font-size: 1rem;">Bodega Platform</span>
+        <div class="bodega-brand">
+          <span class="bodega-brand-mark" aria-hidden="true">K</span>
+          <span class="bodega-brand-name">Kipu</span>
+        </div>
       </div>
       <div class="flex align-items-center gap-2">
         <language-switcher/>
         <!-- Mobile alert badge -->
         <button
-            class="relative flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
+            class="bodega-icon-btn relative flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
             :class="{ 'alerts-btn-critical': hasCriticalAlerts }"
-            style="width: 40px; height: 40px; background: none; color: #FAFAF7;"
             :aria-label="t('option.alerts')"
             :title="t('option.alerts')"
             @click="navigateTo('alerts')"
         >
-          <i class="pi pi-bell" :style="{ fontSize: '1.3rem', color: hasCriticalAlerts ? '#F87171' : '#FAFAF7' }"/>
-          <span
-              v-if="activeAlertCount > 0"
-              class="absolute flex align-items-center justify-content-center border-circle"
-              style="top: 2px; right: 2px; width: 16px; height: 16px; background-color: #EF4444; color: #fff; font-size: 0.6rem; font-weight: 700;"
-          >
-                        {{ activeAlertCount > 9 ? '9+' : activeAlertCount }}
-                    </span>
+          <i class="pi pi-bell" :class="{ 'bodega-icon-critical': hasCriticalAlerts }" style="font-size: 1.3rem;"/>
+          <span v-if="activeAlertCount > 0" class="bodega-badge absolute flex align-items-center justify-content-center border-circle">
+            {{ activeAlertCount > 9 ? '9+' : activeAlertCount }}
+          </span>
         </button>
       </div>
     </div>
 
     <!-- ── Sidebar ───────────────────────────────────────────────────── -->
     <aside
-        class="fixed top-0 left-0 h-full z-40 flex flex-column"
-        style="
-                width: 224px;
-                background-color: #0B3558;
-                transition: transform 0.3s ease;
-                flex-shrink: 0;
-            "
+        class="bodega-sidebar fixed top-0 left-0 h-full z-40 flex flex-column"
         :style="{ transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' }"
     >
-      <!-- Logo (desktop only) -->
-      <div
-          class="hidden lg:flex flex-column align-items-center pt-5 pb-4 px-3"
-          style="border-bottom: 1px solid rgba(255,255,255,0.08);"
-      >
-        <img src="../../../assets/qullqa_logo.jpeg" alt="Bodega Platform" style="width: 48px; height: 48px; border-radius: 10px; object-fit: contain;"/>
-        <p class="m-0 mt-2" style="color: #FAFAF7; font-weight: 700; font-size: 1rem;">Bodega Platform</p>
-        <p class="m-0" style="color: #7FA8BF; font-size: 0.7rem;">Store Manager</p>
+      <!-- Brand mark (desktop only) -->
+      <div class="hidden lg:flex flex-column align-items-center pt-5 pb-4 px-3 bodega-sidebar-brand">
+        <span class="bodega-brand-mark bodega-brand-mark--lg" aria-hidden="true">K</span>
+        <p class="m-0 mt-2 bodega-sidebar-title">Kipu</p>
+        <p class="m-0 bodega-sidebar-subtitle">{{ t('sidebar.tagline') }}</p>
       </div>
 
       <!-- Navigation -->
-      <nav class="flex-1 py-4 px-2 overflow-y-auto" style="display: flex; flex-direction: column; gap: 2px;">
+      <nav class="flex-1 py-4 px-2 overflow-y-auto bodega-nav">
         <button
             v-for="item in menuItems"
             :key="item.labelKey"
-            class="relative w-full flex align-items-center gap-3 px-3 py-3 border-round-lg border-none cursor-pointer"
-            :style="{
-                        backgroundColor: isActiveRoute(item.routeName)
-                            ? 'rgba(14,116,144,0.25)'
-                            : (item.showBadge && hasCriticalAlerts ? 'rgba(239,68,68,0.14)' : 'transparent'),
-                        color:           isActiveRoute(item.routeName)
-                            ? '#FAFAF7'
-                            : (item.showBadge && hasCriticalAlerts ? '#FCA5A5' : '#93B5C9'),
-                        fontSize:        '0.88rem',
-                        fontWeight:      isActiveRoute(item.routeName) ? 600 : 400,
-                        transition:      'background-color 0.15s, color 0.15s'
-                    }"
+            class="bodega-nav-item relative w-full flex align-items-center gap-3 px-3 py-3 border-round-lg border-none cursor-pointer"
+            :class="{
+              'bodega-nav-item--active': isActiveRoute(item.routeName),
+              'bodega-nav-item--critical': item.showBadge && hasCriticalAlerts && !isActiveRoute(item.routeName)
+            }"
             @click="navigateTo(item.routeName)"
-            @mouseenter="(event) => { if (!isActiveRoute(item.routeName)) event.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; }"
-            @mouseleave="(event) => { if (!isActiveRoute(item.routeName)) event.currentTarget.style.backgroundColor = (item.showBadge && hasCriticalAlerts) ? 'rgba(239,68,68,0.14)' : 'transparent'; }"
         >
           <i :class="item.icon" style="font-size: 1rem; flex-shrink: 0;"/>
           <span>{{ t(item.labelKey) }}</span>
 
-          <!-- Alert badge -->
-          <span
-              v-if="item.showBadge && activeAlertCount > 0"
-              class="ml-auto flex align-items-center justify-content-center border-circle"
-              style="width: 18px; height: 18px; background-color: #EF4444; color: #fff; font-size: 0.62rem; font-weight: 700; flex-shrink: 0;"
-          >
-                        {{ activeAlertCount > 9 ? '9+' : activeAlertCount }}
-                    </span>
+          <span v-if="item.showBadge && activeAlertCount > 0" class="bodega-badge ml-auto flex align-items-center justify-content-center border-circle" style="position: static;">
+            {{ activeAlertCount > 9 ? '9+' : activeAlertCount }}
+          </span>
 
-          <!-- Active indicator bar -->
-          <div
-              v-if="isActiveRoute(item.routeName)"
-              class="absolute"
-              style="right: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 20px; background-color: #0E7490; border-radius: 2px 0 0 2px;"
-          />
+          <div v-if="isActiveRoute(item.routeName)" class="bodega-nav-active-bar absolute"/>
         </button>
       </nav>
 
       <!-- Language switcher (desktop sidebar) -->
-      <div
-          class="hidden lg:flex justify-content-center px-3 py-3"
-          style="border-top: 1px solid rgba(255,255,255,0.08);"
-      >
+      <div class="hidden lg:flex justify-content-center px-3 py-3 bodega-sidebar-footer-divider">
         <language-switcher/>
       </div>
 
       <!-- User info + logout -->
-      <div
-          class="px-2 pb-4"
-          style="border-top: 1px solid rgba(255,255,255,0.08);"
-      >
+      <div class="px-2 pb-4 bodega-sidebar-footer-divider">
         <div class="flex align-items-center gap-2 px-3 py-3">
-          <div
-              class="flex align-items-center justify-content-center border-circle flex-shrink-0"
-              style="width: 34px; height: 34px; background-color: #0E7490; font-size: 0.72rem; font-weight: 700; color: #FAFAF7;"
-          >
-            {{ iamStore.currentUser ? iamStore.currentUser.initials : 'Q' }}
+          <div class="bodega-avatar flex align-items-center justify-content-center border-circle flex-shrink-0">
+            {{ iamStore.currentUser ? iamStore.currentUser.initials : 'B' }}
           </div>
           <div style="min-width: 0; flex: 1;">
-            <p class="m-0" style="color: #FAFAF7; font-size: 0.78rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-              {{ iamStore.currentUser ? iamStore.currentUser.fullName : 'Bodega Platform' }}
+            <p class="m-0 bodega-sidebar-username">
+              {{ iamStore.currentUser ? iamStore.currentUser.fullName : 'Kipu' }}
             </p>
-            <p class="m-0" style="color: #7FA8BF; font-size: 0.68rem;">
+            <p class="m-0 bodega-sidebar-userrole">
               {{ currentUserRoleLabel }}
             </p>
           </div>
         </div>
 
-        <button
-            class="w-full flex align-items-center gap-3 px-3 py-2 border-round-lg border-none cursor-pointer"
-            style="background: transparent; color: #93B5C9; font-size: 0.85rem; transition: background-color 0.15s, color 0.15s;"
-            @click="handleSignOut"
-            @mouseenter="(event) => { event.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; event.currentTarget.style.color = '#FAFAF7'; }"
-            @mouseleave="(event) => { event.currentTarget.style.backgroundColor = 'transparent'; event.currentTarget.style.color = '#93B5C9'; }"
-        >
+        <button class="bodega-signout-btn w-full flex align-items-center gap-3 px-3 py-2 border-round-lg border-none cursor-pointer" @click="handleSignOut">
           <i class="pi pi-sign-out" style="font-size: 1rem;"/>
           <span>{{ t('sidebar.logout') }}</span>
         </button>
@@ -283,17 +268,13 @@ function handleSignOut() {
     <!-- Mobile overlay -->
     <div
         v-if="sidebarOpen"
-        class="fixed inset-0 z-30 lg:hidden"
-        style="background-color: rgba(0,0,0,0.5);"
+        class="fixed inset-0 z-30 lg:hidden bodega-overlay"
         @click="closeSidebar"
     />
 
     <!-- ── Main content ───────────────────────────────────────────────── -->
-    <main
-        class="flex-1 min-w-0"
-        style="margin-left: 0; transition: margin-left 0.3s ease; padding-top: 56px; display: flex; justify-content: center;"
-    >
-      <div class="px-4 py-6" style="width: 100%; max-width: 1200px;">
+    <main class="bodega-main flex-1 min-w-0">
+      <div class="px-4 py-6 bodega-main-inner">
         <router-view/>
       </div>
     </main>
@@ -302,26 +283,120 @@ function handleSignOut() {
 </template>
 
 <style scoped>
-aside {
+.bodega-shell {
+  background-color: var(--bg);
+}
+
+.bodega-topbar {
+  height: 56px;
+  background-color: var(--brand);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.bodega-brand { display: flex; align-items: center; gap: 8px; }
+.bodega-brand-mark {
+  width: 30px; height: 30px; border-radius: var(--radius-sm);
+  background: var(--brand-ink); color: var(--brand);
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 700; font-size: 1rem;
+  flex-shrink: 0;
+}
+.bodega-brand-mark--lg { width: 44px; height: 44px; font-size: 1.3rem; }
+.bodega-brand-name { color: var(--brand-ink); font-weight: 700; font-size: 1rem; font-family: var(--font-body); }
+
+.bodega-icon-btn {
+  width: 36px; height: 36px; background: none; color: var(--brand-ink); border: none;
+}
+.bodega-icon-critical { color: var(--status-critical-fg); }
+
+.bodega-badge {
+  top: 2px; right: 2px; width: 16px; height: 16px;
+  background-color: var(--status-critical-fg); color: #fff;
+  font-size: 0.6rem; font-weight: 700;
+}
+
+.bodega-sidebar {
+  width: 224px;
+  background-color: var(--brand);
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
   padding-top: 56px;
 }
 
-.alerts-btn-critical {
-  animation: alerts-critical-pulse 1.8s ease-in-out infinite;
+.bodega-sidebar-brand { border-bottom: 1px solid rgba(255,255,255,0.12); }
+.bodega-sidebar-title { color: var(--brand-ink); font-weight: 700; font-size: 1rem; font-family: var(--font-body); }
+.bodega-sidebar-subtitle { color: color-mix(in srgb, var(--brand-ink) 65%, transparent); font-size: 0.7rem; }
+
+.bodega-nav-item {
+  color: color-mix(in srgb, var(--brand-ink) 75%, transparent);
+  font-size: 0.88rem;
+  font-weight: 400;
+  background: transparent;
+  transition: background-color 0.15s, color 0.15s;
 }
+.bodega-nav-item:hover { background-color: rgba(255,255,255,0.08); }
+.bodega-nav-item--active {
+  background-color: color-mix(in srgb, var(--accent) 24%, transparent);
+  color: var(--brand-ink);
+  font-weight: 600;
+}
+.bodega-nav-item--critical {
+  /* Needs to read as MORE urgent than the plain active state, not less —
+     mixing the critical color down to 55% against --brand-ink (the old
+     value) landed weaker than --active's full-strength --brand-ink, so an
+     alert item ended up looking more washed out than an ordinary selected
+     one instead of standing out from it. */
+  background-color: color-mix(in srgb, var(--status-critical-fg) 28%, transparent);
+  color: var(--brand-ink);
+  font-weight: 600;
+}
+.bodega-nav-active-bar {
+  right: 0; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 20px; background-color: var(--accent);
+  border-radius: 2px 0 0 2px;
+}
+
+.bodega-sidebar-footer-divider { border-top: 1px solid rgba(255,255,255,0.12); }
+
+.bodega-avatar {
+  width: 34px; height: 34px;
+  background-color: var(--accent); color: var(--accent-ink);
+  font-size: 0.72rem; font-weight: 700; font-family: var(--font-body);
+}
+.bodega-sidebar-username {
+  color: var(--brand-ink); font-size: 0.78rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bodega-sidebar-userrole { color: color-mix(in srgb, var(--brand-ink) 65%, transparent); font-size: 0.68rem; }
+
+.bodega-signout-btn {
+  background: transparent; color: color-mix(in srgb, var(--brand-ink) 75%, transparent);
+  font-size: 0.85rem; transition: background-color 0.15s, color 0.15s;
+}
+.bodega-signout-btn:hover { background-color: rgba(255,255,255,0.08); color: var(--brand-ink); }
+
+.bodega-overlay { background-color: rgba(0,0,0,0.5); }
+
+.bodega-main { padding-top: 56px; display: flex; justify-content: center; }
+.bodega-main-inner { width: 100%; max-width: 1200px; }
+
+.alerts-btn-critical { animation: alerts-critical-pulse 1.8s ease-in-out infinite; }
 
 @keyframes alerts-critical-pulse {
   0%, 100% { background-color: transparent; }
-  50%      { background-color: rgba(239, 68, 68, 0.22); }
+  50%      { background-color: color-mix(in srgb, var(--status-critical-fg) 22%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alerts-btn-critical { animation: none; }
 }
 
 @media (min-width: 1024px) {
-  aside {
+  .bodega-sidebar {
     transform: translateX(0) !important;
     padding-top: 0 !important;
   }
-
-  main {
+  .bodega-main {
     margin-left: 224px !important;
     padding-top: 0 !important;
   }

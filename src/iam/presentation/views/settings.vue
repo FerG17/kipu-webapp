@@ -1,41 +1,73 @@
 <script setup>
-import { onMounted, ref, toRefs, watch } from 'vue';
+import { computed, onMounted, ref, toRefs, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useConfirm } from 'primevue';
+import { useConfirm, useToast } from 'primevue';
 import useIamStore from '../../application/iam.store.js';
+import useThemeStore from '../../../shared/application/theme.store.js';
 import LanguageSwitcher from '../../../shared/presentation/components/language-switcher.vue';
 import InviteUserModal from '../components/invite-user-modal.vue';
 import { roleLabelKey, roleStyleByPosition } from '../role-labels.js';
+import { canManageTeam, canEditBusinessProfile } from '../../application/permissions.js';
+import { isStrongPassword } from '../../domain/model/password-rules.js';
 
-const { t }    = useI18n();
-const confirm  = useConfirm();
-const iamStore = useIamStore();
+const { t }     = useI18n();
+const confirm   = useConfirm();
+const toast     = useToast();
+const iamStore  = useIamStore();
+const themeStore = useThemeStore();
 
-const { users, usersLoaded, rolesLoaded, currentBusiness, businessLoaded } = toRefs(iamStore);
-const { fetchUsers, fetchRoles, fetchBusiness, getRolePosition, deleteUser } = iamStore;
+/**
+ * Options for the theme segmented control, in the same shape the tab bar
+ * above already uses (key/labelKey/icon).
+ */
+const themeOptions = [
+  { key: 'light',  labelKey: 'settings.theme-light',  icon: 'pi pi-sun'     },
+  { key: 'dark',   labelKey: 'settings.theme-dark',   icon: 'pi pi-moon'    },
+  { key: 'system', labelKey: 'settings.theme-system', icon: 'pi pi-desktop' }
+];
+
+const { users, usersLoaded, usersLoadFailed, rolesLoaded, currentBusiness, businessLoaded } = toRefs(iamStore);
+const { fetchUsers, fetchRoles, fetchBusiness, getRolePosition, deleteUser, deactivateUser, reactivateUser } = iamStore;
 
 const activeTab = ref('profile');
 
-const tabs = [
+/**
+ * Whether the current role may manage the team (invite/remove users) — the
+ * backend's GET /users (team roster) is admin-only, so the Team tab isn't
+ * just write-gated, it's not even readable for CASHIER/WAREHOUSE.
+ * @type {import('vue').ComputedRef<boolean>}
+ */
+const canSeeTeamTab = computed(() => canManageTeam(iamStore.currentUserPosition));
+
+/**
+ * Whether the current role may edit the business's own profile fields
+ * (name/address) — admin only. Personal fields (name/phone) stay editable
+ * by anyone, self-o-admin per the backend.
+ * @type {import('vue').ComputedRef<boolean>}
+ */
+const canEditBusiness = computed(() => canEditBusinessProfile(iamStore.currentUserPosition));
+
+const tabs = computed(() => [
   { key: 'profile',     labelKey: 'settings.tab-profile',     icon: 'pi pi-user'      },
-  { key: 'users',       labelKey: 'settings.tab-users',       icon: 'pi pi-users'     },
+  ...(canSeeTeamTab.value ? [{ key: 'users', labelKey: 'settings.tab-users', icon: 'pi pi-users' }] : []),
   { key: 'preferences', labelKey: 'settings.tab-preferences', icon: 'pi pi-sliders-h' },
   { key: 'security',    labelKey: 'settings.tab-security',    icon: 'pi pi-shield'    }
-];
+]);
 
+// businessType is not user-editable — this product is a single bodega's own
+// system, not a multi-vertical SaaS, so there is nothing to pick. Kept as an
+// internal field (always "BODEGA", loaded from the real business record) so
+// saveProfile still sends a valid `type` to UpdateBusinessResource, which
+// requires one.
 const profileForm = ref({
   businessName: '',
   businessType: 'BODEGA',
   address:      '',
   phone:        '',
-  fullName:     iamStore.currentUser ? iamStore.currentUser.fullName : '',
-  email:        iamStore.currentUser ? iamStore.currentUser.email    : ''
+  firstName:    iamStore.currentUser ? iamStore.currentUser.firstName : '',
+  lastName:     iamStore.currentUser ? iamStore.currentUser.lastName  : '',
+  email:        iamStore.currentUser ? iamStore.currentUser.email     : ''
 });
-
-const businessTypeOptions = [
-  { value: 'BODEGA',   labelKey: 'sign-up.type-bodega'   },
-  { value: 'FARMACIA', labelKey: 'sign-up.type-farmacia' }
-];
 
 /** Populates the profile form once the business/user data has loaded. */
 function syncProfileFormFromStore() {
@@ -45,9 +77,10 @@ function syncProfileFormFromStore() {
     profileForm.value.address      = currentBusiness.value.address;
   }
   if (iamStore.currentUser) {
-    profileForm.value.fullName = iamStore.currentUser.fullName;
-    profileForm.value.email    = iamStore.currentUser.email;
-    profileForm.value.phone    = iamStore.currentUser.phone;
+    profileForm.value.firstName = iamStore.currentUser.firstName;
+    profileForm.value.lastName  = iamStore.currentUser.lastName;
+    profileForm.value.email     = iamStore.currentUser.email;
+    profileForm.value.phone     = iamStore.currentUser.phone;
   }
 }
 watch(currentBusiness, syncProfileFormFromStore);
@@ -63,11 +96,16 @@ const showNewPassword = ref(false);
 
 const showInviteModal = ref(false);
 
-const notificationsEnabled = ref(true);
-
 onMounted(() => {
-  if (!usersLoaded.value) fetchUsers(iamStore.currentUser?.businessId);
-  if (!rolesLoaded.value) fetchRoles();
+  const loadUsersIfAllowed = rolesLoaded.value
+      ? Promise.resolve()
+      : fetchRoles();
+  // GET /users (team roster) is admin-only server-side — only fetch it once
+  // the role is known to be ADMIN, instead of firing a request that always
+  // 403s for CASHIER/WAREHOUSE.
+  loadUsersIfAllowed.then(() => {
+    if (!usersLoaded.value && canSeeTeamTab.value) fetchUsers(iamStore.currentUser?.businessId);
+  });
   if (!businessLoaded.value && iamStore.currentUser?.businessId) {
     fetchBusiness(iamStore.currentUser.businessId).then(syncProfileFormFromStore);
   } else {
@@ -87,9 +125,14 @@ function resolveRoleStyle(roleId) {
   return roleStyleByPosition(getRolePosition(roleId));
 }
 
+/** An admin can't suspend or delete their own account — deactivating kills the session they'd need to undo it with. */
+function isSelf(userAccount) {
+  return iamStore.currentUser?.id === userAccount.id;
+}
+
 function resolveStatusStyle(status) {
-  if (status === 'ACTIVE') return { background: '#DCFCE7', color: '#16A34A', label: t('settings.status-active') };
-  return { background: '#F1F5F9', color: '#64748B', label: t('settings.status-inactive') };
+  if (status === 'ACTIVE') return { background: 'var(--status-ok-bg)', color: 'var(--status-ok-fg)', label: t('settings.status-active') };
+  return { background: 'var(--surface-alt)', color: 'var(--text-muted)', label: t('settings.status-inactive') };
 }
 
 function confirmDeleteUser(userAccount) {
@@ -98,13 +141,50 @@ function confirmDeleteUser(userAccount) {
     header:  t('settings.delete-user-header'),
     icon:    'pi pi-exclamation-triangle',
     accept:  () => deleteUser(userAccount)
+        .then(() => toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('settings.toast-delete-user-success', { name: userAccount.fullName }), life: 3500 }))
+        .catch(error => {
+          const title = error.response?.status === 409 ? error.response?.data?.title : null;
+          const detail = title === 'CannotRemoveLastAdmin' ? t('settings.toast-delete-last-admin-error')
+              : title === 'CannotRemoveOwnAccess' ? t('settings.toast-delete-own-account-error')
+              : t('settings.toast-user-action-error');
+          toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
+        })
   });
+}
+
+/**
+ * Suspends still needs confirmation (it kicks the person out immediately),
+ * reactivating doesn't — it only restores access, nothing destructive to walk back.
+ */
+function confirmDeactivateUser(userAccount) {
+  confirm.require({
+    message: t('settings.confirm-deactivate-user', { name: userAccount.fullName }),
+    header:  t('settings.deactivate-user-header'),
+    icon:    'pi pi-exclamation-triangle',
+    accept:  () => deactivateUser(userAccount)
+        .then(() => toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('settings.toast-deactivate-success', { name: userAccount.fullName }), life: 3500 }))
+        .catch(error => {
+          const isLastAdmin = error.response?.status === 409 && error.response?.data?.title === 'CannotRemoveLastAdmin';
+          toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: isLastAdmin ? t('settings.toast-last-admin-error') : t('settings.toast-user-action-error'), life: 4500 });
+        })
+  });
+}
+
+function reactivateUserAccount(userAccount) {
+  reactivateUser(userAccount)
+      .then(() => toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('settings.toast-reactivate-success', { name: userAccount.fullName }), life: 3500 }))
+      .catch(() => toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('settings.toast-user-action-error'), life: 4500 }));
 }
 
 /**
  * Persists the Profile tab (business fields + user fields) via the IAM store.
  * Both requests run in parallel since they touch independent aggregates
  * (Business and User).
+ *
+ * Business rule: `updateBusiness` is admin-only server-side — a non-admin
+ * skips it entirely instead of firing a request that always 403s, which
+ * used to mark the whole save as 'error' (Promise.all needs every result to
+ * succeed) even when their own personal fields saved fine.
  *
  * Business rule: re-syncs the form from both stores only after BOTH requests
  * have settled. The `watch(currentBusiness, ...)` below also re-syncs the
@@ -120,14 +200,17 @@ async function saveProfile() {
   profileSaveState.value = '';
 
   const [businessResult, userResult] = await Promise.all([
-    iamStore.updateBusiness({
-      name:    profileForm.value.businessName,
-      type:    profileForm.value.businessType,
-      address: profileForm.value.address
-    }),
+    canEditBusiness.value
+        ? iamStore.updateBusiness({
+          name:    profileForm.value.businessName,
+          type:    profileForm.value.businessType,
+          address: profileForm.value.address
+        })
+        : Promise.resolve({ success: true }),
     iamStore.updateUserProfile({
-      fullName: profileForm.value.fullName,
-      phone:    profileForm.value.phone
+      firstName: profileForm.value.firstName,
+      lastName:  profileForm.value.lastName,
+      phone:     profileForm.value.phone
     })
   ]);
   syncProfileFormFromStore();
@@ -141,9 +224,9 @@ async function submitPasswordChange() {
   securityErrors.value = { currentPassword: '', newPassword: '', confirmPassword: '' };
   securitySuccess.value = false;
   let isValid = true;
-  if (!securityForm.value.currentPassword)                                              { securityErrors.value.currentPassword = t('settings.error-current-password'); isValid = false; }
-  if (!securityForm.value.newPassword || securityForm.value.newPassword.length < 8)     { securityErrors.value.newPassword     = t('settings.error-new-password');     isValid = false; }
-  if (securityForm.value.newPassword !== securityForm.value.confirmPassword)            { securityErrors.value.confirmPassword  = t('settings.error-confirm-password'); isValid = false; }
+  if (!securityForm.value.currentPassword)                       { securityErrors.value.currentPassword = t('settings.error-current-password'); isValid = false; }
+  if (!isStrongPassword(securityForm.value.newPassword))          { securityErrors.value.newPassword     = t('settings.error-new-password');     isValid = false; }
+  if (securityForm.value.newPassword !== securityForm.value.confirmPassword) { securityErrors.value.confirmPassword = t('settings.error-confirm-password'); isValid = false; }
   if (!isValid) return;
 
   securitySubmitting.value = true;
@@ -151,7 +234,15 @@ async function submitPasswordChange() {
   securitySubmitting.value = false;
 
   if (!result.success) {
-    securityErrors.value.currentPassword = t(result.errorKey);
+    // WeakPassword belongs under the new-password field; everything else
+    // (wrong current password, a stale/conflicting write, network failure)
+    // reads more naturally attached to the current-password field, which
+    // is where this form already surfaces its one general error line.
+    if (result.errorKey === 'iam-errors.weak-password') {
+      securityErrors.value.newPassword = t(result.errorKey);
+    } else {
+      securityErrors.value.currentPassword = t(result.errorKey);
+    }
     return;
   }
 
@@ -172,7 +263,7 @@ function computePasswordStrength(password) {
   if (password.length < 10) return 3;
   return 4;
 }
-const strengthColors = ['', '#EF4444', '#FACC15', '#0E7490', '#16A34A'];
+const strengthColors = ['', 'var(--status-critical-fg)', 'var(--status-warning-fg)', 'var(--brand)', 'var(--status-ok-fg)'];
 const strengthLabelKeys = ['', 'sign-up.strength-weak', 'sign-up.strength-fair', 'sign-up.strength-good', 'sign-up.strength-strong'];
 function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabelKeys[level]) : ''; }
 </script>
@@ -183,38 +274,38 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
     <!-- ── Header ─────────────────────────────────────────────────── -->
     <div class="flex align-items-start justify-content-between flex-wrap gap-3">
       <div>
-        <h1 class="m-0" style="color: #0B3558; font-size: 1.5rem; font-weight: 700;">{{ t('settings.title') }}</h1>
-        <p class="m-0 mt-1" style="color: #64748B; font-size: 0.82rem;">Gestiona tu perfil, usuarios y preferencias del sistema</p>
+        <h1 class="m-0" style="color: var(--brand); font-size: 1.5rem; font-weight: 700;">{{ t('settings.title') }}</h1>
+        <p class="m-0 mt-1" style="color: var(--text-muted); font-size: 0.82rem;">{{ t('settings.subtitle') }}</p>
       </div>
       <!-- User avatar chip -->
-      <div v-if="iamStore.currentUser" class="flex align-items-center gap-3 px-4 py-2 border-round-xl" style="background-color: #ffffff; border: 1px solid #E2E8F0; box-shadow: 0 1px 4px rgba(0,0,0,0.04);">
-        <div class="flex align-items-center justify-content-center border-circle flex-shrink-0" style="width: 36px; height: 36px; background: linear-gradient(135deg, #0E7490, #0B3558); font-size: 0.8rem; font-weight: 700; color: #fff;">
+      <div v-if="iamStore.currentUser" class="flex align-items-center gap-3 px-4 py-2 border-round-xl" style="background-color: var(--surface); border: 1px solid var(--border); box-shadow: 0 1px 4px rgba(0,0,0,0.04);">
+        <div class="flex align-items-center justify-content-center border-circle flex-shrink-0" style="width: 36px; height: 36px; background: linear-gradient(135deg, var(--brand), var(--brand)); font-size: 0.8rem; font-weight: 700; color: var(--surface);">
           {{ iamStore.currentUser.initials }}
         </div>
         <div>
-          <p class="m-0" style="font-size: 0.85rem; font-weight: 600; color: #0B3558;">{{ iamStore.currentUser.fullName }}</p>
-          <p class="m-0" style="font-size: 0.72rem; color: #64748B;">{{ iamStore.currentUser.email }}</p>
+          <p class="m-0" style="font-size: 0.85rem; font-weight: 600; color: var(--brand);">{{ iamStore.currentUser.fullName }}</p>
+          <p class="m-0" style="font-size: 0.72rem; color: var(--text-muted);">{{ iamStore.currentUser.email }}</p>
         </div>
       </div>
     </div>
 
     <!-- ── Tabs ────────────────────────────────────────────────────── -->
     <div style="overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none;">
-      <div class="flex" style="gap: 2px; background-color: #F1F5F9; border-radius: 12px; padding: 4px; width: fit-content; min-width: 100%;">
+      <div class="flex" style="gap: 2px; background-color: var(--surface-alt); border-radius: 12px; padding: 4px; width: fit-content; min-width: 100%;">
         <button
             v-for="tab in tabs"
             :key="tab.key"
             class="flex align-items-center gap-2 px-4 py-2 border-round-lg border-none cursor-pointer"
             style="white-space: nowrap; font-size: 0.875rem; transition: all 0.18s;"
             :style="{
-              backgroundColor: activeTab === tab.key ? '#ffffff' : 'transparent',
-              color:           activeTab === tab.key ? '#0B3558' : '#64748B',
+              backgroundColor: activeTab === tab.key ? 'var(--surface)' : 'transparent',
+              color:           activeTab === tab.key ? 'var(--brand)' : 'var(--text-muted)',
               fontWeight:      activeTab === tab.key ? 700 : 400,
               boxShadow:       activeTab === tab.key ? '0 1px 6px rgba(0,0,0,0.10)' : 'none'
             }"
             @click="activeTab = tab.key"
         >
-          <i :class="tab.icon" style="font-size: 0.88rem;" :style="{ color: activeTab === tab.key ? '#0E7490' : '#94A3B8' }"/>
+          <i :class="tab.icon" style="font-size: 0.88rem;" :style="{ color: activeTab === tab.key ? 'var(--brand)' : 'var(--text-faint)' }"/>
           {{ t(tab.labelKey) }}
         </button>
       </div>
@@ -223,47 +314,45 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
     <!-- ══════════════════════════════════════════════════════════════
          TAB: PROFILE
     ═══════════════════════════════════════════════════════════════ -->
-    <div v-if="activeTab === 'profile'" class="border-round-xl overflow-hidden" style="background-color: #ffffff; border: 1px solid #E2E8F0; box-shadow: 0 1px 6px rgba(0,0,0,0.05);">
+    <div v-if="activeTab === 'profile'" class="border-round-xl overflow-hidden" style="background-color: var(--surface); border: 1px solid var(--border); box-shadow: 0 1px 6px rgba(0,0,0,0.05);">
 
       <!-- Profile avatar header -->
-      <div style="background: linear-gradient(135deg, #0B3558, #0E7490); padding: 2rem 1.5rem 3.5rem;">
+      <div style="background: linear-gradient(135deg, var(--brand), var(--brand)); padding: 2rem 1.5rem 3.5rem;">
         <div class="flex align-items-center gap-4">
-          <div class="flex align-items-center justify-content-center border-circle" style="width: 72px; height: 72px; background-color: rgba(255,255,255,0.15); backdrop-filter: blur(4px); border: 3px solid rgba(255,255,255,0.3); font-size: 1.6rem; font-weight: 700; color: #fff; flex-shrink: 0;">
+          <div class="flex align-items-center justify-content-center border-circle" style="width: 72px; height: 72px; background-color: rgba(255,255,255,0.15); backdrop-filter: blur(4px); border: 3px solid rgba(255,255,255,0.3); font-size: 1.6rem; font-weight: 700; color: var(--surface); flex-shrink: 0;">
             {{ iamStore.currentUser ? iamStore.currentUser.initials : '?' }}
           </div>
           <div>
-            <p class="m-0" style="font-size: 1.1rem; font-weight: 700; color: #fff;">{{ iamStore.currentUser ? iamStore.currentUser.fullName : '—' }}</p>
+            <p class="m-0" style="font-size: 1.1rem; font-weight: 700; color: var(--brand-ink);">{{ iamStore.currentUser ? iamStore.currentUser.fullName : '—' }}</p>
             <p class="m-0 mt-1" style="font-size: 0.82rem; color: rgba(255,255,255,0.7);">{{ iamStore.currentUser ? iamStore.currentUser.email : '—' }}</p>
-            <span v-if="iamStore.currentUser" class="inline-block mt-2 border-round-3xl px-2 py-1" style="background-color: rgba(255,255,255,0.15); font-size: 0.72rem; font-weight: 600; color: #7DD3E8;">{{ resolveRoleLabel(iamStore.currentUser.roleId) }}</span>
+            <span v-if="iamStore.currentUser" class="inline-block mt-2 border-round-3xl px-2 py-1" style="background-color: rgba(255,255,255,0.15); font-size: 0.72rem; font-weight: 600; color: var(--brand-ink);">{{ resolveRoleLabel(iamStore.currentUser.roleId) }}</span>
           </div>
         </div>
       </div>
 
       <!-- Form area (pulled up with negative margin) -->
       <div class="px-5 pb-5" style="margin-top: -1.5rem;">
-        <div class="border-round-xl p-5" style="background-color: #fff; border: 1px solid #E2E8F0; box-shadow: 0 2px 12px rgba(0,0,0,0.06);">
+        <div class="border-round-xl p-5" style="background-color: var(--surface); border: 1px solid var(--border); box-shadow: 0 2px 12px rgba(0,0,0,0.06);">
           <div class="flex align-items-center gap-2 mb-4">
-            <i class="pi pi-building" style="color: #0E7490; font-size: 0.9rem;"/>
-            <p class="m-0" style="font-size: 0.9rem; font-weight: 700; color: #0B3558;">{{ t('settings.profile-title') }}</p>
+            <i class="pi pi-building" style="color: var(--brand); font-size: 0.9rem;"/>
+            <p class="m-0" style="font-size: 0.9rem; font-weight: 700; color: var(--brand);">{{ t('settings.profile-title') }}</p>
           </div>
           <div class="settings-form-grid">
             <div class="settings-field">
               <label class="settings-label"><i class="pi pi-building" style="font-size: 0.7rem;"/> {{ t('settings.field-business-name') }}</label>
-              <input v-model="profileForm.businessName" type="text" class="settings-input"/>
-            </div>
-            <div class="settings-field">
-              <label class="settings-label"><i class="pi pi-tag" style="font-size: 0.7rem;"/> {{ t('settings.field-business-type') }}</label>
-              <select v-model="profileForm.businessType" class="settings-input">
-                <option v-for="option in businessTypeOptions" :key="option.value" :value="option.value">{{ t(option.labelKey) }}</option>
-              </select>
+              <input v-model="profileForm.businessName" type="text" class="settings-input" :disabled="!canEditBusiness" :title="!canEditBusiness ? t('settings.field-admin-only') : undefined"/>
             </div>
             <div class="settings-field">
               <label class="settings-label"><i class="pi pi-map-marker" style="font-size: 0.7rem;"/> {{ t('settings.field-address') }}</label>
-              <input v-model="profileForm.address" type="text" class="settings-input"/>
+              <input v-model="profileForm.address" type="text" class="settings-input" :disabled="!canEditBusiness" :title="!canEditBusiness ? t('settings.field-admin-only') : undefined"/>
             </div>
             <div class="settings-field">
-              <label class="settings-label"><i class="pi pi-user" style="font-size: 0.7rem;"/> {{ t('settings.field-full-name') }}</label>
-              <input v-model="profileForm.fullName" type="text" class="settings-input"/>
+              <label class="settings-label"><i class="pi pi-user" style="font-size: 0.7rem;"/> {{ t('settings.field-first-name') }}</label>
+              <input v-model="profileForm.firstName" type="text" class="settings-input" maxlength="50"/>
+            </div>
+            <div class="settings-field">
+              <label class="settings-label"><i class="pi pi-user" style="font-size: 0.7rem;"/> {{ t('settings.field-last-name') }}</label>
+              <input v-model="profileForm.lastName" type="text" class="settings-input" maxlength="50"/>
             </div>
             <div class="settings-field">
               <label class="settings-label"><i class="pi pi-phone" style="font-size: 0.7rem;"/> {{ t('settings.field-phone') }}</label>
@@ -274,20 +363,20 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
       </div>
 
       <div class="flex align-items-center justify-content-end gap-3 px-5 pb-5 pt-2">
-        <span v-if="profileSaveState === 'success'" style="color: #16A34A; font-size: 0.82rem; font-weight: 600;">
+        <span v-if="profileSaveState === 'success'" style="color: var(--status-ok-fg); font-size: 0.82rem; font-weight: 600;">
           <i class="pi pi-check-circle"/> {{ t('settings.save-success') }}
         </span>
-        <span v-else-if="profileSaveState === 'error'" style="color: #DC2626; font-size: 0.82rem; font-weight: 600;">
+        <span v-else-if="profileSaveState === 'error'" style="color: var(--status-critical-fg); font-size: 0.82rem; font-weight: 600;">
           <i class="pi pi-exclamation-circle"/> {{ t('settings.save-error') }}
         </span>
         <button
             class="flex align-items-center gap-2 px-5 py-2 border-round-xl border-none cursor-pointer"
-            style="background: linear-gradient(135deg, #0E7490, #0B3558); color: #fff; font-size: 0.9rem; font-weight: 700; box-shadow: 0 2px 10px rgba(14,116,144,0.3); transition: all 0.18s;"
+            style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.9rem; font-weight: 700; box-shadow: 0 2px 10px rgba(198,113,57,0.3); transition: all 0.18s;"
             :style="{ opacity: savingProfile ? 0.7 : 1, cursor: savingProfile ? 'not-allowed' : 'pointer' }"
             :disabled="savingProfile"
             @click="saveProfile"
-            @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(14,116,144,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
-            @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(14,116,144,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
+            @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(198,113,57,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
+            @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(198,113,57,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
         >
           <i v-if="savingProfile" class="pi pi-spin pi-spinner"/>
           <i v-else class="pi pi-check"/>
@@ -299,20 +388,20 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
     <!-- ══════════════════════════════════════════════════════════════
          TAB: USERS
     ═══════════════════════════════════════════════════════════════ -->
-    <div v-if="activeTab === 'users'" class="border-round-xl overflow-hidden" style="background-color: #ffffff; border: 1px solid #E2E8F0; box-shadow: 0 1px 6px rgba(0,0,0,0.05);">
+    <div v-if="activeTab === 'users'" class="border-round-xl overflow-hidden" style="background-color: var(--surface); border: 1px solid var(--border); box-shadow: 0 1px 6px rgba(0,0,0,0.05);">
       <!-- Header row -->
-      <div class="flex align-items-center justify-content-between px-5 py-4" style="border-bottom: 1px solid #E2E8F0; background-color: #F8FAFC;">
+      <div class="flex align-items-center justify-content-between px-5 py-4" style="border-bottom: 1px solid var(--border); background-color: var(--surface-alt);">
         <div class="flex align-items-center gap-2">
-          <i class="pi pi-users" style="color: #0E7490; font-size: 0.9rem;"/>
-          <h3 class="m-0" style="color: #0B3558; font-size: 0.92rem; font-weight: 700;">{{ t('settings.users-title') }}</h3>
-          <span v-if="usersLoaded" class="border-round-3xl px-2" style="background-color: #E0F2FE; color: #0E7490; font-size: 0.7rem; font-weight: 700; padding: 2px 8px;">{{ users.length }}</span>
+          <i class="pi pi-users" style="color: var(--brand); font-size: 0.9rem;"/>
+          <h3 class="m-0" style="color: var(--brand); font-size: 0.92rem; font-weight: 700;">{{ t('settings.users-title') }}</h3>
+          <span v-if="usersLoaded" class="border-round-3xl px-2" style="background-color: var(--brand-soft); color: var(--brand); font-size: 0.7rem; font-weight: 700; padding: 2px 8px;">{{ users.length }}</span>
         </div>
         <button
             class="flex align-items-center gap-2 px-4 py-2 border-round-xl border-none cursor-pointer"
-            style="background: linear-gradient(135deg, #0E7490, #0B3558); color: #fff; font-size: 0.82rem; font-weight: 700; box-shadow: 0 2px 8px rgba(14,116,144,0.3); transition: all 0.18s;"
+            style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.82rem; font-weight: 700; box-shadow: 0 2px 8px rgba(198,113,57,0.3); transition: all 0.18s;"
             @click="showInviteModal = true"
-            @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(14,116,144,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
-            @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(14,116,144,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
+            @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(198,113,57,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
+            @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(198,113,57,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
         >
           <i class="pi pi-user-plus" style="font-size: 0.82rem;"/>
           {{ t('settings.invite-user') }}
@@ -325,10 +414,21 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
           @invited="handleUserInvited"
       />
 
+      <!-- Load failed -->
+      <div v-if="usersLoadFailed" class="flex flex-column justify-content-center align-items-center gap-3 py-8">
+        <i class="pi pi-exclamation-triangle" style="font-size: 1.3rem; color: var(--status-critical-fg);"/>
+        <span style="color: var(--text-muted); font-size: 0.88rem;">{{ t('settings.error-load-users') }}</span>
+        <button
+            class="border-round-lg border-none cursor-pointer px-3 py-2"
+            style="background: var(--surface-alt); color: var(--text); font-size: 0.82rem; font-weight: 600;"
+            @click="fetchUsers(iamStore.currentUser?.businessId)"
+        >{{ t('common.retry') }}</button>
+      </div>
+
       <!-- Loading -->
-      <div v-if="!usersLoaded" class="flex justify-content-center align-items-center gap-3 py-8">
-        <i class="pi pi-spin pi-spinner" style="font-size: 1.3rem; color: #0E7490;"/>
-        <span style="color: #64748B; font-size: 0.88rem;">Cargando usuarios…</span>
+      <div v-else-if="!usersLoaded" class="flex justify-content-center align-items-center gap-3 py-8">
+        <i class="pi pi-spin pi-spinner" style="font-size: 1.3rem; color: var(--brand);"/>
+        <span style="color: var(--text-muted); font-size: 0.88rem;">{{ t('settings.loading-users') }}</span>
       </div>
 
       <div v-else>
@@ -338,14 +438,14 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
               v-for="(userAccount, index) in users"
               :key="userAccount.id"
               class="flex align-items-start gap-3 p-4"
-              :style="{ borderBottom: index < users.length - 1 ? '1px solid #F1F5F9' : 'none' }"
+              :style="{ borderBottom: index < users.length - 1 ? '1px solid var(--surface-alt)' : 'none' }"
           >
-            <div class="flex align-items-center justify-content-center border-circle flex-shrink-0" style="width: 40px; height: 40px; background: linear-gradient(135deg, #0E7490, #0B3558); font-size: 0.8rem; font-weight: 700; color: #fff;">
+            <div class="flex align-items-center justify-content-center border-circle flex-shrink-0" style="width: 40px; height: 40px; background: linear-gradient(135deg, var(--brand), var(--brand)); font-size: 0.8rem; font-weight: 700; color: var(--surface);">
               {{ userAccount.initials }}
             </div>
             <div style="flex: 1; min-width: 0;">
-              <p class="m-0" style="color: #1E293B; font-weight: 700; font-size: 0.9rem;">{{ userAccount.fullName }}</p>
-              <p class="m-0 mt-1" style="color: #64748B; font-size: 0.78rem;">{{ userAccount.email }}</p>
+              <p class="m-0" style="color: var(--text); font-weight: 700; font-size: 0.9rem;">{{ userAccount.fullName }}</p>
+              <p class="m-0 mt-1" style="color: var(--text-muted); font-size: 0.78rem;">{{ userAccount.email }}</p>
               <div class="flex align-items-center gap-2 mt-2 flex-wrap">
                 <span
                     class="border-round-2xl px-2 py-1"
@@ -363,15 +463,28 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
                 </span>
               </div>
             </div>
-            <button
-                class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer flex-shrink-0"
-                style="width: 32px; height: 32px; background: none; transition: background-color 0.15s;"
-                @click="confirmDeleteUser(userAccount)"
-                @mouseenter="(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'"
-                @mouseleave="(e) => e.currentTarget.style.backgroundColor = 'transparent'"
-            >
-              <i class="pi pi-trash" style="color: #EF4444; font-size: 0.85rem;"/>
-            </button>
+            <div v-if="!isSelf(userAccount)" class="flex align-items-center gap-1 flex-shrink-0">
+              <button
+                  class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
+                  style="width: 32px; height: 32px; background: none; transition: background-color 0.15s;"
+                  :title="userAccount.status === 'ACTIVE' ? t('settings.action-deactivate') : t('settings.action-reactivate')"
+                  @click="userAccount.status === 'ACTIVE' ? confirmDeactivateUser(userAccount) : reactivateUserAccount(userAccount)"
+                  @mouseenter="(e) => e.currentTarget.style.backgroundColor = 'var(--status-warning-bg)'"
+                  @mouseleave="(e) => e.currentTarget.style.backgroundColor = 'transparent'"
+              >
+                <i :class="userAccount.status === 'ACTIVE' ? 'pi pi-lock' : 'pi pi-lock-open'" style="color: var(--status-warning-fg); font-size: 0.85rem;"/>
+              </button>
+              <button
+                  class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
+                  style="width: 32px; height: 32px; background: none; transition: background-color 0.15s;"
+                  :title="t('settings.delete-user-header')"
+                  @click="confirmDeleteUser(userAccount)"
+                  @mouseenter="(e) => e.currentTarget.style.backgroundColor = 'var(--status-critical-bg)'"
+                  @mouseleave="(e) => e.currentTarget.style.backgroundColor = 'transparent'"
+              >
+                <i class="pi pi-trash" style="color: var(--status-critical-fg); font-size: 0.85rem;"/>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -379,10 +492,10 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
         <div class="hidden lg:block" style="overflow-x: auto;">
           <table style="width: 100%; border-collapse: collapse;">
             <thead>
-            <tr style="background: linear-gradient(to right, #F8FAFC, #F1F5F9); border-bottom: 2px solid #E2E8F0;">
+            <tr style="background: linear-gradient(to right, var(--surface-alt), var(--surface-alt)); border-bottom: 2px solid var(--border);">
               <th v-for="col in [t('settings.col-name'), t('settings.col-email'), t('settings.col-role'), t('settings.col-status'), t('settings.col-actions')]"
                   :key="col" class="py-3 px-4 text-left"
-                  style="color: #64748B; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;"
+                  style="color: var(--text-muted); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;"
                   :style="{ textAlign: col === t('settings.col-actions') ? 'right' : 'left' }"
               >{{ col }}</th>
             </tr>
@@ -392,17 +505,17 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
                 v-for="userAccount in users"
                 :key="userAccount.id"
                 class="user-row"
-                style="border-bottom: 1px solid #F1F5F9; transition: background-color 0.1s;"
+                style="border-bottom: 1px solid var(--surface-alt); transition: background-color 0.1s;"
             >
               <td class="py-3 px-4">
                 <div class="flex align-items-center gap-3">
-                  <div class="flex align-items-center justify-content-center border-circle flex-shrink-0" style="width: 34px; height: 34px; background: linear-gradient(135deg, #0E7490, #0B3558); font-size: 0.72rem; font-weight: 700; color: #fff;">
+                  <div class="flex align-items-center justify-content-center border-circle flex-shrink-0" style="width: 34px; height: 34px; background: linear-gradient(135deg, var(--brand), var(--brand)); font-size: 0.72rem; font-weight: 700; color: var(--surface);">
                     {{ userAccount.initials }}
                   </div>
-                  <span style="color: #1E293B; font-weight: 600; font-size: 0.88rem;">{{ userAccount.fullName }}</span>
+                  <span style="color: var(--text); font-weight: 600; font-size: 0.88rem;">{{ userAccount.fullName }}</span>
                 </div>
               </td>
-              <td class="py-3 px-4" style="color: #64748B; font-size: 0.875rem;">{{ userAccount.email }}</td>
+              <td class="py-3 px-4" style="color: var(--text-muted); font-size: 0.875rem;">{{ userAccount.email }}</td>
               <td class="py-3 px-4">
                 <span
                     class="border-round-2xl px-3 py-1"
@@ -423,24 +536,38 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
                 </span>
               </td>
               <td class="py-3 px-4 text-right">
-                <button
-                    class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer ml-auto"
-                    style="width: 32px; height: 32px; background: none; transition: all 0.15s;"
-                    @click="confirmDeleteUser(userAccount)"
-                    @mouseenter="(e) => { e.currentTarget.style.backgroundColor = '#FEE2E2'; e.currentTarget.style.transform = 'scale(1.1)'; }"
-                    @mouseleave="(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }"
-                >
-                  <i class="pi pi-trash" style="color: #EF4444; font-size: 0.85rem;"/>
-                </button>
+                <div v-if="!isSelf(userAccount)" class="flex align-items-center justify-content-end gap-1">
+                  <button
+                      class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
+                      style="width: 32px; height: 32px; background: none; transition: all 0.15s;"
+                      :title="userAccount.status === 'ACTIVE' ? t('settings.action-deactivate') : t('settings.action-reactivate')"
+                      @click="userAccount.status === 'ACTIVE' ? confirmDeactivateUser(userAccount) : reactivateUserAccount(userAccount)"
+                      @mouseenter="(e) => { e.currentTarget.style.backgroundColor = 'var(--status-warning-bg)'; e.currentTarget.style.transform = 'scale(1.1)'; }"
+                      @mouseleave="(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }"
+                  >
+                    <i :class="userAccount.status === 'ACTIVE' ? 'pi pi-lock' : 'pi pi-lock-open'" style="color: var(--status-warning-fg); font-size: 0.85rem;"/>
+                  </button>
+                  <button
+                      class="flex align-items-center justify-content-center border-round-lg border-none cursor-pointer"
+                      style="width: 32px; height: 32px; background: none; transition: all 0.15s;"
+                      :title="t('settings.delete-user-header')"
+                      @click="confirmDeleteUser(userAccount)"
+                      @mouseenter="(e) => { e.currentTarget.style.backgroundColor = 'var(--status-critical-bg)'; e.currentTarget.style.transform = 'scale(1.1)'; }"
+                      @mouseleave="(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }"
+                  >
+                    <i class="pi pi-trash" style="color: var(--status-critical-fg); font-size: 0.85rem;"/>
+                  </button>
+                </div>
+                <span v-else style="color: var(--text-faint); font-size: 0.72rem;">—</span>
               </td>
             </tr>
             </tbody>
           </table>
           <div v-if="!users.length" class="flex flex-column align-items-center py-10 gap-3">
-            <div class="flex align-items-center justify-content-center border-round-xl" style="width: 56px; height: 56px; background-color: #F1F5F9;">
-              <i class="pi pi-users" style="font-size: 1.5rem; color: #CBD5E1;"/>
+            <div class="flex align-items-center justify-content-center border-round-xl" style="width: 56px; height: 56px; background-color: var(--surface-alt);">
+              <i class="pi pi-users" style="font-size: 1.5rem; color: var(--text-faint);"/>
             </div>
-            <p class="m-0" style="color: #94A3B8; font-size: 0.88rem;">No hay usuarios registrados</p>
+            <p class="m-0" style="color: var(--text-faint); font-size: 0.88rem;">{{ t('settings.no-users') }}</p>
           </div>
         </div>
       </div>
@@ -449,52 +576,57 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
     <!-- ══════════════════════════════════════════════════════════════
          TAB: PREFERENCES
     ═══════════════════════════════════════════════════════════════ -->
-    <div v-if="activeTab === 'preferences'" class="border-round-xl overflow-hidden" style="background-color: #ffffff; border: 1px solid #E2E8F0; box-shadow: 0 1px 6px rgba(0,0,0,0.05);">
-      <div class="px-5 py-4 flex align-items-center gap-2" style="border-bottom: 1px solid #E2E8F0; background-color: #F8FAFC;">
-        <i class="pi pi-sliders-h" style="color: #0E7490; font-size: 0.9rem;"/>
-        <h3 class="m-0" style="color: #0B3558; font-size: 0.92rem; font-weight: 700;">{{ t('settings.preferences-title') }}</h3>
+    <div v-if="activeTab === 'preferences'" class="border-round-xl overflow-hidden" style="background-color: var(--surface); border: 1px solid var(--border); box-shadow: 0 1px 6px rgba(0,0,0,0.05);">
+      <div class="px-5 py-4 flex align-items-center gap-2" style="border-bottom: 1px solid var(--border); background-color: var(--surface-alt);">
+        <i class="pi pi-sliders-h" style="color: var(--brand); font-size: 0.9rem;"/>
+        <h3 class="m-0" style="color: var(--brand); font-size: 0.92rem; font-weight: 700;">{{ t('settings.preferences-title') }}</h3>
       </div>
       <div class="px-5 py-4" style="display: flex; flex-direction: column; gap: 0;">
 
-        <!-- Language row -->
-        <div class="flex align-items-center justify-content-between py-4" style="border-bottom: 1px solid #F1F5F9;">
+        <!-- Theme row -->
+        <div class="flex align-items-center justify-content-between py-4 flex-wrap gap-3" style="border-bottom: 1px solid var(--surface-alt);">
           <div class="flex align-items-center gap-3">
-            <div class="flex align-items-center justify-content-center border-round-lg flex-shrink-0" style="width: 40px; height: 40px; background-color: #E0F2FE;">
-              <i class="pi pi-globe" style="color: #0E7490; font-size: 1rem;"/>
+            <div class="flex align-items-center justify-content-center border-round-lg flex-shrink-0" style="width: 40px; height: 40px; background-color: var(--brand-soft);">
+              <i class="pi pi-sun" style="color: var(--brand); font-size: 1rem;"/>
             </div>
             <div>
-              <p class="m-0" style="color: #1E293B; font-weight: 600; font-size: 0.9rem;">{{ t('settings.language-label') }}</p>
-              <p class="m-0 mt-1" style="color: #64748B; font-size: 0.78rem;">Idioma de la interfaz</p>
+              <p class="m-0" style="color: var(--text); font-weight: 600; font-size: 0.9rem;">{{ t('settings.theme-label') }}</p>
+              <p class="m-0 mt-1" style="color: var(--text-muted); font-size: 0.78rem;">{{ t('settings.theme-desc') }}</p>
+            </div>
+          </div>
+          <div class="flex" style="gap: 2px; background-color: var(--surface-alt); border-radius: 10px; padding: 3px;">
+            <button
+                v-for="option in themeOptions"
+                :key="option.key"
+                type="button"
+                class="flex align-items-center gap-2 px-3 py-2 border-round-lg border-none cursor-pointer"
+                style="white-space: nowrap; font-size: 0.82rem; transition: all 0.18s;"
+                :style="{
+                  backgroundColor: themeStore.mode === option.key ? 'var(--surface)' : 'transparent',
+                  color:           themeStore.mode === option.key ? 'var(--brand)' : 'var(--text-muted)',
+                  fontWeight:      themeStore.mode === option.key ? 700 : 400,
+                  boxShadow:       themeStore.mode === option.key ? '0 1px 6px rgba(0,0,0,0.10)' : 'none'
+                }"
+                @click="themeStore.setMode(option.key)"
+            >
+              <i :class="option.icon" style="font-size: 0.85rem;"/>
+              <span class="hidden sm:inline">{{ t(option.labelKey) }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Language row -->
+        <div class="flex align-items-center justify-content-between py-4">
+          <div class="flex align-items-center gap-3">
+            <div class="flex align-items-center justify-content-center border-round-lg flex-shrink-0" style="width: 40px; height: 40px; background-color: var(--brand-soft);">
+              <i class="pi pi-globe" style="color: var(--brand); font-size: 1rem;"/>
+            </div>
+            <div>
+              <p class="m-0" style="color: var(--text); font-weight: 600; font-size: 0.9rem;">{{ t('settings.language-label') }}</p>
+              <p class="m-0 mt-1" style="color: var(--text-muted); font-size: 0.78rem;">{{ t('settings.language-desc') }}</p>
             </div>
           </div>
           <language-switcher/>
-        </div>
-
-        <!-- Notifications row -->
-        <div class="flex align-items-start justify-content-between py-4">
-          <div class="flex align-items-start gap-3">
-            <div class="flex align-items-center justify-content-center border-round-lg flex-shrink-0" style="width: 40px; height: 40px;" :style="{ backgroundColor: notificationsEnabled ? '#DCFCE7' : '#F1F5F9' }">
-              <i class="pi pi-bell" style="font-size: 1rem;" :style="{ color: notificationsEnabled ? '#16A34A' : '#94A3B8' }"/>
-            </div>
-            <div style="padding-right: 1rem;">
-              <p class="m-0" style="color: #1E293B; font-weight: 600; font-size: 0.9rem;">{{ t('settings.notifications-label') }}</p>
-              <p class="m-0 mt-1" style="color: #64748B; font-size: 0.78rem; line-height: 1.4;">{{ t('settings.notifications-desc') }}</p>
-            </div>
-          </div>
-          <!-- Toggle -->
-          <button
-              type="button"
-              class="flex-shrink-0"
-              style="width: 48px; height: 26px; border-radius: 13px; border: none; cursor: pointer; transition: background-color 0.2s; position: relative; margin-top: 2px;"
-              :style="{ backgroundColor: notificationsEnabled ? '#0E7490' : '#CBD5E1' }"
-              @click="notificationsEnabled = !notificationsEnabled"
-          >
-            <span
-                class="absolute"
-                style="width: 20px; height: 20px; border-radius: 50%; background-color: #fff; top: 3px; transition: left 0.2s; box-shadow: 0 1px 4px rgba(0,0,0,0.25);"
-                :style="{ left: notificationsEnabled ? '25px' : '3px' }"
-            />
-          </button>
         </div>
       </div>
     </div>
@@ -502,19 +634,19 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
     <!-- ══════════════════════════════════════════════════════════════
          TAB: SECURITY
     ═══════════════════════════════════════════════════════════════ -->
-    <div v-if="activeTab === 'security'" class="border-round-xl overflow-hidden" style="background-color: #ffffff; border: 1px solid #E2E8F0; box-shadow: 0 1px 6px rgba(0,0,0,0.05);">
-      <div class="px-5 py-4 flex align-items-center gap-2" style="border-bottom: 1px solid #E2E8F0; background-color: #F8FAFC;">
-        <i class="pi pi-shield" style="color: #0E7490; font-size: 0.9rem;"/>
-        <h3 class="m-0" style="color: #0B3558; font-size: 0.92rem; font-weight: 700;">{{ t('settings.security-title') }}</h3>
+    <div v-if="activeTab === 'security'" class="border-round-xl overflow-hidden" style="background-color: var(--surface); border: 1px solid var(--border); box-shadow: 0 1px 6px rgba(0,0,0,0.05);">
+      <div class="px-5 py-4 flex align-items-center gap-2" style="border-bottom: 1px solid var(--border); background-color: var(--surface-alt);">
+        <i class="pi pi-shield" style="color: var(--brand); font-size: 0.9rem;"/>
+        <h3 class="m-0" style="color: var(--brand); font-size: 0.92rem; font-weight: 700;">{{ t('settings.security-title') }}</h3>
       </div>
       <div class="p-5">
 
         <!-- Success banner -->
-        <div v-if="securitySuccess" class="flex align-items-center gap-3 p-4 border-round-xl mb-4" style="background-color: #F0FDF4; border: 1.5px solid #86EFAC;">
-          <div class="flex align-items-center justify-content-center border-round-lg flex-shrink-0" style="width: 36px; height: 36px; background-color: #DCFCE7;">
-            <i class="pi pi-check-circle" style="color: #16A34A; font-size: 1rem;"/>
+        <div v-if="securitySuccess" class="flex align-items-center gap-3 p-4 border-round-xl mb-4" style="background-color: var(--status-ok-bg); border: 1.5px solid color-mix(in srgb, var(--status-ok-fg) 35%, transparent);">
+          <div class="flex align-items-center justify-content-center border-round-lg flex-shrink-0" style="width: 36px; height: 36px; background-color: var(--status-ok-bg);">
+            <i class="pi pi-check-circle" style="color: var(--status-ok-fg); font-size: 1rem;"/>
           </div>
-          <p class="m-0" style="color: #15803D; font-size: 0.9rem; font-weight: 600;">{{ t('settings.success-password') }}</p>
+          <p class="m-0" style="color: var(--status-ok-fg); font-size: 0.9rem; font-weight: 600;">{{ t('settings.success-password') }}</p>
         </div>
 
         <form @submit.prevent="submitPasswordChange" style="max-width: 480px; display: flex; flex-direction: column; gap: 1.25rem;">
@@ -530,10 +662,10 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
             <label class="settings-label"><i class="pi pi-key" style="font-size: 0.7rem;"/> {{ t('settings.new-password') }}</label>
             <div class="relative">
               <input v-model="securityForm.newPassword" :type="showNewPassword ? 'text' : 'password'" class="settings-input" style="padding-right: 44px;"/>
-              <button type="button" class="absolute" style="right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94A3B8; cursor: pointer; padding: 4px; border-radius: 6px; display: flex; transition: color 0.15s;"
+              <button type="button" class="absolute" style="right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-faint); cursor: pointer; padding: 4px; border-radius: 6px; display: flex; transition: color 0.15s;"
                 @click="showNewPassword = !showNewPassword"
-                @mouseenter="(e) => e.currentTarget.style.color = '#0E7490'"
-                @mouseleave="(e) => e.currentTarget.style.color = '#94A3B8'"
+                @mouseenter="(e) => e.currentTarget.style.color = 'var(--brand)'"
+                @mouseleave="(e) => e.currentTarget.style.color = 'var(--text-faint)'"
               >
                 <i :class="showNewPassword ? 'pi pi-eye-slash' : 'pi pi-eye'" style="font-size: 0.9rem;"/>
               </button>
@@ -541,7 +673,7 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
             <div v-if="securityForm.newPassword.length > 0" class="flex align-items-center gap-2 mt-1">
               <div class="flex gap-1 flex-1">
                 <div v-for="i in [1,2,3,4]" :key="i" class="flex-1 border-round-lg" style="height: 4px; transition: background-color 0.3s;"
-                  :style="{ backgroundColor: computePasswordStrength(securityForm.newPassword) >= i ? strengthColors[computePasswordStrength(securityForm.newPassword)] : '#E2E8F0' }"
+                  :style="{ backgroundColor: computePasswordStrength(securityForm.newPassword) >= i ? strengthColors[computePasswordStrength(securityForm.newPassword)] : 'var(--border)' }"
                 />
               </div>
               <span style="font-size: 0.72rem; font-weight: 600; min-width: 42px; text-align: right;" :style="{ color: strengthColors[computePasswordStrength(securityForm.newPassword)] }">
@@ -561,11 +693,11 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
           <button
               type="submit"
               class="flex align-items-center gap-2 px-5 py-2 border-round-xl border-none cursor-pointer"
-              style="background: linear-gradient(135deg, #0E7490, #0B3558); color: #fff; font-size: 0.9rem; font-weight: 700; width: fit-content; box-shadow: 0 2px 10px rgba(14,116,144,0.3); transition: all 0.18s;"
+              style="background: linear-gradient(135deg, var(--brand), var(--brand)); color: var(--surface); font-size: 0.9rem; font-weight: 700; width: fit-content; box-shadow: 0 2px 10px rgba(198,113,57,0.3); transition: all 0.18s;"
               :style="{ opacity: securitySubmitting ? 0.7 : 1, cursor: securitySubmitting ? 'not-allowed' : 'pointer' }"
               :disabled="securitySubmitting"
-              @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(14,116,144,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
-              @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(14,116,144,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
+              @mouseenter="(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(198,113,57,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)'; }"
+              @mouseleave="(e) => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(198,113,57,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }"
           >
             <i v-if="securitySubmitting" class="pi pi-spin pi-spinner"/>
             <i v-else class="pi pi-lock"/>
@@ -593,33 +725,37 @@ function strengthLabel(level) { return strengthLabelKeys[level] ? t(strengthLabe
 
 .settings-label {
   display: flex; align-items: center; gap: 5px;
-  font-size: 0.8rem; font-weight: 700; color: #374151;
+  font-size: 0.8rem; font-weight: 700; color: var(--text);
   letter-spacing: 0.02em;
 }
 
 .settings-input {
   width: 100%; border-radius: 10px;
   padding: 10px 14px;
-  background-color: #F8FAFC;
-  border: 1.5px solid #E2E8F0;
-  color: #0B3558; font-size: 0.9rem;
+  background-color: var(--surface-alt);
+  border: 1.5px solid var(--border);
+  color: var(--text); font-size: 0.9rem;
   outline: none; transition: all 0.18s;
   box-sizing: border-box; font-family: inherit;
 }
+.settings-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
 .settings-input:focus {
-  border-color: #0E7490;
-  background-color: #fff;
-  box-shadow: 0 0 0 3px rgba(14,116,144,0.12);
+  border-color: var(--brand);
+  background-color: var(--surface);
+  box-shadow: 0 0 0 3px rgba(198,113,57,0.12);
 }
 
 .settings-error {
   margin: 2px 0 0;
-  font-size: 0.77rem; color: #DC2626;
+  font-size: 0.77rem; color: var(--status-critical-fg);
   display: flex; align-items: center; gap: 4px;
 }
 
 /* Table rows */
-.user-row:hover { background-color: #F8FBFF; }
+.user-row:hover { background-color: var(--surface-alt); }
 
 /* Hide scrollbar on tab bar */
 div[style*="overflow-x: auto"]::-webkit-scrollbar { display: none; }

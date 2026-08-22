@@ -28,7 +28,24 @@ export class CustomerAssembler {
             console.error(`CustomerAssembler error — status: ${response.status}, message: ${response.statusText}`);
             return [];
         }
-        const resources = response.data instanceof Array ? response.data : response.data['customers'];
+        const resources = response.data instanceof Array ? response.data : (response.data.items ?? response.data['customers']);
         return resources.map(resource => this.toEntityFromResource(resource));
+    }
+
+    /**
+     * Builds the exact payload the real backend accepts for create/update
+     * (`CreateCustomerResource`/`UpdateCustomerResource`: FullName,
+     * DocumentNumber, PhoneNumber, Email — nothing else). id/businessId
+     * come from the JWT and the URL, not the body.
+     * @param {Customer} customer
+     * @returns {Object}
+     */
+    static toResourceFromEntity(customer) {
+        return {
+            fullName:       customer.fullName,
+            documentNumber: customer.documentNumber,
+            phoneNumber:    customer.phoneNumber,
+            email:          customer.email
+        };
     }
 }

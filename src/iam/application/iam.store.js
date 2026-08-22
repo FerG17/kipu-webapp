@@ -4,9 +4,10 @@
  *
  * Business rules enforced here:
  * - Sign-in requires a non-empty email containing '@' and a non-empty password.
- * - Password must match the stored value (client-side check against mock API).
- * - Sign-up requires a business name, a full name, a valid email, a password
- *   of at least 6 characters, and matching confirmation.
+ * - Password is verified server-side (BCrypt) — never compared client-side.
+ * - Sign-up requires a business name, first/last name, a valid email, and a
+ *   password of at least 8 characters (matches the backend's
+ *   SignUpCommandValidator).
  * - Only one user can be authenticated at a time (currentUser).
  *
  * @module useIamStore
@@ -19,6 +20,7 @@ import { UserAccountAssembler } from '../infrastructure/user-account.assembler.j
 import { BusinessAssembler } from '../infrastructure/business.assembler.js';
 import { UserAccount } from '../domain/model/user-account.entity.js';
 import { SESSION_EXPIRED_EVENT } from '../../shared/infrastructure/base-api.js';
+import { resolveIamErrorKey } from '../domain/model/iam-error-messages.js';
 
 const iamApi = new IamApi();
 const authProvider = new AuthProvider();
@@ -60,6 +62,13 @@ const useIamStore = defineStore('iam', () => {
     const usersLoaded = ref(false);
 
     /**
+     * Whether the last fetchUsers() call failed — lets the Team tab show a
+     * "couldn't load, retry" state instead of spinning forever.
+     * @type {import('vue').Ref<boolean>}
+     */
+    const usersLoadFailed = ref(false);
+
+    /**
      * Whether the role list has been loaded from the API.
      * @type {import('vue').Ref<boolean>}
      */
@@ -88,7 +97,16 @@ const useIamStore = defineStore('iam', () => {
      * authenticated user (and its businessId) survives a page reload.
      * @type {string}
      */
-    const SESSION_STORAGE_KEY = 'bodega.session';
+    const SESSION_STORAGE_KEY = 'kipu.session';
+
+    /**
+     * sessionStorage key the sign-in page checks on mount to tell "your
+     * session expired" apart from a deliberate sign-out — set right before
+     * the full-page reload the SESSION_EXPIRED_EVENT listener below
+     * triggers, read and cleared by sign-in.vue.
+     * @type {string}
+     */
+    const SESSION_EXPIRED_MESSAGE_KEY = 'kipu.session-expired';
 
     /**
      * Serialises a UserAccount entity into a plain resource (password excluded)
@@ -142,12 +160,72 @@ const useIamStore = defineStore('iam', () => {
         }
     }
 
-    restoreSession();
+    /**
+     * Re-fetches the current user's own record from the server and
+     * overwrites the locally cached session with it — defense in depth
+     * against a role/status tampered with in localStorage (devtools). The
+     * backend already rejects any real privilege escalation on every
+     * endpoint; this only keeps what the UI *shows* (sidebar, route guard)
+     * in sync so a stale/edited local copy doesn't linger for a whole
+     * session. Best-effort: a network failure here just leaves the cached
+     * session as-is — a genuine auth failure (401) is already handled by
+     * the SESSION_EXPIRED_EVENT listener below.
+     * @returns {void}
+     */
+    function revalidateSession() {
+        if (!currentUser.value) return;
+        iamApi.getUserById(currentUser.value.id).then(response => {
+            currentUser.value = UserAccountAssembler.toEntityFromResource(response.data);
+            persistSession(currentUser.value);
+        }).catch(() => {});
+    }
 
-    // When BaseApi sees a 401, it clears the token and dispatches this event.
-    // Wired here (not in BaseApi) so the shared/infrastructure layer never
-    // depends on IAM. Never fires today since no real token is issued yet.
-    window.addEventListener(SESSION_EXPIRED_EVENT, () => signOut());
+    restoreSession();
+    revalidateSession();
+
+    // When BaseApi sees a 401 on a non-auth endpoint (session cookie
+    // missing/expired/revoked), it dispatches this event. Wired here (not in
+    // BaseApi) so the shared/infrastructure layer never depends on IAM.
+    // isAuthenticated is flipped to false synchronously, before any await —
+    // a burst of parallel 401s (several requests in flight when the session
+    // dies) dispatches this event more than once, and since nothing yields
+    // to another handler until after that flip, only the first one passes
+    // the guard and calls clearLocalSession(). Reloads to /sign-in the same
+    // way layout.vue's manual sign-out does, rather than leaving the user
+    // parked on a now-broken page behind the scenes.
+    //
+    // Deliberately does NOT call the real /sign-out endpoint the way a
+    // manual sign-out does. This session is already dead server-side — the
+    // 401 that got us here proves it — so there is nothing valid left to
+    // revoke for THIS session. But /sign-out's job is "invalidate this
+    // user's TokenVersion everywhere" (see User.RevokeAllSessions, one
+    // counter shared by every session/device/tab), so calling it from an
+    // auto-triggered cleanup would also kill any OTHER session that is
+    // still perfectly valid — e.g. the very tab that just changed its own
+    // password and got a freshly reissued cookie a moment earlier. Confirmed
+    // this exact cascade manually: change password in tab B, tab A's next
+    // click called /sign-out and logged tab B out too.
+    window.addEventListener(SESSION_EXPIRED_EVENT, () => {
+        if (!isAuthenticated.value) return;
+        isAuthenticated.value = false;
+        sessionStorage.setItem(SESSION_EXPIRED_MESSAGE_KEY, '1');
+        clearLocalSession();
+        window.location.href = '/sign-in';
+    });
+
+    /**
+     * Clears local session state only — no backend call. Shared by the
+     * auto-triggered session-expiry cleanup above and by signOut() below,
+     * which layers the real backend revocation on top for a deliberate,
+     * user-initiated sign-out.
+     * @returns {void}
+     */
+    function clearLocalSession() {
+        currentUser.value     = null;
+        isAuthenticated.value = false;
+        errors.value          = [];
+        clearSession();
+    }
 
     /**
      * Number of loaded user accounts.
@@ -190,33 +268,30 @@ const useIamStore = defineStore('iam', () => {
 
     /**
      * Registers a new user and business account.
-     * Business rule: businessName, fullName, valid email, password >= 6 chars,
-     * and password confirmation must match (enforced by the Sign Up view).
+     * Business rule: firstName, lastName, businessName, a valid email and a
+     * password of at least 8 characters (matching the backend's
+     * SignUpCommandValidator) are all required — enforced by the Sign Up view.
      *
-     * Phase 2: the backend creates the User and its Business atomically in a
-     * single request and returns a JWT — this used to be a client-side chain
-     * of 3 calls (create user → create business → PUT user to link them),
-     * which is exactly the shape of bug that left businessId permanently null
-     * if any step failed partway. The backend also no longer provisions a
-     * default warehouse here (that's Product & Inventory's job once that
-     * bounded context exists — see the backend's TODO in
-     * UserCommandService.Handle(SignUpCommand)), so a freshly-registered
-     * business has zero warehouses until Phase 3.
+     * The backend creates the User and its Business atomically in a single
+     * request, provisions the business's default "Almacén Principal"
+     * warehouse in the same transaction, and returns a JWT — no separate
+     * client-side steps or follow-up calls needed.
      *
      * @param {Object} payload - Registration form data.
      * @param {string} payload.businessName - Name of the business.
-     * @param {string} [payload.businessType] - BODEGA or FARMACIA.
-     * @param {string} payload.fullName - Full name of the user.
+     * @param {string} [payload.businessType] - Always BusinessType.BODEGA today.
+     * @param {string} payload.firstName - User's first name.
+     * @param {string} payload.lastName - User's last name.
      * @param {string} payload.email - Email address.
-     * @param {string} payload.password - Password (min 6 characters).
+     * @param {string} payload.password - Password (min 8 characters).
      * @returns {Promise<import('../domain/model/user-account.entity.js').UserAccount>}
      */
     function signUp(payload) {
         errors.value = [];
 
         const resource = {
-            name:         payload.fullName.split(' ')[0] ?? payload.fullName,
-            lastName:     payload.fullName.split(' ').slice(1).join(' ') ?? '',
+            name:         payload.firstName,
+            lastName:     payload.lastName,
             email:        payload.email,
             password:     payload.password,
             businessName: payload.businessName,
@@ -237,27 +312,34 @@ const useIamStore = defineStore('iam', () => {
     }
 
     /**
-     * Signs the current user out and clears session state.
-     * @returns {void}
+     * Ends the session server-side (clears the httpOnly cookie, revokes the
+     * token) and clears local session state. Awaited by callers (see
+     * layout.vue) before navigating away, so the backend call has a chance
+     * to complete before the page unloads.
+     * @returns {Promise<void>}
      */
-    function signOut() {
-        currentUser.value     = null;
-        isAuthenticated.value = false;
-        errors.value          = [];
-        clearSession();
+    async function signOut() {
+        await authProvider.signOut();
+        clearLocalSession();
     }
 
     /**
      * Loads all user accounts scoped to the given business from the API.
+     * usersLoadFailed lets the Team tab show a "couldn't load, retry" state
+     * instead of spinning forever — usersLoaded is deliberately NOT set on
+     * failure, since that would render as "loaded, zero users" rather than
+     * "failed to load".
      * @param {number|string} businessId
      * @returns {void}
      */
     function fetchUsers(businessId) {
+        usersLoadFailed.value = false;
         iamApi.getUsers(businessId).then(response => {
             users.value      = UserAccountAssembler.toEntitiesFromResponse(response);
             usersLoaded.value = true;
         }).catch(error => {
             errors.value.push(error.message);
+            usersLoadFailed.value = true;
         });
     }
 
@@ -266,10 +348,16 @@ const useIamStore = defineStore('iam', () => {
      * role labels — presentation components must resolve a roleId to its
      * `position` (ADMIN/CASHIER/WAREHOUSE) via getRolePosition instead of
      * hardcoding their own numeric-id-to-label mapping.
-     * @returns {void}
+     *
+     * Returns its promise (unlike most fire-and-forget fetches in this store)
+     * so the router guard can await it before deciding whether the current
+     * role may enter a permission-gated route — roles are otherwise only
+     * fetched lazily on layout mount, which would race the very first
+     * navigation after sign-in.
+     * @returns {Promise<void>}
      */
     function fetchRoles() {
-        iamApi.getRoles().then(response => {
+        return iamApi.getRoles().then(response => {
             roles.value = response.data instanceof Array ? response.data : [];
             rolesLoaded.value = true;
         }).catch(error => {
@@ -287,6 +375,16 @@ const useIamStore = defineStore('iam', () => {
         const role = roles.value.find(roleItem => roleItem.id === numericId);
         return role ? role.position : null;
     }
+
+    /**
+     * The current user's role position (ADMIN/CASHIER/WAREHOUSE), the single
+     * value every UI permission check in `permissions.js` is keyed on. Null
+     * until both the session and the roles catalog have loaded.
+     * @type {import('vue').ComputedRef<string|null>}
+     */
+    const currentUserPosition = computed(() =>
+        currentUser.value ? getRolePosition(currentUser.value.roleId) : null
+    );
 
     /**
      * Loads the business (tenant) the given identifier points to.
@@ -334,29 +432,34 @@ const useIamStore = defineStore('iam', () => {
     }
 
     /**
-     * Updates profile fields (full name, phone) of the currently authenticated user.
-     * Fetches the raw stored resource first and merges changes into it, since
-     * the mock's PUT replaces the entire resource and the UserAccount entity
-     * intentionally excludes the password field — merging avoids wiping it.
+     * Updates profile fields (first name, last name, phone) of the currently
+     * authenticated user.
+     *
+     * This used to accept one "fullName" field, fetch the full stored user
+     * resource, and merge a client-side `fullName.split(' ')` into it before
+     * PATCHing the whole thing back — built for a mock backend whose PUT
+     * replaced the entire resource. The real backend's PATCH endpoint
+     * (`UpdateUserProfileResource`) only ever reads Name/LastName/Phone from
+     * the body regardless of what else is sent, so neither the fetch nor the
+     * merge is needed — and the split silently produced an empty last name
+     * for anyone with a single-word full name.
      *
      * @param {Object} fields
-     * @param {string} fields.fullName
+     * @param {string} fields.firstName
+     * @param {string} fields.lastName
      * @param {string} [fields.phone]
      * @returns {Promise<{success: boolean}>}
      */
-    async function updateUserProfile({ fullName, phone }) {
+    async function updateUserProfile({ firstName, lastName, phone }) {
         if (!currentUser.value) return { success: false };
 
         try {
-            const existingResponse = await iamApi.getUserById(currentUser.value.id);
-            const nameParts = fullName.trim().split(' ');
-            const updatedResource = {
-                ...existingResponse.data,
-                name:     nameParts[0] ?? existingResponse.data.name,
-                lastName: nameParts.slice(1).join(' '),
-                phone:    phone ?? existingResponse.data.phone ?? ''
-            };
-            const response = await iamApi.updateUser(updatedResource);
+            const response = await iamApi.updateUser({
+                id:       currentUser.value.id,
+                name:     firstName,
+                lastName: lastName,
+                phone:    phone ?? currentUser.value.phone ?? ''
+            });
             currentUser.value = UserAccountAssembler.toEntityFromResource(response.data);
             persistSession(currentUser.value);
             return { success: true };
@@ -386,11 +489,61 @@ const useIamStore = defineStore('iam', () => {
             await iamApi.changePassword(currentUser.value.id, currentPassword, newPassword);
             return { success: true, errorKey: null };
         } catch (error) {
-            if (error?.response?.status === 401) {
-                return { success: false, errorKey: 'settings.error-current-password-invalid' };
-            }
             errors.value.push(error);
-            return { success: false, errorKey: 'settings.error-password-change-failed' };
+            return { success: false, errorKey: resolveIamErrorKey(error, 'settings.error-password-change-failed') };
+        }
+    }
+
+    /**
+     * Requests a 6-digit password-reset code by email. The backend itself
+     * never reveals whether the email is registered — it answers 200
+     * whether or not an account exists — so `success: true` here only means
+     * the request reached the server; it is not proof an email was sent.
+     * A real failure (network error, 4xx/5xx) still needs to surface so the
+     * caller doesn't advance the wizard on a request that never landed.
+     * @param {string} email
+     * @returns {Promise<{success: boolean}>}
+     */
+    async function requestPasswordReset(email) {
+        try {
+            await iamApi.requestPasswordReset(email);
+            return { success: true };
+        } catch (error) {
+            errors.value.push(error);
+            return { success: false };
+        }
+    }
+
+    /**
+     * Checks a reset code without consuming it.
+     * @param {string} email
+     * @param {string} code
+     * @returns {Promise<{success: boolean, errorKey: string|null}>}
+     */
+    async function verifyResetCode(email, code) {
+        try {
+            await iamApi.verifyResetCode(email, code);
+            return { success: true, errorKey: null };
+        } catch (error) {
+            errors.value.push(error);
+            return { success: false, errorKey: resolveIamErrorKey(error, 'forgot-password.error-invalid-code') };
+        }
+    }
+
+    /**
+     * Sets a new password against an already-verified code.
+     * @param {string} email
+     * @param {string} code
+     * @param {string} newPassword
+     * @returns {Promise<{success: boolean, errorKey: string|null}>}
+     */
+    async function resetPassword(email, code, newPassword) {
+        try {
+            await iamApi.resetPassword(email, code, newPassword);
+            return { success: true, errorKey: null };
+        } catch (error) {
+            errors.value.push(error);
+            return { success: false, errorKey: resolveIamErrorKey(error, 'forgot-password.error-reset-failed') };
         }
     }
 
@@ -418,7 +571,7 @@ const useIamStore = defineStore('iam', () => {
      *
      * @param {UserAccount} userAccount - UserAccount entity to persist (no password).
      * @param {string} password - Temporary password assigned to the invited user.
-     * @returns {Promise<{success: boolean}>}
+     * @returns {Promise<{success: boolean, errorKey: string|null}>}
      */
     async function addUser(userAccount, password) {
         const resource = UserAccountAssembler.toResourceFromEntity(userAccount, { password });
@@ -427,10 +580,10 @@ const useIamStore = defineStore('iam', () => {
             const response = await iamApi.inviteUser(resource);
             const newUser = UserAccountAssembler.toEntityFromResource(response.data);
             users.value.push(newUser);
-            return { success: true };
+            return { success: true, errorKey: null };
         } catch (error) {
             errors.value.push(error.message ?? error);
-            return { success: false };
+            return { success: false, errorKey: resolveIamErrorKey(error, 'settings.invite-error-generic') };
         }
     }
 
@@ -462,17 +615,41 @@ const useIamStore = defineStore('iam', () => {
     }
 
     /**
-     * Deletes a user account and removes it from local state.
+     * Deletes a user account and removes it from local state. Rejects (e.g.
+     * "last active admin") are left for the caller to catch and show as a
+     * toast — same pattern as deactivateUser.
      * @param {UserAccount} userAccount - UserAccount entity to remove.
-     * @returns {void}
+     * @returns {Promise<void>}
      */
-    function deleteUser(userAccount) {
-        iamApi.deleteUser(userAccount.id).then(() => {
-            const index = users.value.findIndex(user => user.id === userAccount.id);
-            if (index !== -1) users.value.splice(index, 1);
-        }).catch(error => {
-            errors.value.push(error.message);
-        });
+    async function deleteUser(userAccount) {
+        await iamApi.deleteUser(userAccount.id);
+        const index = users.value.findIndex(user => user.id === userAccount.id);
+        if (index !== -1) users.value.splice(index, 1);
+    }
+
+    /**
+     * Suspends a team member's access without deleting the account —
+     * updates the local status pill immediately so the table reflects it
+     * without a full refetch. Rejects (e.g. "last active admin") are left
+     * for the caller to catch and show as a toast.
+     * @param {UserAccount} userAccount - UserAccount entity to suspend.
+     * @returns {Promise<void>}
+     */
+    async function deactivateUser(userAccount) {
+        await iamApi.deactivateUser(userAccount.id);
+        const user = users.value.find(user => user.id === userAccount.id);
+        if (user) user.status = 'INACTIVE';
+    }
+
+    /**
+     * Restores a previously suspended team member's access.
+     * @param {UserAccount} userAccount - UserAccount entity to reactivate.
+     * @returns {Promise<void>}
+     */
+    async function reactivateUser(userAccount) {
+        await iamApi.reactivateUser(userAccount.id);
+        const user = users.value.find(user => user.id === userAccount.id);
+        if (user) user.status = 'ACTIVE';
     }
 
     return {
@@ -481,6 +658,7 @@ const useIamStore = defineStore('iam', () => {
         roles,
         currentBusiness,
         usersLoaded,
+        usersLoadFailed,
         rolesLoaded,
         businessLoaded,
         isAuthenticated,
@@ -493,13 +671,19 @@ const useIamStore = defineStore('iam', () => {
         fetchRoles,
         fetchBusiness,
         getRolePosition,
+        currentUserPosition,
         getUserById,
         addUser,
         updateUser,
         updateBusiness,
         updateUserProfile,
         changePassword,
-        deleteUser
+        deleteUser,
+        deactivateUser,
+        reactivateUser,
+        requestPasswordReset,
+        verifyResetCode,
+        resetPassword
     };
 });
 

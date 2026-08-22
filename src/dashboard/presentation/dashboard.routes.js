@@ -14,19 +14,19 @@ const dashboardRoutes = [
         path:      'dashboard',
         name:      'dashboard',
         component: businessDashboard,
-        meta:      { title: 'Dashboard' }
+        meta:      { title: 'Dashboard', requiredPermission: 'dashboard' }
     },
     {
         path:      'dashboard/reports/new',
         name:      'dashboard-report-filters',
         component: reportFilters,
-        meta:      { title: 'Generate Report' }
+        meta:      { title: 'Generate Report', requiredPermission: 'dashboard' }
     },
     {
         path:      'dashboard/reports/result',
         name:      'dashboard-report-result',
         component: reportResult,
-        meta:      { title: 'Report Result' }
+        meta:      { title: 'Report Result', requiredPermission: 'dashboard' }
     }
 ];
 

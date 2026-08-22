@@ -1,10 +1,10 @@
 import { createApp } from 'vue';
 import './style.css';
-import App from './app.vue';
+import App from './App.vue';
 import i18n from './i18n.js';
 import 'primeflex/primeflex.css';
 import 'primeicons/primeicons.css';
-import Material from '@primeuix/themes/material';
+import KipuPreset from './styles/theme.js';
 import PrimeVue from 'primevue/config';
 import {
     Button,
@@ -24,6 +24,7 @@ import {
     InputNumber,
     InputText,
     Menu,
+    MultiSelect,
     Rating,
     Row,
     Select,
@@ -37,11 +38,15 @@ import {
 } from 'primevue';
 import router from './router.js';
 import pinia from './pinia.js';
+import useThemeStore from './shared/application/theme.store.js';
 
 // noinspection JSCheckFunctionSignatures
 createApp(App)
     .use(i18n)
-    .use(PrimeVue, { theme: { preset: Material }, ripple: true })
+    // darkModeSelector matches the `data-theme` attribute the theme store
+    // stamps on <html>, so PrimeVue's own dark tokens follow the same manual
+    // toggle instead of running their own prefers-color-scheme check.
+    .use(PrimeVue, { theme: { preset: KipuPreset, options: { darkModeSelector: '[data-theme="dark"]' } }, ripple: true })
     .use(ConfirmationService)
     .use(DialogService)
     .use(ToastService)
@@ -60,6 +65,7 @@ createApp(App)
     .component('pv-input-number', InputNumber)
     .component('pv-input-text', InputText)
     .component('pv-menu', Menu)
+    .component('pv-multiselect', MultiSelect)
     .component('pv-rating', Rating)
     .component('pv-row', Row)
     .component('pv-select', Select)
@@ -72,3 +78,5 @@ createApp(App)
     .use(pinia)
     .use(router)
     .mount('#app');
+
+useThemeStore(pinia).initialize();

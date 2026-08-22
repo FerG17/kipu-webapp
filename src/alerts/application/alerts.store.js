@@ -28,6 +28,7 @@ import { computed, ref } from 'vue';
 import { AlertsApi }     from '../infrastructure/alerts.api.js';
 import { AlertAssembler } from '../infrastructure/alert.assembler.js';
 import { AlertStatus, AlertType, AlertSeverity } from '../domain/model/alert.entity.js';
+import { warnIfTruncated } from '../../shared/infrastructure/pagination.js';
 
 const alertsApi = new AlertsApi();
 
@@ -50,16 +51,25 @@ const useAlertsStore = defineStore('alerts', () => {
     /** @type {import('vue').Ref<boolean>} */
     const alertsLoaded = ref(false);
 
-    /** @type {import('vue').Ref<Error[]>} */
-    const errors = ref([]);
+    /**
+     * Set when the last fetchAlerts() call failed — lets the view tell a
+     * real error apart from "this business genuinely has no alerts" instead
+     * of both rendering the same "sin alertas" empty state.
+     * @type {import('vue').Ref<Error|null>}
+     */
+    const alertsError = ref(null);
 
     /**
      * Alert rules, one per real backend AlertType — LOW_STOCK and
      * OUT_OF_STOCK only ever expose `active` (their threshold is each
      * product's own minimumStock, not configurable here); EXPIRATION also
-     * exposes an editable `threshold` (days), which governs both the
-     * "expiring soon" and the "already expired" alerts server-side (there is
-     * no separate EXPIRED rule on the backend).
+     * exposes an editable `threshold` (days), governing the "expiring soon"
+     * alert. EXPIRED *is* a real, separately configurable rule on the
+     * backend (AlertExpirationSweepJob.LoadExpirationRules looks it up
+     * independently — toggling it off only silences "already expired"
+     * alerts, EXPIRATION keeps working) — it just has no row here yet,
+     * so it always defaults to enabled (backend's own `?? true` fallback)
+     * with no way to disable it from this screen. Known gap, not fixed here.
      *
      * Populated from the real /alert-rules endpoint on fetchAlertRules — a
      * type with no saved row yet keeps this default (Enabled=true
@@ -190,15 +200,17 @@ const useAlertsStore = defineStore('alerts', () => {
      */
     function fetchAlerts() {
         alertsLoaded.value = false;
+        alertsError.value  = null;
         return Promise.all([alertsApi.getActiveAlerts(), alertsApi.getAlertHistory()])
             .then(([activeResponse, historyResponse]) => {
+                warnIfTruncated(historyResponse, 'Historial de alertas');
                 const active  = AlertAssembler.toEntitiesFromResponse(activeResponse);
                 const history = AlertAssembler.toEntitiesFromResponse(historyResponse);
                 alerts.value       = [...active, ...history];
                 alertsLoaded.value = true;
             })
             .catch(error => {
-                errors.value.push(error);
+                alertsError.value  = error;
                 alertsLoaded.value = true;
             });
     }
@@ -221,8 +233,7 @@ const useAlertsStore = defineStore('alerts', () => {
                 });
                 alertRulesLoaded.value = true;
             })
-            .catch(error => {
-                errors.value.push(error);
+            .catch(() => {
                 alertRulesLoaded.value = true;
             });
     }
@@ -242,10 +253,6 @@ const useAlertsStore = defineStore('alerts', () => {
                 const index = alerts.value.findIndex(existing => existing.id === updatedAlert.id);
                 if (index !== -1) alerts.value[index] = updatedAlert;
                 return updatedAlert;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -264,10 +271,6 @@ const useAlertsStore = defineStore('alerts', () => {
                 const index = alerts.value.findIndex(existing => existing.id === updatedAlert.id);
                 if (index !== -1) alerts.value[index] = updatedAlert;
                 return updatedAlert;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
@@ -290,10 +293,10 @@ const useAlertsStore = defineStore('alerts', () => {
             .then(response => {
                 rule.active    = response.data.enabled;
                 rule.threshold = response.data.thresholdValue;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
+                // Disabling a rule resolves its active alerts server-side
+                // right away (see AlertRuleCommandService) — refresh so they
+                // drop out of "Activas" without needing a page reload.
+                return fetchAlerts();
             });
     }
 
@@ -318,17 +321,13 @@ const useAlertsStore = defineStore('alerts', () => {
             .then(response => {
                 rule.threshold = response.data.thresholdValue;
                 rule.active    = response.data.enabled;
-            })
-            .catch(error => {
-                errors.value.push(error);
-                throw error;
             });
     }
 
     return {
         alerts,
         alertsLoaded,
-        errors,
+        alertsError,
         alertRules,
         alertRulesLoaded,
         alertsCount,

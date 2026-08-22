@@ -5,13 +5,14 @@ import { useI18n }       from 'vue-i18n';
 /**
  * CustomerModal component for the Sales & POS Management bounded context.
  *
- * Inline modal for registering a new customer directly from the Clientes tab.
- * Validates required fields before emitting the save event.
+ * Inline modal for registering a new customer, or editing an existing one
+ * when opened with a `customer` prop, from the Clientes tab. Validates
+ * required fields before emitting the save event.
  *
  * Business rules:
  * - fullName is required (minimum 2 characters).
- * - documentNumber is required; must be 8 digits (DNI) or 11 digits (RUC).
- * - phoneNumber is required; must be 9 digits.
+ * - documentNumber is optional; when provided, must be 8 digits (DNI) or 11 digits (RUC).
+ * - phoneNumber is optional; when provided, must be 9 digits.
  * - email is optional.
  *
  * @component CustomerModal
@@ -22,13 +23,23 @@ const props = defineProps({
   saving: {
     type:    Boolean,
     default: false
+  },
+  /**
+   * The customer being edited. Null/absent means the modal is in
+   * registration mode — a fresh, blank form.
+   * @type {import('../../domain/model/customer.entity.js').Customer|null}
+   */
+  customer: {
+    type:    Object,
+    default: null
   }
 });
 
 const emit = defineEmits([
   /**
-   * Emitted when the form is valid and the user clicks register.
-   * payload: { fullName, documentNumber, phoneNumber, email }
+   * Emitted when the form is valid and the user clicks save.
+   * payload: { id, fullName, documentNumber, phoneNumber, email } — id is
+   * null in registration mode, the existing customer's id in edit mode.
    */
   'save',
   /** Emitted when the user closes the modal without saving. */
@@ -37,14 +48,16 @@ const emit = defineEmits([
 
 const { t } = useI18n();
 
+const isEditMode = computed(() => props.customer != null);
+
 /** @type {import('vue').Ref<string>} */
-const fullName = ref('');
+const fullName = ref(props.customer?.fullName ?? '');
 /** @type {import('vue').Ref<string>} */
-const documentNumber = ref('');
+const documentNumber = ref(props.customer?.documentNumber ?? '');
 /** @type {import('vue').Ref<string>} */
-const phoneNumber = ref('');
+const phoneNumber = ref(props.customer?.phoneNumber ?? '');
 /** @type {import('vue').Ref<string>} */
-const email = ref('');
+const email = ref(props.customer?.email ?? '');
 
 /** @type {import('vue').Ref<Record<string, string>>} Field-level validation error messages. */
 const fieldErrors = ref({});
@@ -54,11 +67,7 @@ const fieldErrors = ref({});
  * Used to enable/disable the submit button.
  * @type {import('vue').ComputedRef<boolean>}
  */
-const isFormValid = computed(() =>
-    fullName.value.trim().length >= 2 &&
-    documentNumber.value.trim().length > 0 &&
-    phoneNumber.value.trim().length > 0
-);
+const isFormValid = computed(() => fullName.value.trim().length >= 2);
 
 /**
  * Validates all form fields and populates fieldErrors.
@@ -76,8 +85,6 @@ function validateForm() {
     if (cleaned.length !== 8 && cleaned.length !== 11) {
       fieldErrors.value.documentNumber = t('customer-form.error-document');
     }
-  } else {
-    fieldErrors.value.documentNumber = t('customer-form.error-document-required');
   }
 
   if (phoneNumber.value) {
@@ -85,8 +92,6 @@ function validateForm() {
     if (cleaned.length !== 9) {
       fieldErrors.value.phoneNumber = t('customer-form.error-phone');
     }
-  } else {
-    fieldErrors.value.phoneNumber = t('customer-form.error-phone-required');
   }
 
   return Object.keys(fieldErrors.value).length === 0;
@@ -98,6 +103,7 @@ function validateForm() {
 function handleSave() {
   if (!validateForm()) return;
   emit('save', {
+    id:             props.customer?.id ?? null,
     fullName:       fullName.value.trim(),
     documentNumber: documentNumber.value.trim(),
     phoneNumber:    phoneNumber.value.trim(),
@@ -116,21 +122,21 @@ function handleSave() {
     <!-- Modal panel -->
     <div
         class="w-full border-round-top-2xl sm:border-round-2xl shadow-8"
-        style="max-width: 420px; background-color: #fff; border: 1px solid #E2E8F0;"
+        style="max-width: 420px; background-color: var(--surface); border: 1px solid var(--border);"
     >
       <!-- Header -->
       <div
           class="flex align-items-center justify-content-between px-5 pt-5 pb-3"
-          style="border-bottom: 1px solid #F1F5F9;"
+          style="border-bottom: 1px solid var(--surface-alt);"
       >
-        <h2 class="m-0" style="font-size: 1.05rem; font-weight: 700; color: #0B3558;">
-          {{ t('customers.modal-register-title') }}
+        <h2 class="m-0" style="font-size: 1.05rem; font-weight: 700; color: var(--brand);">
+          {{ isEditMode ? t('customers.modal-edit-title') : t('customers.modal-register-title') }}
         </h2>
         <button
             style="background: none; border: none; cursor: pointer; padding: 4px;"
             @click="emit('close')"
         >
-          <i class="pi pi-times" style="color: #94A3B8; font-size: 1.1rem;" />
+          <i class="pi pi-times" style="color: var(--text-faint); font-size: 1.1rem;" />
         </button>
       </div>
 
@@ -141,7 +147,7 @@ function handleSave() {
         <div>
           <label
               class="block mb-1"
-              style="font-size: 0.78rem; font-weight: 600; color: #64748B;"
+              style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);"
           >
             {{ t('customer-form.full-name') }} *
           </label>
@@ -150,11 +156,11 @@ function handleSave() {
               type="text"
               :placeholder="t('customer-form.full-name-placeholder')"
               class="w-full border-round-lg px-3 py-2"
-              style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
-              @focus="(e) => e.target.style.borderColor = '#0E7490'"
-              @blur="(e) => e.target.style.borderColor = fieldErrors.fullName ? '#EF4444' : '#E2E8F0'"
+              style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none;"
+              @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+              @blur="(e) => e.target.style.borderColor = fieldErrors.fullName ? 'var(--status-critical-fg)' : 'var(--border)'"
           />
-          <small v-if="fieldErrors.fullName" style="color: #EF4444; font-size: 0.72rem;">
+          <small v-if="fieldErrors.fullName" style="color: var(--status-critical-fg); font-size: 0.72rem;">
             {{ fieldErrors.fullName }}
           </small>
         </div>
@@ -163,20 +169,20 @@ function handleSave() {
         <div>
           <label
               class="block mb-1"
-              style="font-size: 0.78rem; font-weight: 600; color: #64748B;"
+              style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);"
           >
-            {{ t('customer-form.document-number') }} *
+            {{ t('customer-form.document-number') }}
           </label>
           <input
               v-model="documentNumber"
               type="text"
               :placeholder="t('customer-form.document-placeholder')"
               class="w-full border-round-lg px-3 py-2"
-              style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
-              @focus="(e) => e.target.style.borderColor = '#0E7490'"
-              @blur="(e) => e.target.style.borderColor = fieldErrors.documentNumber ? '#EF4444' : '#E2E8F0'"
+              style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none;"
+              @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+              @blur="(e) => e.target.style.borderColor = fieldErrors.documentNumber ? 'var(--status-critical-fg)' : 'var(--border)'"
           />
-          <small v-if="fieldErrors.documentNumber" style="color: #EF4444; font-size: 0.72rem;">
+          <small v-if="fieldErrors.documentNumber" style="color: var(--status-critical-fg); font-size: 0.72rem;">
             {{ fieldErrors.documentNumber }}
           </small>
         </div>
@@ -185,20 +191,20 @@ function handleSave() {
         <div>
           <label
               class="block mb-1"
-              style="font-size: 0.78rem; font-weight: 600; color: #64748B;"
+              style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);"
           >
-            {{ t('customer-form.phone-number') }} *
+            {{ t('customer-form.phone-number') }}
           </label>
           <input
               v-model="phoneNumber"
               type="tel"
               :placeholder="t('customer-form.phone-placeholder')"
               class="w-full border-round-lg px-3 py-2"
-              style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
-              @focus="(e) => e.target.style.borderColor = '#0E7490'"
-              @blur="(e) => e.target.style.borderColor = fieldErrors.phoneNumber ? '#EF4444' : '#E2E8F0'"
+              style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none;"
+              @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+              @blur="(e) => e.target.style.borderColor = fieldErrors.phoneNumber ? 'var(--status-critical-fg)' : 'var(--border)'"
           />
-          <small v-if="fieldErrors.phoneNumber" style="color: #EF4444; font-size: 0.72rem;">
+          <small v-if="fieldErrors.phoneNumber" style="color: var(--status-critical-fg); font-size: 0.72rem;">
             {{ fieldErrors.phoneNumber }}
           </small>
         </div>
@@ -207,7 +213,7 @@ function handleSave() {
         <div>
           <label
               class="block mb-1"
-              style="font-size: 0.78rem; font-weight: 600; color: #64748B;"
+              style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);"
           >
             {{ t('customer-form.email') }}
           </label>
@@ -216,9 +222,9 @@ function handleSave() {
               type="email"
               :placeholder="t('customer-form.email-placeholder')"
               class="w-full border-round-lg px-3 py-2"
-              style="border: 1px solid #E2E8F0; font-size: 0.88rem; color: #1E293B; outline: none;"
-              @focus="(e) => e.target.style.borderColor = '#0E7490'"
-              @blur="(e) => e.target.style.borderColor = '#E2E8F0'"
+              style="border: 1px solid var(--border); font-size: 0.88rem; color: var(--text); outline: none;"
+              @focus="(e) => e.target.style.borderColor = 'var(--brand)'"
+              @blur="(e) => e.target.style.borderColor = 'var(--border)'"
           />
         </div>
 
@@ -226,7 +232,7 @@ function handleSave() {
         <div class="flex gap-2 mt-1">
           <button
               class="flex-1 border-round-xl py-3"
-              style="border: 1px solid #E2E8F0; color: #64748B; font-size: 0.88rem; font-weight: 600; background: #fff; cursor: pointer;"
+              style="border: 1px solid var(--border); color: var(--text-muted); font-size: 0.88rem; font-weight: 600; background: var(--surface); cursor: pointer;"
               :disabled="saving"
               @click="emit('close')"
           >
@@ -235,8 +241,8 @@ function handleSave() {
           <button
               class="flex-1 border-round-xl py-3"
               :style="{
-                            backgroundColor: (isFormValid && !saving) ? '#0B3558' : '#CBD5E1',
-                            color: '#fff',
+                            backgroundColor: (isFormValid && !saving) ? 'var(--brand)' : 'var(--text-faint)',
+                            color: 'var(--brand-ink)',
                             fontSize: '0.88rem',
                             fontWeight: 600,
                             border: 'none',
@@ -246,7 +252,7 @@ function handleSave() {
               @click="handleSave"
           >
             <i v-if="saving" class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>
-            {{ saving ? t('customers.modal-saving') : t('customers.modal-register-btn') }}
+            {{ saving ? t('customers.modal-saving') : (isEditMode ? t('customers.modal-save-btn') : t('customers.modal-register-btn')) }}
           </button>
         </div>
       </div>

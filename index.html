@@ -1,10 +1,18 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>bodega-webapp</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Kipu</title>
+    <script>
+      (function () {
+        var mode = localStorage.getItem('kipu-theme-mode') || 'system';
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode);
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>
