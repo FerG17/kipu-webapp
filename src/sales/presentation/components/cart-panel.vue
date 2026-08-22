@@ -12,6 +12,8 @@ import { useI18n }  from 'vue-i18n';
  * Business rules:
  * - Quantity cannot be decreased below 1 via the minus button (use remove instead).
  * - Quantity cannot be increased above the available stock for that product.
+ * - A weight-sold item (isSoldByWeight, X5 Bloque D) shows an editable fractional
+ *   input instead of the plain quantity span, alongside the same +/- buttons.
  *
  * @component CartPanel
  */
@@ -38,6 +40,12 @@ const props = defineProps({
 const emit = defineEmits([
   /** Emitted when the user clicks the minus/plus button on a cart item. payload: { productId, delta } */
   'update-quantity',
+  /**
+   * Emitted when the user types a new value into a weight-sold item's
+   * quantity input (X5 Bloque D) — an absolute value, unlike
+   * update-quantity's delta. payload: { productId, quantity }
+   */
+  'set-quantity',
   /** Emitted when the user clicks the trash button on a cart item. payload: productId */
   'remove-item',
   /** Emitted when the user clicks the "Cobrar" button. */
@@ -78,6 +86,18 @@ function changeQuantity(productId, delta) {
  */
 function removeItem(productId) {
   emit('remove-item', productId);
+}
+
+/**
+ * Emits a set-quantity event from a weight-sold item's fractional input,
+ * fired on change (blur/Enter) rather than every keystroke so a transient
+ * "2." or empty value while typing never round-trips as an update.
+ * @param {number} productId
+ * @param {Event} event
+ */
+function setQuantity(productId, event) {
+  const parsed = parseFloat(String(event.target.value).replace(',', '.'));
+  emit('set-quantity', { productId, quantity: Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : 0 });
 }
 </script>
 
@@ -145,7 +165,15 @@ function removeItem(productId) {
           >
             <i class="pi pi-minus" style="font-size: 0.55rem;" />
           </button>
-          <span style="font-size: 0.82rem; font-weight: 700; color: var(--brand); min-width: 18px; text-align: center;">
+          <!-- A weight-sold item gets an editable fractional input (X5 Bloque D); a
+               unit-sold item keeps the plain read-only value the +/- buttons alone move. -->
+          <input
+              v-if="item.isSoldByWeight"
+              type="number" min="0.01" step="0.01" :value="item.quantity"
+              class="cart-quantity-input"
+              @change="setQuantity(item.productId, $event)"
+          />
+          <span v-else style="font-size: 0.82rem; font-weight: 700; color: var(--brand); min-width: 18px; text-align: center;">
                         {{ item.quantity }}
                     </span>
           <button
@@ -202,3 +230,34 @@ function removeItem(productId) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.cart-quantity-input {
+  width: 44px;
+  min-width: 44px;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--brand);
+  border: 1px solid var(--surface-alt);
+  border-radius: 6px;
+  padding: 2px 0;
+  background-color: var(--surface);
+}
+
+.cart-quantity-input:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+/* Hide the native spinner arrows — the +/- buttons already cover coarse stepping. */
+.cart-quantity-input::-webkit-outer-spin-button,
+.cart-quantity-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.cart-quantity-input[type='number'] {
+  -moz-appearance: textfield;
+}
+</style>

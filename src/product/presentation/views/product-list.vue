@@ -8,7 +8,7 @@ import useIamStore        from '../../../iam/application/iam.store.js';
 import useAlertsStore     from '../../../alerts/application/alerts.store.js';
 import useSupplierStore   from '../../../suppliers/application/supplier.store.js';
 import { Supplier }       from '../../../suppliers/domain/model/supplier.entity.js';
-import { Product, ProductCategory, ProductStatus } from '../../domain/model/product.entity.js';
+import { Product, ProductCategory, ProductStatus, UnitOfSale } from '../../domain/model/product.entity.js';
 import { toDateLocale }   from '../../../shared/presentation/date-locale.js';
 import { isCustomCategory, orderedCategoryOptions, filterableCategoryOptions } from '../category-options.js';
 import { canWriteInventory, canAccessSuppliers } from '../../../iam/application/permissions.js';
@@ -52,6 +52,20 @@ const todayIsoDate = useTodayLocalDateString();
  */
 function parseMoneyInput(rawValue) {
   return parseFloat(String(rawValue).replace(',', '.'));
+}
+
+/**
+ * A quantity (stock, minimum stock) is only allowed to carry decimals for a
+ * product sold by weight (X5 Bloque D) — parsed as a whole number for every
+ * other product, same as before this block existed.
+ * @param {string} rawValue
+ * @param {string} unitOfSale
+ * @returns {number}
+ */
+function parseQuantityInput(rawValue, unitOfSale) {
+  return unitOfSale === UnitOfSale.WEIGHT
+      ? (parseMoneyInput(rawValue) || 0)
+      : (parseInt(rawValue) || 0);
 }
 
 const savingProduct  = ref(false);
@@ -453,7 +467,8 @@ const productModalForm = ref({
   cost:           '',
   expirationDate: '',
   warehouseId:    '',
-  barcode:        ''
+  barcode:        '',
+  unitOfSale:     UnitOfSale.UNIT
 });
 
 const productModalErrors = ref({ basePrice: '', name: '' });
@@ -525,7 +540,8 @@ function openCreateProductModal(prefillBarcode = '') {
   productModalForm.value = {
     name: '', category: ProductCategory.OTHER, customCategory: '', supplierIds: [], currentStock: '', minimumStock: '', basePrice: '', cost: '', expirationDate: '',
     warehouseId: warehouses.value[0] ? String(warehouses.value[0].id) : '',
-    barcode: prefillBarcode
+    barcode: prefillBarcode,
+    unitOfSale: UnitOfSale.UNIT
   };
   productModalErrors.value = { basePrice: '', name: '' };
   showAddSupplierInline.value = false;
@@ -591,7 +607,8 @@ function openEditProductModal(product) {
     cost:           '',
     expirationDate: '',
     warehouseId:    '',
-    barcode:        product.barcode ?? ''
+    barcode:        product.barcode ?? '',
+    unitOfSale:     product.unitOfSale ?? UnitOfSale.UNIT
   };
   productModalErrors.value = { basePrice: '', name: '' };
   showAddSupplierInline.value = false;
@@ -669,7 +686,7 @@ function saveProductFromModal() {
   // modal was opened before the warehouse list finished loading) would
   // otherwise send `null` and fail with an opaque 400 instead of a
   // readable message.
-  const initialStock = parseInt(productModalForm.value.currentStock) || 0;
+  const initialStock = parseQuantityInput(productModalForm.value.currentStock, productModalForm.value.unitOfSale);
   if (!editingProduct.value && !productModalForm.value.warehouseId) {
     toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-warehouse-required'), life: 4500 });
     return;
@@ -714,7 +731,7 @@ function saveProductFromModal() {
  */
 function persistProductFromModal(resolvedCategory) {
   const businessId = iamStore.currentUser?.businessId ?? null;
-  const initialStock = parseInt(productModalForm.value.currentStock) || 0;
+  const initialStock = parseQuantityInput(productModalForm.value.currentStock, productModalForm.value.unitOfSale);
 
   const productEntity = new Product({
     id:          editingProduct.value ? editingProduct.value.id : null,
@@ -728,10 +745,11 @@ function persistProductFromModal(resolvedCategory) {
     basePrice:   parseMoneyInput(productModalForm.value.basePrice),
     status:      ProductStatus.ACTIVE,
     barcode:     productModalForm.value.barcode.trim() || null,
-    supplierIds: productModalForm.value.supplierIds
+    supplierIds: productModalForm.value.supplierIds,
+    unitOfSale:  productModalForm.value.unitOfSale
   });
 
-  const minimumStock   = parseInt(productModalForm.value.minimumStock) || 0;
+  const minimumStock   = parseQuantityInput(productModalForm.value.minimumStock, productModalForm.value.unitOfSale);
   const purchasePrice  = parseMoneyInput(productModalForm.value.cost) || 0;
   const expirationDate = productModalForm.value.expirationDate;
 
@@ -848,6 +866,11 @@ function handleDeleteProduct(product) {
 // ── Intake modal ───────────────────────────────────────────────────────────────
 
 const intakeForm = ref({ productId: '', quantity: '', cost: '', expirationDate: '', supplierId: '', note: '', warehouseId: '', basePrice: '' });
+
+/** The product currently picked in the intake modal — null while nothing's selected yet. */
+const intakeFormProduct = computed(() =>
+    products.value.find(product => product.id === parseInt(intakeForm.value.productId)) ?? null
+);
 
 /**
  * Defaults the intake warehouse to where a product's stock already lives,
@@ -1005,18 +1028,23 @@ function saveIntake() {
     return;
   }
 
+  // X5 Bloque D: a fractional quantity is only meaningful for a product
+  // marked "se vende por peso" — resolved before the quantity checks below
+  // so they can gate on it.
+  const allowsFractionalQuantity = intakeFormProduct.value?.isSoldByWeight ?? false;
+
   const rawQuantity = intakeForm.value.quantity;
-  const quantity = parseInt(rawQuantity);
+  const quantity = allowsFractionalQuantity ? (parseMoneyInput(rawQuantity) || 0) : parseInt(rawQuantity);
   if (!quantity || quantity <= 0) {
     toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-intake-quantity-required'), life: 4500 });
     return;
   }
 
-  // The input is `type="number"` with no `step`, so a decimal like "5.7" is
-  // typeable — parseInt above silently truncated it to 5 with no warning.
-  // Backend quantities are int end-to-end, so this is a real rejection, not
-  // just a rounding nicety.
-  if (Number(rawQuantity) !== quantity) {
+  // The input is `type="number"`, so a decimal like "5.7" is typeable even
+  // with no `step` — parseInt above would otherwise silently truncate it to
+  // 5 with no warning. Only a whole-unit product is rejected here; a
+  // weight-sold one is exactly what this decimal is for.
+  if (!allowsFractionalQuantity && Number(rawQuantity) !== quantity) {
     toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-quantity-not-whole'), life: 4500 });
     return;
   }
@@ -1033,7 +1061,7 @@ function saveIntake() {
   // (see resolveIntakeDefaultsForProduct) purely to save re-typing when it
   // hasn't changed — only persisted as a real product update when the admin
   // actually edited it, so an untouched intake never triggers an extra call.
-  const targetProduct  = products.value.find(p => p.id === parseInt(intakeForm.value.productId));
+  const targetProduct  = intakeFormProduct.value;
   const newBasePrice   = parseFloat(intakeForm.value.basePrice);
   const basePriceEdited = targetProduct && !isNaN(newBasePrice) && newBasePrice !== targetProduct.basePrice;
 
@@ -1235,8 +1263,11 @@ function openAdjustModal(product) {
 }
 
 function saveAdjustment() {
+  // X5 Bloque D — same gating as saveIntake.
+  const allowsFractionalQuantity = adjustTargetProduct.value?.isSoldByWeight ?? false;
+
   const rawQuantity = adjustForm.value.quantity;
-  const quantity = parseInt(rawQuantity);
+  const quantity = allowsFractionalQuantity ? (parseMoneyInput(rawQuantity) || 0) : parseInt(rawQuantity);
   if (!quantity || quantity <= 0) {
     toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-intake-quantity-required'), life: 4500 });
     return;
@@ -1244,7 +1275,9 @@ function saveAdjustment() {
 
   // Same silent-truncation gap as saveIntake — the input allows a decimal
   // like "3.5", parseInt above would otherwise drop it to 3 with no warning.
-  if (Number(rawQuantity) !== quantity) {
+  // Only enforced for a whole-unit product; a weight-sold one is exactly
+  // what this decimal is for.
+  if (!allowsFractionalQuantity && Number(rawQuantity) !== quantity) {
     toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-quantity-not-whole'), life: 4500 });
     return;
   }
@@ -2073,6 +2106,16 @@ function saveWarehouse() {
               </div>
             </div>
 
+            <!-- Unidad de venta — solo PESO permite cantidades fraccionarias en venta/ingreso/ajuste (X5 Bloque D) -->
+            <div>
+              <label class="modal-label">{{ t('inventory.modal-field-unit-of-sale') }}</label>
+              <select v-model="productModalForm.unitOfSale" class="modal-input modal-select">
+                <option :value="UnitOfSale.UNIT">{{ t('inventory.modal-field-unit-of-sale-unit') }}</option>
+                <option :value="UnitOfSale.WEIGHT">{{ t('inventory.modal-field-unit-of-sale-weight') }}</option>
+              </select>
+              <p class="m-0 mt-1 modal-field-hint">{{ t('inventory.modal-field-unit-of-sale-hint') }}</p>
+            </div>
+
             <!-- Custom category (only shown when "Otros" is selected) -->
             <div v-if="productModalForm.category === 'OTHER'">
               <label class="modal-label">{{ t('inventory.modal-field-custom-category') }}</label>
@@ -2090,7 +2133,7 @@ function saveWarehouse() {
                 <label class="modal-label">{{ t('inventory.modal-field-stock') }}</label>
                 <input
                     v-model="productModalForm.currentStock"
-                    type="number" min="0" placeholder="0"
+                    type="number" min="0" :step="productModalForm.unitOfSale === UnitOfSale.WEIGHT ? '0.01' : '1'" placeholder="0"
                     class="modal-input"
                     :disabled="!!editingProduct"
                     :title="editingProduct ? t('inventory.modal-field-stock-readonly-hint') : ''"
@@ -2101,7 +2144,11 @@ function saveWarehouse() {
               </div>
               <div style="flex: 1;">
                 <label class="modal-label">{{ t('inventory.modal-field-min-stock') }}</label>
-                <input v-model="productModalForm.minimumStock" type="number" min="0" placeholder="0" class="modal-input"/>
+                <input
+                    v-model="productModalForm.minimumStock"
+                    type="number" min="0" :step="productModalForm.unitOfSale === UnitOfSale.WEIGHT ? '0.01' : '1'" placeholder="0"
+                    class="modal-input"
+                />
               </div>
             </div>
 
@@ -2243,10 +2290,14 @@ function saveWarehouse() {
               <option v-for="product in products" :key="product.id" :value="String(product.id)">{{ product.name }}</option>
             </select>
           </div>
-          <!-- Quantity -->
+          <!-- Quantity — step allows decimals only for a product sold by weight (X5 Bloque D) -->
           <div>
             <label class="modal-label">{{ t('inventory.intake-field-qty') }}</label>
-            <input v-model="intakeForm.quantity" type="number" min="1" placeholder="0" class="modal-input"/>
+            <input
+                v-model="intakeForm.quantity"
+                type="number" min="0.01" :step="intakeFormProduct?.isSoldByWeight ? '0.01' : '1'" placeholder="0"
+                class="modal-input"
+            />
           </div>
           <!-- Cost + Expiration (2-col on sm+) — updates the product's active batch atomically -->
           <div class="flex flex-column sm:flex-row gap-4">
@@ -2557,7 +2608,11 @@ function saveWarehouse() {
 
           <div>
             <label class="modal-label">{{ t('inventory.adjust-field-quantity') }}</label>
-            <input v-model="adjustForm.quantity" type="number" min="1" step="1" placeholder="0" class="modal-input"/>
+            <input
+                v-model="adjustForm.quantity"
+                type="number" min="0.01" :step="adjustTargetProduct?.isSoldByWeight ? '0.01' : '1'" placeholder="0"
+                class="modal-input"
+            />
           </div>
 
           <div v-if="adjustableWarehouses.length > 1">
