@@ -354,6 +354,25 @@ const useProductStore = defineStore('product', () => {
     }
 
     /**
+     * Sets/corrects a batch's expiration date — most useful right after a
+     * purchase order is received, since that intake has no expiration
+     * field of its own and lands the batch with none set. Also moves it to
+     * its correct FEFO position for free: the server ranks batches by
+     * expiration on every sale, so nothing else needs to change here.
+     * Patches the local copy from the response, same as discardBatch.
+     * @param {number|string} batchId
+     * @param {string|null} expiration ISO date string (YYYY-MM-DD), or null to clear it.
+     * @returns {Promise<void>}
+     */
+    function updateBatchExpiration(batchId, expiration) {
+        return productApi.updateBatchExpiration(batchId, expiration)
+            .then(response => {
+                const index = batches.value.findIndex(batch => batch.id === response.data.id);
+                if (index !== -1) batches.value[index] = response.data;
+            });
+    }
+
+    /**
      * Returns the number of days until the nearest active batch of a product expires.
      *
      * Reads the server-computed `daysToExpiry` already present on every
@@ -657,6 +676,7 @@ const useProductStore = defineStore('product', () => {
         fetchInventory,
         fetchBatches,
         discardBatch,
+        updateBatchExpiration,
         fetchStockMovements,
         fetchAllStockMovements,
         invalidateStockMovements,

@@ -190,6 +190,18 @@ export class ProductApi extends BaseApi {
     }
 
     /**
+     * Sets/corrects a batch's expiration date after the fact — most useful
+     * right after a purchase order is received, since that intake has no
+     * expiration field of its own and lands the batch with none set.
+     * @param {number|string} batchId
+     * @param {string|null} expiration ISO date string (YYYY-MM-DD), or null to clear it.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    updateBatchExpiration(batchId, expiration) {
+        return this.http.patch(`${batchesEndpointPath}/${batchId}/expiration`, { expiration });
+    }
+
+    /**
      * Fetches all batches across every product.
      * Batch resources carry no businessId of their own, so scoping to the
      * authenticated business is done client-side by matching productId

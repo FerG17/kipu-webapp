@@ -24,7 +24,7 @@ const alertsStore   = useAlertsStore();
 const supplierStore = useSupplierStore();
 
 const { products, productsLoaded, inactiveProducts, inactiveProductsLoaded, inventory, stockMovements, stockMovementsLoaded, stockMovementsError } = toRefs(productStore);
-const { fetchProducts, fetchInventory, fetchBatches, discardBatch, fetchAllStockMovements,
+const { fetchProducts, fetchInventory, fetchBatches, discardBatch, updateBatchExpiration, fetchAllStockMovements,
   addProduct, updateProduct, deleteProduct, registerStockIntake, updateMinimumStock,
   isProductExpiringSoon, isProductExpired,
   fetchInactiveProducts, activateProduct } = productStore;
@@ -75,6 +75,9 @@ const scanInputEl          = ref(null);
 const showLotsModal        = ref(false);
 const lotsTargetProduct    = ref(null);
 const discardingBatchId    = ref(null);
+const editingLotId          = ref(null);
+const editingExpirationValue = ref('');
+const savingLotExpiration   = ref(false);
 
 /**
  * Whether the current role may create/edit/delete products, register stock
@@ -934,7 +937,13 @@ const productLots = computed(() => {
 function openLotsModal(product) {
   lotsTargetProduct.value = product;
   showLotsModal.value = true;
-  if (!productStore.batchesLoaded) fetchBatches();
+  editingLotId.value = null;
+  // Always refetch, not just when never loaded: a sale, a return, or a
+  // purchase-order receipt changes RemainingQuantity/opens a batch without
+  // this page's own knowledge, and productStore.batches has no way to know
+  // it went stale — the owner otherwise saw last-loaded numbers here until
+  // a hard refresh (X5 feedback #2).
+  fetchBatches();
 }
 
 function handleDiscardLot(batch) {
@@ -949,6 +958,42 @@ function handleDiscardLot(batch) {
       })
       .finally(() => {
         discardingBatchId.value = null;
+      });
+}
+
+/**
+ * X5 feedback #3: a purchase order's RECEIVED intake opens a batch with no
+ * expiration at all (the order has no such field) — this is how the owner
+ * fills it in once the delivery is checked, or corrects a typo on any lot.
+ */
+function startEditingLotExpiration(batch) {
+  editingLotId.value = batch.id;
+  editingExpirationValue.value = batch.expiration || '';
+}
+
+function cancelEditingLotExpiration() {
+  editingLotId.value = null;
+  editingExpirationValue.value = '';
+}
+
+function saveLotExpiration(batch) {
+  if (editingExpirationValue.value && editingExpirationValue.value < todayIsoDate.value) {
+    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-lot-expiration-invalid'), life: 4500 });
+    return;
+  }
+
+  savingLotExpiration.value = true;
+  updateBatchExpiration(batch.id, editingExpirationValue.value || null)
+      .then(() => {
+        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-lot-expiration-updated'), life: 3000 });
+        alertsStore.fetchAlerts();
+        cancelEditingLotExpiration();
+      })
+      .catch(() => {
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-lot-expiration-update-error'), life: 4500 });
+      })
+      .finally(() => {
+        savingLotExpiration.value = false;
       });
 }
 
@@ -2294,21 +2339,57 @@ function saveWarehouse() {
           <div v-else class="flex flex-column gap-3">
             <div v-for="batch in productLots" :key="batch.id" class="p-3 border-round-xl lot-card">
               <div class="flex align-items-center justify-content-between gap-2 mb-2">
+                <input
+                    v-if="editingLotId === batch.id"
+                    v-model="editingExpirationValue"
+                    type="date"
+                    :min="todayIsoDate"
+                    class="modal-input lot-expiration-input"
+                />
                 <span
+                    v-else
                     class="lot-expiration"
                     :style="{ color: batch.isExpired ? 'var(--status-critical-fg)' : batch.isExpiringSoon ? 'var(--status-warning-fg)' : 'var(--text)' }"
                 >
                   <i class="pi pi-calendar" style="font-size: 0.8rem; margin-right: 0.35rem;"/>
                   {{ batch.expiration ? parseLocalDate(batch.expiration).toLocaleDateString(toDateLocale(locale), { day: '2-digit', month: '2-digit', year: 'numeric' }) : t('inventory.lots-no-expiration') }}
                 </span>
-                <button
-                    class="py-1 px-3 border-round-lg border-none cursor-pointer btn-lot-discard"
-                    :disabled="discardingBatchId === batch.id"
-                    @click="handleDiscardLot(batch)"
-                >
-                  <i :class="discardingBatchId === batch.id ? 'pi pi-spin pi-spinner' : 'pi pi-trash'" style="font-size: 0.8rem;"/>
-                  {{ t('inventory.btn-discard-lot') }}
-                </button>
+
+                <div class="flex align-items-center gap-2 flex-shrink-0">
+                  <template v-if="editingLotId === batch.id">
+                    <button
+                        class="p-2 border-round-lg border-none cursor-pointer btn-lot-save"
+                        :disabled="savingLotExpiration"
+                        @click="saveLotExpiration(batch)"
+                    >
+                      <i :class="savingLotExpiration ? 'pi pi-spin pi-spinner' : 'pi pi-check'" style="font-size: 0.8rem;"/>
+                    </button>
+                    <button
+                        class="p-2 border-round-lg border-none cursor-pointer btn-lot-cancel"
+                        :disabled="savingLotExpiration"
+                        @click="cancelEditingLotExpiration"
+                    >
+                      <i class="pi pi-times" style="font-size: 0.8rem;"/>
+                    </button>
+                  </template>
+                  <template v-else>
+                    <button
+                        class="p-2 border-round-lg border-none cursor-pointer btn-lot-edit"
+                        :title="t('inventory.btn-edit-lot-expiration')"
+                        @click="startEditingLotExpiration(batch)"
+                    >
+                      <i class="pi pi-pencil" style="font-size: 0.8rem;"/>
+                    </button>
+                    <button
+                        class="py-1 px-3 border-round-lg border-none cursor-pointer btn-lot-discard"
+                        :disabled="discardingBatchId === batch.id"
+                        @click="handleDiscardLot(batch)"
+                    >
+                      <i :class="discardingBatchId === batch.id ? 'pi pi-spin pi-spinner' : 'pi pi-trash'" style="font-size: 0.8rem;"/>
+                      {{ t('inventory.btn-discard-lot') }}
+                    </button>
+                  </template>
+                </div>
               </div>
               <div class="flex gap-4 lot-details">
                 <span>{{ t('inventory.lots-remaining', { remaining: batch.remainingQuantity, total: batch.quantity }) }}</span>
@@ -2946,6 +3027,49 @@ function saveWarehouse() {
 .btn-lot-discard:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.btn-lot-edit {
+  background: none;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+.btn-lot-edit:hover {
+  background-color: var(--surface);
+  color: var(--brand);
+}
+
+.btn-lot-save {
+  background: none;
+  color: var(--brand);
+  transition: all 0.15s;
+}
+.btn-lot-save:hover {
+  background-color: var(--brand-soft);
+}
+.btn-lot-save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.btn-lot-cancel {
+  background: none;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+.btn-lot-cancel:hover {
+  background-color: var(--surface);
+}
+.btn-lot-cancel:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.lot-expiration-input {
+  width: auto;
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 0.85rem;
 }
 
 /* ── Mobile product cards ────────────────────────────────────── */
