@@ -186,6 +186,14 @@ function navigateToForgotPassword() { router.push({ name: 'forgot-password' }); 
           </button>
         </form>
 
+        <p class="mt-5 auth-legal-notice">
+          Al continuar aceptas los
+          <router-link :to="{ name: 'terms-of-service' }" class="auth-link">Términos y Condiciones</router-link>
+          y la
+          <router-link :to="{ name: 'privacy-policy' }" class="auth-link">Política de Privacidad</router-link>
+          de Kipu.
+        </p>
+
       </div>
 
       <p class="mt-8 auth-copyright">© 2026 Kipu</p>
@@ -297,6 +305,9 @@ function navigateToForgotPassword() { router.push({ name: 'forgot-password' }); 
 
 .auth-footer-text { color: var(--text-muted); font-size: 0.875rem; }
 .auth-copyright { color: var(--text-faint); font-size: 0.74rem; }
+
+.auth-legal-notice { color: var(--text-faint); font-size: 0.78rem; line-height: 1.6; text-align: center; }
+.auth-legal-notice .auth-link { font-size: inherit; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin-ring {
