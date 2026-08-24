@@ -1737,7 +1737,7 @@ function saveWarehouse() {
           </div>
 
           <!-- Action buttons -->
-          <div v-if="canWrite" class="flex gap-2">
+          <div v-if="canWrite" class="flex flex-wrap gap-2">
             <button
                 class="flex-1 flex align-items-center justify-content-center gap-2 py-2 border-round-xl border-none cursor-pointer btn-mobile-intake"
                 @click="openIntakeModal(product)"
@@ -1746,11 +1746,11 @@ function saveWarehouse() {
               {{ t('inventory.btn-intake-short') }}
             </button>
             <button
-                class="flex-1 flex align-items-center justify-content-center gap-2 py-2 border-round-xl cursor-pointer btn-mobile-edit"
+                class="flex align-items-center justify-content-center py-2 px-3 border-round-xl cursor-pointer btn-mobile-edit"
+                :aria-label="t('inventory.btn-edit')"
                 @click="openEditProductModal(product)"
             >
               <i class="pi pi-pencil" style="font-size: 0.82rem;"/>
-              {{ t('inventory.btn-edit') }}
             </button>
             <button
                 class="flex align-items-center justify-content-center py-2 px-3 border-round-xl cursor-pointer btn-mobile-adjust"
