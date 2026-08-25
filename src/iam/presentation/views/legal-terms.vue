@@ -8,7 +8,7 @@ import LegalLayout from './legal-layout.vue';
     <p>
       Kipu es operado por Fernando Julio Güere Calero, persona natural (sin RUC registrado
       a la fecha) ("nosotros", "Kipu"). Puedes contactarnos para temas relacionados a estos
-      términos escribiendo a <a href="mailto:fguerec17@gmail.com">fguerec17@gmail.com</a>.
+      términos escribiendo a <a href="mailto:soporte@kipuapp.co.uk">soporte@kipuapp.co.uk</a>.
     </p>
     <p>
       Al crear una cuenta o usar Kipu (la aplicación web de gestión de inventario, ventas
@@ -143,7 +143,7 @@ import LegalLayout from './legal-layout.vue';
     <h2>8. Terminación</h2>
     <p>
       Puedes dejar de usar Kipu y solicitar el cierre de tu cuenta cuando quieras,
-      escribiendo a <a href="mailto:fguerec17@gmail.com">fguerec17@gmail.com</a>. Al
+      escribiendo a <a href="mailto:soporte@kipuapp.co.uk">soporte@kipuapp.co.uk</a>. Al
       cerrar una cuenta, tus datos se eliminan según lo descrito en la Política de
       Privacidad, salvo lo que debamos conservar por obligación legal.
     </p>
@@ -169,7 +169,7 @@ import LegalLayout from './legal-layout.vue';
     <h2>11. Contacto</h2>
     <p>
       Para preguntas sobre estos términos:
-      <a href="mailto:fguerec17@gmail.com">fguerec17@gmail.com</a>.
+      <a href="mailto:soporte@kipuapp.co.uk">soporte@kipuapp.co.uk</a>.
     </p>
   </LegalLayout>
 </template>
