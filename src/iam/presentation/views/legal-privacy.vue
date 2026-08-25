@@ -10,7 +10,7 @@ import LegalLayout from './legal-layout.vue';
       bodegas y pequeños negocios, operada por Fernando Julio Güere Calero, persona
       natural (sin RUC registrado a la fecha) ("nosotros", "Kipu"). Puedes contactarnos
       para temas de privacidad escribiendo a
-      <a href="mailto:fguerec17@gmail.com">fguerec17@gmail.com</a>.
+      <a href="mailto:soporte@kipuapp.co.uk">soporte@kipuapp.co.uk</a>.
     </p>
 
     <h2>2. Una distinción importante: tus datos vs. los datos de tus clientes</h2>
@@ -182,7 +182,7 @@ import LegalLayout from './legal-layout.vue';
     </ul>
     <p>
       Para ejercer estos derechos sobre tu propia cuenta, escríbenos a
-      <a href="mailto:fguerec17@gmail.com">fguerec17@gmail.com</a>.
+      <a href="mailto:soporte@kipuapp.co.uk">soporte@kipuapp.co.uk</a>.
     </p>
     <p>
       Si eres cliente de un negocio que usa Kipu y quieres ejercer estos derechos sobre
@@ -216,7 +216,7 @@ import LegalLayout from './legal-layout.vue';
     <h2>12. Contacto</h2>
     <p>
       Para cualquier consulta sobre esta política o sobre tus datos:
-      <a href="mailto:fguerec17@gmail.com">fguerec17@gmail.com</a>.
+      <a href="mailto:soporte@kipuapp.co.uk">soporte@kipuapp.co.uk</a>.
     </p>
   </LegalLayout>
 </template>
