@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, toRefs, watch } from 'vue';
+import { useRouter }      from 'vue-router';
 import { useI18n }        from 'vue-i18n';
 import { useToast }       from 'primevue/usetoast';
 import { useConfirm }     from 'primevue';
@@ -16,6 +17,7 @@ import { useModalScrollLock } from '../../../shared/presentation/use-modal-scrol
 import { useTodayLocalDateString } from '../../../shared/presentation/use-today-local-date.js';
 
 const { t, locale } = useI18n();
+const router        = useRouter();
 const toast        = useToast();
 const confirm      = useConfirm();
 const productStore  = useProductStore();
@@ -23,8 +25,8 @@ const iamStore      = useIamStore();
 const alertsStore   = useAlertsStore();
 const supplierStore = useSupplierStore();
 
-const { products, productsLoaded, inactiveProducts, inactiveProductsLoaded, inventory, stockMovements, stockMovementsLoaded, stockMovementsError } = toRefs(productStore);
-const { fetchProducts, fetchInventory, fetchBatches, discardBatch, updateBatchExpiration, fetchAllStockMovements,
+const { products, productsLoaded, inactiveProducts, inactiveProductsLoaded, inventory } = toRefs(productStore);
+const { fetchProducts, fetchInventory, fetchBatches, discardBatch, updateBatchExpiration, invalidateStockMovements,
   addProduct, updateProduct, deleteProduct, registerStockIntake, updateMinimumStock,
   isProductExpiringSoon, isProductExpired,
   fetchInactiveProducts, activateProduct } = productStore;
@@ -69,7 +71,6 @@ function parseQuantityInput(rawValue, unitOfSale) {
 }
 
 const savingProduct  = ref(false);
-const savingIntake   = ref(false);
 const deletingProductId = ref(null);
 const addingSupplier = ref(false);
 const showAddSupplierInline = ref(false);
@@ -81,8 +82,6 @@ const selectedCategory     = ref('Todos');
 const selectedStatusFilter = ref('all');
 const showProductModal     = ref(false);
 const editingProduct       = ref(null);
-const showIntakeModal      = ref(false);
-const intakeTargetProduct  = ref(null);
 const showScanModal        = ref(false);
 const scanInput            = ref('');
 const scanInputEl          = ref(null);
@@ -278,17 +277,6 @@ function confirmAddSupplierInline() {
 }
 
 /**
- * Lazily loads the real stock-movement history the first time the user
- * opens the "Movimientos" tab, instead of fetching it on every Inventory
- * page load regardless of whether that tab is ever viewed.
- */
-watch(activeTab, (tab) => {
-  if (tab === 'movements' && !stockMovementsLoaded.value && iamStore.currentUser?.businessId) {
-    fetchAllStockMovements();
-  }
-});
-
-/**
  * Resolves a product's inventory status for the summary cards, filter pills
  * and status badge.
  *
@@ -366,67 +354,6 @@ function resolveExpirationLabel(productId) {
 
   return parseLocalDate(nearestBatch.expiration).toLocaleDateString(toDateLocale(locale.value), { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
-
-/**
- * Resolves a stock movement's product name for display, falling back to a
- * generic "#id" label if the product isn't in the currently loaded list.
- * @param {number|string} productId
- * @returns {string}
- */
-function movementProductName(productId) {
-  const product = products.value.find(p => p.id === parseInt(productId));
-  return product ? product.name : `#${productId}`;
-}
-
-/**
- * Formats a stock movement's registeredAt (a real ISO timestamp) into a
- * locale-aware date + time string.
- * @param {string} isoString
- * @returns {string}
- */
-function formatMovementDate(isoString) {
-  if (!isoString) return '—';
-  return new Date(isoString).toLocaleString(toDateLocale(locale.value), {
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-  });
-}
-
-/**
- * Visual treatment for a "Movimientos" row's type badge. RETURN and
- * ADJUSTMENT used to be indistinguishable — both fell into a single
- * "anything that isn't INTAKE/SALE" bucket, sharing the "Ajuste" label and
- * an always-green (stock added) color even when an adjustment removed
- * stock. Distinguishes all four real types, and reads ADJUSTMENT's
- * direction from its own signed quantity rather than assuming positive.
- * @param {import('../../domain/model/stock-movement.entity.js').StockMovement} movement
- * @returns {{ bg: string, fg: string, icon: string, labelKey: string }}
- */
-function movementTypeVisual(movement) {
-  if (movement.type === 'INTAKE') {
-    return { bg: 'var(--status-ok-bg)', fg: 'var(--status-ok-fg)', icon: 'pi-arrow-circle-up', labelKey: 'inventory.movement-intake' };
-  }
-  if (movement.type === 'SALE') {
-    return { bg: 'var(--status-critical-bg)', fg: 'var(--status-critical-fg)', icon: 'pi-arrow-circle-down', labelKey: 'inventory.movement-sale' };
-  }
-  if (movement.type === 'RETURN') {
-    return { bg: 'var(--status-ok-bg)', fg: 'var(--status-ok-fg)', icon: 'pi-replay', labelKey: 'inventory.movement-return' };
-  }
-  return movement.signedQuantity < 0
-      ? { bg: 'var(--status-critical-bg)', fg: 'var(--status-critical-fg)', icon: 'pi-sliders-h', labelKey: 'inventory.movement-adjustment' }
-      : { bg: 'var(--status-warning-bg)', fg: 'var(--status-warning-fg)', icon: 'pi-sliders-h', labelKey: 'inventory.movement-adjustment' };
-}
-
-/**
- * Human-readable message for the Movimientos tab's error state — a CASHIER
- * gets the real "no permission" reason (the backend 403s that role on
- * GET /stock-movements) instead of the misleading "no movements yet" empty
- * state a silently-swallowed error used to show.
- * @type {import('vue').ComputedRef<string>}
- */
-const movementsErrorMessage = computed(() => {
-  const status = stockMovementsError.value?.response?.status;
-  return status === 403 ? t('inventory.toast-movements-forbidden') : t('errors.occurred');
-});
 
 const summaryCounts = computed(() => {
   const counts = { total: products.value.length, low: 0, expiring: 0, out: 0 };
@@ -582,7 +509,9 @@ function handleScanSubmit() {
 
   if (match) {
     toast.add({ severity: 'info', summary: t('inventory.scan-known-title'), detail: t('inventory.scan-known-detail', { name: match.name }), life: 3500 });
-    openIntakeModal(match);
+    // X6 #4: Registrar ingreso moved out of Inventario entirely — Kardex
+    // opens its own intake modal for this product on arrival.
+    router.push({ name: 'kardex', query: { intake: match.id } });
   } else {
     toast.add({ severity: 'info', summary: t('inventory.scan-unknown-title'), detail: t('inventory.scan-unknown-detail'), life: 4500 });
     openCreateProductModal(code);
@@ -717,7 +646,7 @@ function saveProductFromModal() {
         rejectLabel: t('inventory.confirm-duplicate-reject'),
         accept: () => {
           showProductModal.value = false;
-          openIntakeModal(duplicate);
+          router.push({ name: 'kardex', query: { intake: duplicate.id } });
         },
         reject: () => persistProductFromModal(resolvedCategory)
       });
@@ -795,9 +724,10 @@ function persistProductFromModal(resolvedCategory) {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-save-success'), life: 3500 });
         showProductModal.value = false;
         // A new product with initial stock just recorded a StockMovement
-        // server-side (see registerStockIntake) — refresh so "Movimientos"
-        // reflects it without requiring a full page reload.
-        if (!editingProduct.value) fetchAllStockMovements();
+        // server-side (see registerStockIntake) — invalidate Kardex's
+        // cached history so it reloads next visit instead of showing stale
+        // data (Kardex now owns the actual movements view, not this page).
+        if (!editingProduct.value) invalidateStockMovements();
         // A new product with a cost/expiration just opened its first lot
         // server-side (X5 Bloque C) — refresh so the "Vencimiento" column
         // and the "Ver lotes" panel reflect it immediately, without waiting
@@ -867,81 +797,6 @@ function handleDeleteProduct(product) {
     }
   });
 }
-
-// ── Intake modal ───────────────────────────────────────────────────────────────
-
-const intakeForm = ref({ productId: '', quantity: '', cost: '', expirationDate: '', supplierId: '', note: '', warehouseId: '', basePrice: '' });
-
-/** The product currently picked in the intake modal — null while nothing's selected yet. */
-const intakeFormProduct = computed(() =>
-    products.value.find(product => product.id === parseInt(intakeForm.value.productId)) ?? null
-);
-
-/**
- * Defaults the intake warehouse to where a product's stock already lives,
- * so leaving the selector untouched never silently moves it elsewhere —
- * only falls back to the first warehouse for a product with no inventory
- * record yet (shouldn't normally happen, since every product gets one).
- * @param {number|string} productId
- * @returns {string}
- */
-function resolveWarehouseIdForProduct(productId) {
-  const inventoryItem = productStore.getInventoryByProduct(productId);
-  if (inventoryItem && inventoryItem.warehouseId) return String(inventoryItem.warehouseId);
-  return warehouses.value[0] ? String(warehouses.value[0].id) : '';
-}
-
-/**
- * Pre-fills the intake form from what's already known about a product —
- * its last purchase cost/expiration (its active batch), its first tagged
- * supplier (see Product.supplierIds — same pool the product form's
- * multiselect draws from, now a real linked SupplierId here too instead of
- * free text) and its current sale price — so re-stocking a known product
- * (typically via the barcode scanner) only requires typing the quantity
- * instead of retyping everything by hand. Every field stays a normal
- * editable input, this is only the starting value.
- * @param {number|string} productId
- * @returns {{warehouseId: string, cost: string, expirationDate: string, supplierId: string|number, basePrice: string}}
- */
-function resolveIntakeDefaultsForProduct(productId) {
-  const product = products.value.find(p => p.id === parseInt(productId));
-  const activeBatch = productStore.batches.find(
-      batch => batch.productId === parseInt(productId) && batch.status === 'ACTIVE'
-  );
-  return {
-    warehouseId:    resolveWarehouseIdForProduct(productId),
-    cost:           activeBatch ? String(activeBatch.purchasePrice) : '',
-    expirationDate: activeBatch ? activeBatch.expiration : '',
-    supplierId:     product?.supplierIds?.[0] ?? '',
-    basePrice:      product ? String(product.basePrice) : ''
-  };
-}
-
-function openIntakeModal(product) {
-  intakeTargetProduct.value = product;
-  const initialProductId = product ? String(product.id) : (products.value[0] ? String(products.value[0].id) : '');
-  intakeForm.value = {
-    productId: initialProductId,
-    quantity:  '',
-    note:      '',
-    ...(initialProductId
-        ? resolveIntakeDefaultsForProduct(initialProductId)
-        : { warehouseId: '', cost: '', expirationDate: '', supplierId: '', basePrice: '' })
-  };
-  showIntakeModal.value = true;
-}
-
-/**
- * Keeps cost/expiration/supplier/sale-price/warehouse in sync when the
- * admin picks a different product from the dropdown (the generic
- * "Registrar ingreso" entry point, not tied to one product's row), so they
- * still default to that product's own known data instead of staying on
- * whatever the previously selected product had.
- */
-watch(() => intakeForm.value.productId, (newProductId) => {
-  if (!showIntakeModal.value || !newProductId) return;
-  Object.assign(intakeForm.value, resolveIntakeDefaultsForProduct(newProductId));
-});
 
 /**
  * X5 Bloque C: a product can have several active lots at once — this is the
@@ -1022,101 +877,6 @@ function saveLotExpiration(batch) {
       })
       .finally(() => {
         savingLotExpiration.value = false;
-      });
-}
-
-function saveIntake() {
-  // Previously a silent no-op on a missing product/quantity — the button
-  // isn't disabled by either, so clicking it did nothing with zero feedback.
-  if (!intakeForm.value.productId) {
-    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-intake-product-required'), life: 4500 });
-    return;
-  }
-
-  // X5 Bloque D: a fractional quantity is only meaningful for a product
-  // marked "se vende por peso" — resolved before the quantity checks below
-  // so they can gate on it.
-  const allowsFractionalQuantity = intakeFormProduct.value?.isSoldByWeight ?? false;
-
-  const rawQuantity = intakeForm.value.quantity;
-  const quantity = allowsFractionalQuantity ? (parseMoneyInput(rawQuantity) || 0) : parseInt(rawQuantity);
-  if (!quantity || quantity <= 0) {
-    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-intake-quantity-required'), life: 4500 });
-    return;
-  }
-
-  // The input is `type="number"`, so a decimal like "5.7" is typeable even
-  // with no `step` — parseInt above would otherwise silently truncate it to
-  // 5 with no warning. Only a whole-unit product is rejected here; a
-  // weight-sold one is exactly what this decimal is for.
-  if (!allowsFractionalQuantity && Number(rawQuantity) !== quantity) {
-    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-quantity-not-whole'), life: 4500 });
-    return;
-  }
-
-  // warehouseId is a non-nullable int on the backend's stock-intake command
-  // — submitting without one would otherwise send `null` and fail with an
-  // opaque 400 instead of a readable message.
-  if (!intakeForm.value.warehouseId) {
-    toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-warehouse-required'), life: 4500 });
-    return;
-  }
-
-  // The sale price field is pre-filled from the product's current basePrice
-  // (see resolveIntakeDefaultsForProduct) purely to save re-typing when it
-  // hasn't changed — only persisted as a real product update when the admin
-  // actually edited it, so an untouched intake never triggers an extra call.
-  const targetProduct  = intakeFormProduct.value;
-  const newBasePrice   = parseFloat(intakeForm.value.basePrice);
-  const basePriceEdited = targetProduct && !isNaN(newBasePrice) && newBasePrice !== targetProduct.basePrice;
-
-  // The picked supplier is a real link (supplierId) now instead of free
-  // text — still resolving its name here too so the "Movimientos" table
-  // (which only ever displayed a plain string) keeps showing one.
-  const pickedSupplierId = intakeForm.value.supplierId ? parseInt(intakeForm.value.supplierId) : null;
-  const pickedSupplierName = pickedSupplierId
-      ? allSuppliers.value.find(supplier => supplier.id === pickedSupplierId)?.fullName ?? ''
-      : '';
-
-  savingIntake.value = true;
-  registerStockIntake({
-    productId:     parseInt(intakeForm.value.productId),
-    quantity:      quantity,
-    warehouseId:   parseInt(intakeForm.value.warehouseId),
-    purchasePrice: parseFloat(intakeForm.value.cost) || null,
-    expiration:    intakeForm.value.expirationDate || null,
-    supplierId:    pickedSupplierId,
-    supplier:      pickedSupplierName,
-    note:          intakeForm.value.note
-  })
-      .then(() => basePriceEdited
-          ? updateProduct(new Product({ ...targetProduct, basePrice: newBasePrice }))
-          : null)
-      .then(() => {
-        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-intake-success'), life: 3500 });
-        showIntakeModal.value = false;
-        // The intake just recorded a StockMovement server-side — refresh so
-        // "Movimientos" reflects it without requiring a full page reload.
-        fetchAllStockMovements();
-        // A cost/expiration on this intake may have created or updated the
-        // product's active batch server-side (see registerStockIntake) —
-        // refresh so the expiration column reflects it immediately.
-        if (intakeForm.value.cost || intakeForm.value.expirationDate) fetchBatches();
-        // The intake may have resolved a LOW_STOCK/OUT_OF_STOCK alert, or
-        // its expiration may have created a new EXPIRATION one — refresh so
-        // the sidebar badge picks it up right away.
-        alertsStore.fetchAlerts();
-      })
-      .catch(() => {
-        toast.add({
-          severity: 'error',
-          summary:  t('common.toast-error-title'),
-          detail:   t('inventory.toast-intake-error'),
-          life: 4500
-        });
-      })
-      .finally(() => {
-        savingIntake.value = false;
       });
 }
 
@@ -1268,7 +1028,7 @@ function openAdjustModal(product) {
 }
 
 function saveAdjustment() {
-  // X5 Bloque D — same gating as saveIntake.
+  // X5 Bloque D — a fractional quantity is only meaningful for a product sold by weight.
   const allowsFractionalQuantity = adjustTargetProduct.value?.isSoldByWeight ?? false;
 
   const rawQuantity = adjustForm.value.quantity;
@@ -1278,10 +1038,9 @@ function saveAdjustment() {
     return;
   }
 
-  // Same silent-truncation gap as saveIntake — the input allows a decimal
-  // like "3.5", parseInt above would otherwise drop it to 3 with no warning.
-  // Only enforced for a whole-unit product; a weight-sold one is exactly
-  // what this decimal is for.
+  // The input allows a decimal like "3.5" even with no `step` — parseInt
+  // above would otherwise drop it to 3 with no warning. Only enforced for a
+  // whole-unit product; a weight-sold one is exactly what this decimal is for.
   if (!allowsFractionalQuantity && Number(rawQuantity) !== quantity) {
     toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-quantity-not-whole'), life: 4500 });
     return;
@@ -1311,9 +1070,10 @@ function saveAdjustment() {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-adjust-success'), life: 3500 });
         showAdjustModal.value = false;
         // The adjustment may have created/resolved a LOW_STOCK/OUT_OF_STOCK
-        // alert, and it's a real audit-trail entry the "Movimientos" tab
-        // should reflect right away.
-        fetchAllStockMovements();
+        // alert, and it's a real audit-trail entry — invalidate Kardex's
+        // cached history so it reloads next visit instead of showing stale
+        // data (Kardex now owns the actual movements view, not this page).
+        invalidateStockMovements();
         alertsStore.fetchAlerts();
       })
       .catch(error => {
@@ -1331,7 +1091,6 @@ function saveAdjustment() {
 // which read as the modal itself being broken once the virtual keyboard
 // covered fields further down.
 useModalScrollLock(showProductModal);
-useModalScrollLock(showIntakeModal);
 useModalScrollLock(showWarehouseModal);
 useModalScrollLock(showInactiveModal);
 useModalScrollLock(showAdjustModal);
@@ -1379,15 +1138,6 @@ function saveWarehouse() {
           <p class="m-0 mt-1 page-subtitle">{{ t('inventory.subtitle') }}</p>
         </div>
         <div v-if="canWrite" class="flex align-items-center gap-2 flex-shrink-0">
-          <!-- Register intake (hidden on mobile, replaced by FAB) -->
-          <button
-              class="hidden sm:flex align-items-center gap-2 px-3 py-2 border-round-xl cursor-pointer btn-intake-outline"
-              :title="t('inventory.intake-modal-hint')"
-              @click="openIntakeModal(null)"
-          >
-            <i class="pi pi-inbox" style="font-size: 0.9rem;"/>
-            {{ t('inventory.btn-register-intake') }}
-          </button>
           <!-- Scan barcode -->
           <button
               class="hidden sm:flex align-items-center gap-2 px-3 py-2 border-round-xl cursor-pointer btn-intake-outline"
@@ -1451,7 +1201,6 @@ function saveWarehouse() {
         <button
             v-for="tab in [
               { id: 'products',  label: t('inventory.tab-products'),  icon: 'pi pi-box'      },
-              { id: 'movements', label: t('inventory.tab-movements'), icon: 'pi pi-clock'    },
               { id: 'warehouse', label: t('inventory.tab-warehouse'), icon: 'pi pi-building' }
             ]"
             :key="tab.id"
@@ -1620,14 +1369,6 @@ function saveWarehouse() {
               <td class="px-4 py-3">
                 <div v-if="canWrite" class="flex align-items-center gap-1 justify-content-end">
                   <button
-                      class="p-2 border-round-lg border-none cursor-pointer btn-icon-intake"
-                      :title="t('inventory.btn-register-intake')"
-                      :aria-label="t('inventory.btn-register-intake')"
-                      @click="openIntakeModal(product)"
-                  >
-                    <i class="pi pi-inbox" style="font-size: 0.95rem;"/>
-                  </button>
-                  <button
                       class="p-2 border-round-lg border-none cursor-pointer btn-icon-adjust"
                       :title="t('inventory.btn-adjust-stock')"
                       :aria-label="t('inventory.btn-adjust-stock')"
@@ -1744,13 +1485,6 @@ function saveWarehouse() {
           <!-- Action buttons -->
           <div v-if="canWrite" class="flex flex-wrap gap-2">
             <button
-                class="flex-1 flex align-items-center justify-content-center gap-2 py-2 border-round-xl border-none cursor-pointer btn-mobile-intake"
-                @click="openIntakeModal(product)"
-            >
-              <i class="pi pi-inbox" style="font-size: 0.82rem;"/>
-              {{ t('inventory.btn-intake-short') }}
-            </button>
-            <button
                 class="flex align-items-center justify-content-center py-2 px-3 border-round-xl cursor-pointer btn-mobile-edit"
                 :aria-label="t('inventory.btn-edit')"
                 @click="openEditProductModal(product)"
@@ -1784,16 +1518,6 @@ function saveWarehouse() {
       </div>
     </div>
 
-    <!-- FAB: mobile quick intake -->
-    <button
-        v-if="activeTab === 'products' && canWrite"
-        class="sm:hidden fixed flex align-items-center justify-content-center border-round-3xl border-none cursor-pointer fab"
-        :title="t('inventory.btn-register-intake')"
-        @click="openIntakeModal(null)"
-    >
-      <i class="pi pi-inbox" style="font-size: 1.3rem;"/>
-    </button>
-
     <!-- FAB: mobile quick scan -->
     <button
         v-if="activeTab === 'products' && canWrite"
@@ -1803,115 +1527,6 @@ function saveWarehouse() {
     >
       <i class="pi pi-qrcode" style="font-size: 1.3rem;"/>
     </button>
-
-    <!-- ══════════════════════════════════════════════════════════════
-         TAB: MOVEMENTS
-    ═══════════════════════════════════════════════════════════════ -->
-    <div v-if="activeTab === 'movements'" class="border-round-xl overflow-hidden table-card">
-      <!-- Desktop table -->
-      <div class="hidden md:block" style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse;">
-          <thead>
-          <tr class="table-head">
-            <th
-                v-for="header in [t('inventory.col-date'), t('inventory.col-movement-product'), t('inventory.col-type'), t('inventory.col-qty'), t('inventory.col-supplier'), t('inventory.col-note')]"
-                :key="header"
-                class="px-4 py-3 text-left col-header"
-            >
-              {{ header }}
-            </th>
-          </tr>
-          </thead>
-          <tbody>
-          <tr
-              v-for="(movement, index) in stockMovements"
-              :key="movement.id"
-              class="table-row"
-              :style="{ borderBottom: index < stockMovements.length - 1 ? '1px solid var(--surface-alt)' : 'none' }"
-          >
-            <td class="px-4 py-3 movement-date">{{ formatMovementDate(movement.registeredAt) }}</td>
-            <td class="px-4 py-3 movement-product">{{ movementProductName(movement.productId) }}</td>
-            <td class="px-4 py-3">
-              <span
-                  class="inline-flex align-items-center gap-1 border-round-3xl status-badge"
-                  :style="{ backgroundColor: movementTypeVisual(movement).bg, color: movementTypeVisual(movement).fg }"
-              >
-                <i :class="`pi ${movementTypeVisual(movement).icon}`" style="font-size: 0.65rem;"/>
-                {{ t(movementTypeVisual(movement).labelKey) }}
-              </span>
-            </td>
-            <td class="px-4 py-3">
-              <span class="stock-value" :style="{ color: movementTypeVisual(movement).fg }">
-                {{ movement.signedQuantity > 0 ? '+' : '' }}{{ movement.signedQuantity }}
-              </span>
-              <span class="stock-unit"> und.</span>
-            </td>
-            <td class="px-4 py-3 movement-date">{{ movement.supplier ?? '—' }}</td>
-            <td class="px-4 py-3 product-desc">{{ movement.note ?? '—' }}</td>
-          </tr>
-          </tbody>
-        </table>
-        <div v-if="stockMovementsError" class="flex flex-column align-items-center py-12 gap-3">
-          <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap">
-            <i class="pi pi-lock" style="font-size: 1.8rem; color: var(--status-critical-fg);"/>
-          </div>
-          <p class="m-0 empty-text">{{ movementsErrorMessage }}</p>
-        </div>
-        <div v-else-if="!stockMovements.length" class="flex flex-column align-items-center py-12 gap-3">
-          <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap">
-            <i class="pi pi-clock" style="font-size: 1.8rem; color: var(--text-faint);"/>
-          </div>
-          <p class="m-0 empty-text">{{ t('inventory.no-movements') }}</p>
-        </div>
-      </div>
-
-      <!-- Mobile movement list -->
-      <div class="md:hidden">
-        <div v-if="stockMovementsError" class="flex flex-column align-items-center py-10 gap-3">
-          <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap-sm">
-            <i class="pi pi-lock" style="font-size: 1.6rem; color: var(--status-critical-fg);"/>
-          </div>
-          <p class="m-0 empty-text">{{ movementsErrorMessage }}</p>
-        </div>
-        <div v-else-if="!stockMovements.length" class="flex flex-column align-items-center py-10 gap-3">
-          <div class="flex align-items-center justify-content-center border-round-xl empty-icon-wrap-sm">
-            <i class="pi pi-clock" style="font-size: 1.6rem; color: var(--text-faint);"/>
-          </div>
-          <p class="m-0 empty-text">{{ t('inventory.no-movements') }}</p>
-        </div>
-        <div
-            v-for="(movement, index) in stockMovements"
-            :key="movement.id"
-            class="flex align-items-start gap-3 p-4"
-            :style="{ borderBottom: index < stockMovements.length - 1 ? '1px solid var(--surface-alt)' : 'none' }"
-        >
-          <!-- Type icon circle -->
-          <div
-              class="flex align-items-center justify-content-center border-round-lg flex-shrink-0 movement-type-icon"
-              :style="{ backgroundColor: movementTypeVisual(movement).bg }"
-          >
-            <i :class="`pi ${movementTypeVisual(movement).icon}`" :style="{ fontSize: '1.05rem', color: movementTypeVisual(movement).fg }"/>
-          </div>
-          <div style="flex: 1; min-width: 0;">
-            <div class="flex align-items-center justify-content-between gap-2">
-              <p class="m-0 mobile-product-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ movementProductName(movement.productId) }}</p>
-              <p class="m-0 flex-shrink-0 stock-value" :style="{ color: movementTypeVisual(movement).fg }">
-                {{ movement.signedQuantity > 0 ? '+' : '' }}{{ movement.signedQuantity }}
-              </p>
-            </div>
-            <div class="flex align-items-center gap-2 mt-1 flex-wrap">
-              <span
-                  class="border-round-3xl inline-block category-badge-sm"
-                  :style="{ backgroundColor: movementTypeVisual(movement).bg, color: movementTypeVisual(movement).fg }"
-              >
-                {{ t(movementTypeVisual(movement).labelKey) }}
-              </span>
-              <p class="m-0 product-desc">{{ formatMovementDate(movement.registeredAt) }}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- ══════════════════════════════════════════════════════════════
          TAB: WAREHOUSE
@@ -2257,112 +1872,6 @@ function saveWarehouse() {
       </div>
     </div>
 
-    <!-- ══════════════════════════════════════════════════════════════
-         MODAL: STOCK INTAKE
-    ═══════════════════════════════════════════════════════════════ -->
-    <div
-        v-if="showIntakeModal"
-        class="fixed inset-0 z-50 flex align-items-end sm:align-items-center justify-content-center modal-overlay"
-        @click.self="showIntakeModal = false"
-    >
-      <div class="w-full border-round-t-2xl sm:border-round-2xl overflow-y-auto modal-container-sm">
-        <!-- Modal header -->
-        <div class="flex align-items-center justify-content-between px-5 py-4 modal-header">
-          <div class="flex align-items-center gap-3">
-            <div class="flex align-items-center justify-content-center border-round-lg modal-icon-wrap" style="background: linear-gradient(135deg, var(--status-ok-bg), var(--status-ok-bg));">
-              <i class="pi pi-inbox" style="color: var(--status-ok-fg); font-size: 0.95rem;"/>
-            </div>
-            <p class="m-0 modal-title">{{ t('inventory.intake-modal-title') }}</p>
-          </div>
-          <button class="p-2 border-round-lg border-none cursor-pointer btn-modal-close" @click="showIntakeModal = false">
-            <i class="pi pi-times" style="font-size: 1rem;"/>
-          </button>
-        </div>
-
-        <div class="px-5 pt-2 pb-0">
-          <p class="m-0 intake-modal-hint">
-            <i class="pi pi-info-circle" style="font-size: 0.8rem; margin-right: 0.3rem;"/>
-            {{ t('inventory.intake-modal-hint') }}
-          </p>
-        </div>
-
-        <div class="px-5 py-5 flex flex-column gap-4">
-          <!-- Product selector -->
-          <div>
-            <label class="modal-label">{{ t('inventory.intake-field-product') }}</label>
-            <select v-model="intakeForm.productId" class="modal-input modal-select">
-              <option value="" disabled>{{ t('inventory.intake-field-product-placeholder') }}</option>
-              <option v-for="product in products" :key="product.id" :value="String(product.id)">{{ product.name }}</option>
-            </select>
-          </div>
-          <!-- Quantity — step allows decimals only for a product sold by weight (X5 Bloque D) -->
-          <div>
-            <label class="modal-label">{{ t('inventory.intake-field-qty') }}</label>
-            <input
-                v-model="intakeForm.quantity"
-                type="number" min="0.01" :step="intakeFormProduct?.isSoldByWeight ? '0.01' : '1'" placeholder="0"
-                class="modal-input"
-            />
-          </div>
-          <!-- Cost + Expiration (2-col on sm+) — updates the product's active batch atomically -->
-          <div class="flex flex-column sm:flex-row gap-4">
-            <div style="flex: 1;">
-              <label class="modal-label">{{ t('inventory.intake-field-cost') }}</label>
-              <input v-model="intakeForm.cost" type="number" min="0" step="0.01" placeholder="0.00" class="modal-input"/>
-            </div>
-            <div style="flex: 1;">
-              <label class="modal-label">{{ t('inventory.intake-field-expiration') }}</label>
-              <input v-model="intakeForm.expirationDate" type="date" :min="todayIsoDate" class="modal-input"/>
-            </div>
-          </div>
-          <!-- Sale price -->
-          <div>
-            <label class="modal-label">{{ t('inventory.intake-field-sale-price') }}</label>
-            <input v-model="intakeForm.basePrice" type="number" min="0" step="0.01" placeholder="0.00" class="modal-input"/>
-          </div>
-          <!-- Warehouse -->
-          <div>
-            <label class="modal-label">{{ t('inventory.intake-field-warehouse') }}</label>
-            <select v-model="intakeForm.warehouseId" class="modal-input modal-select">
-              <option value="" disabled>{{ t('inventory.modal-field-warehouse-placeholder') }}</option>
-              <option v-for="warehouse in warehouses" :key="warehouse.id" :value="String(warehouse.id)">
-                {{ warehouse.name }}
-              </option>
-            </select>
-          </div>
-          <!-- Supplier -->
-          <div>
-            <label class="modal-label">{{ t('inventory.intake-field-supplier') }}</label>
-            <select v-model="intakeForm.supplierId" class="modal-input modal-select">
-              <option value="">{{ t('inventory.intake-field-supplier-placeholder') }}</option>
-              <option v-for="supplier in activeSupplierOptions" :key="supplier.value" :value="supplier.value">
-                {{ supplier.label }}
-              </option>
-            </select>
-          </div>
-          <!-- Note -->
-          <div>
-            <label class="modal-label">{{ t('inventory.intake-field-note') }}</label>
-            <input v-model="intakeForm.note" :placeholder="t('inventory.intake-field-note-placeholder')" maxlength="500" class="modal-input"/>
-          </div>
-
-          <!-- Actions -->
-          <div class="flex gap-3">
-            <button class="flex-1 py-2 border-round-xl cursor-pointer btn-modal-cancel" :disabled="savingIntake" @click="showIntakeModal = false">
-              {{ t('inventory.modal-cancel') }}
-            </button>
-            <button
-                class="flex-1 py-2 border-round-xl border-none cursor-pointer btn-intake-confirm"
-                :disabled="savingIntake || warehousesLoading"
-                @click="saveIntake"
-            >
-              <i v-if="savingIntake" class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>
-              {{ savingIntake ? t('inventory.modal-saving') : t('inventory.intake-btn') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- ══════════════════════════════════════════════════════════════
          MODAL: LOTS (X5 Bloque C) — read-only view of every active batch
@@ -2986,16 +2495,6 @@ function saveWarehouse() {
 }
 
 /* ── Table icon buttons ──────────────────────────────────────── */
-.btn-icon-intake {
-  background: none;
-  color: var(--brand);
-  transition: all 0.15s;
-}
-.btn-icon-intake:hover {
-  background-color: var(--brand-soft);
-  transform: scale(1.12);
-}
-
 .btn-icon-adjust {
   background: none;
   color: var(--status-warning-fg);
@@ -3187,14 +2686,6 @@ function saveWarehouse() {
   color: var(--brand);
 }
 
-.btn-mobile-intake {
-  background: linear-gradient(135deg, var(--brand), var(--brand));
-  color: var(--brand-ink);
-  font-size: 0.8rem;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(198, 113, 57, 0.3);
-}
-
 .btn-mobile-edit {
   background: none;
   border: 1.5px solid var(--border);
@@ -3264,23 +2755,6 @@ function saveWarehouse() {
   background: linear-gradient(135deg, var(--accent), var(--accent));
   color: var(--accent-ink);
   box-shadow: 0 4px 18px rgba(111, 128, 85, 0.5);
-}
-
-/* ── Movement table specifics ────────────────────────────────── */
-.movement-date {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
-.movement-product {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.movement-type-icon {
-  width: 40px;
-  height: 40px;
 }
 
 /* ── Warehouse cards ─────────────────────────────────────────── */
@@ -3436,19 +2910,6 @@ function saveWarehouse() {
   transform: translateY(-1px);
 }
 
-.btn-intake-confirm {
-  background: linear-gradient(135deg, var(--status-ok-fg), var(--status-ok-fg));
-  color: var(--brand-ink);
-  font-size: 0.88rem;
-  font-weight: 700;
-  box-shadow: 0 2px 10px rgba(22, 163, 74, 0.3);
-  transition: all 0.18s;
-}
-.btn-intake-confirm:hover {
-  box-shadow: 0 4px 16px rgba(22, 163, 74, 0.45);
-  transform: translateY(-1px);
-}
-
 /* ── Modal input ─────────────────────────────────────────────── */
 .modal-input {
   width: 100%;
@@ -3485,15 +2946,6 @@ function saveWarehouse() {
   color: var(--status-critical-fg);
   margin-top: 0.25rem;
 }
-.intake-modal-hint {
-  font-size: 0.76rem;
-  color: var(--text-muted);
-  background-color: var(--surface-alt);
-  border: 1px solid var(--border);
-  border-radius: 0.6rem;
-  padding: 0.6rem 0.75rem;
-}
-
 .modal-select {
   appearance: none;
   cursor: pointer;

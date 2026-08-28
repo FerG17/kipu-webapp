@@ -88,6 +88,7 @@ function closeSidebar() {
 const allMenuItems = [
   { labelKey: 'option.dashboard',  icon: 'pi pi-th-large',      routeName: 'dashboard',  access: canAccessDashboard },
   { labelKey: 'option.inventory',  icon: 'pi pi-box',           routeName: 'products'  },
+  { labelKey: 'option.kardex',     icon: 'pi pi-history',       routeName: 'kardex'    },
   { labelKey: 'option.sales',      icon: 'pi pi-shopping-cart', routeName: 'pos-screen', access: canAccessSales     },
   { labelKey: 'option.suppliers',  icon: 'pi pi-truck',         routeName: 'suppliers',  access: canAccessSuppliers },
   { labelKey: 'option.alerts',     icon: 'pi pi-bell',          routeName: 'alerts',     showBadge: true },

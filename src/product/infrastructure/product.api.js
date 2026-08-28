@@ -250,4 +250,16 @@ export class ProductApi extends BaseApi {
     getStockMovements() {
         return this.#stockMovementsEndpoint.getPage({ pageSize: 200 });
     }
+
+    /**
+     * Backs Kardex — unpaginated, filterable, ascending-capable. Every
+     * filter is optional; omit a key entirely rather than sending it empty,
+     * since the backend treats an absent query param differently from an
+     * explicit empty string for `category`.
+     * @param {{productId?: number, dateFrom?: string, dateTo?: string, category?: string, ascending?: boolean}} [filters]
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    getFilteredStockMovements(filters = {}) {
+        return this.#stockMovementsEndpoint.getWithParams('/filtered', filters);
+    }
 }

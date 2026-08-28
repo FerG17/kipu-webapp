@@ -5,6 +5,7 @@ import dashboardRoutes from './dashboard/presentation/dashboard.routes.js';
 import {iamAuthenticatedRoutes} from "./iam/presentation/iam.routes.js";
 import Home from './shared/presentation/views/home.vue';
 import productRoutes from './product/presentation/product.routes.js';
+import kardexRoutes from './kardex/presentation/kardex.routes.js';
 import alertsRoutes from './alerts/presentation/alerts.routes.js';
 import salesRoutes from './sales/presentation/sales.routes.js';
 import { authenticationGuard } from './iam/infrastructure/authentication.guard.js';
@@ -46,6 +47,7 @@ const routes = [
             { path: 'home',  name: 'home',  component: Home,  meta: { title: 'Home' } },
             ...dashboardRoutes,
             ...productRoutes,
+            ...kardexRoutes,
             ...alertsRoutes,
             ...salesRoutes,
             ...iamAuthenticatedRoutes,

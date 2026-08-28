@@ -57,6 +57,17 @@ export class BaseEndpoint {
     }
 
     /**
+     * Fetches a sub-path of this endpoint (e.g. '/filtered') with query
+     * parameters — for a GET action that isn't page/id-based.
+     * @param {string} subPath - Appended directly to endpointPath, e.g. '/filtered'.
+     * @param {Object} [params] - Query parameters.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    getWithParams(subPath, params = {}) {
+        return this.http.get(`${this.endpointPath}${subPath}`, { params });
+    }
+
+    /**
      * Creates a new resource.
      * @param {Object} resource - Resource payload to persist.
      * @returns {Promise<import('axios').AxiosResponse>} HTTP response with the created resource.
