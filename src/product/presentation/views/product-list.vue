@@ -476,22 +476,23 @@ const productModalErrors = ref({ basePrice: '', name: '' });
 const supplierMultiselectRef = ref(null);
 
 /**
- * PrimeVue's MultiSelect computes its overlay position (`alignOverlay`)
- * synchronously inside the transition's `onOverlayEnter` hook, while the
- * panel still carries its `p-anchored-overlay-enter-from`/`-enter-active`
- * classes (confirmed by instrumenting a live repro: `getComputedStyle` on
- * the panel reports `insetInlineStart: 0px` even though its own inline
- * `style` attribute already says the correct pixel value — the transition
- * state itself is overriding the freshly-computed position until the enter
- * transition actually finishes advancing, which is exactly what `@show`
- * is supposed to signal, but doesn't reliably fire in time to catch it.
- * Neither a fixed delay (`nextTick`, nor any tested `setTimeout`) nor
- * `@show` reliably lands the correction in the same window the transition
- * resolves in. Since the exact timing can't be pinned down, this instead:
+ * X6 #14: a live repro nailed this down further than the 2026-08-16 fix's
+ * own comment did. `@before-show` fires — and this function's first
+ * `nextTick(attempt)` call runs — *before* PrimeVue has teleported the
+ * overlay panel into the DOM, so `instance.overlay` is still `null` on
+ * that first attempt. The old guard clause below bailed out on that with
+ * a bare `return`, never scheduling a retry — so in practice this never
+ * got a second look, and the panel was left wherever PrimeVue's own
+ * `alignOverlay()` (called later, internally, mid-transition) happened to
+ * clamp it: `inset-inline-start: 0px`, i.e. the viewport's left edge.
+ * Confirmed live: `panel.style.visibility` was never touched by this
+ * function at all — proof the retry loop below it never even started.
  *
- * 1. Hides the panel the instant it exists, before the user can see it in
- *    the wrong spot — this is what actually kills the "white rectangle"
- *    flash the wrong position caused, regardless of how long it takes.
+ * Now the "not mounted yet" case retries exactly like the "not aligned
+ * yet" case does, sharing the same attempt budget:
+ *
+ * 1. Hides the panel once it exists, before the user can see it in the
+ *    wrong spot — this is what kills the "white rectangle" flash.
  * 2. Retries `alignOverlay()` on a short interval, checking after each
  *    attempt whether the panel's left edge now actually matches the
  *    field's — not just trusting that a later call is "probably" right.
@@ -499,7 +500,7 @@ const supplierMultiselectRef = ref(null);
  *    out, so it's never left permanently invisible).
  *
  * `append-to="body"` (already in place from an earlier fix, 2026-08-16)
- * only fixes where the panel lives in the DOM, not this transition race.
+ * only fixes where the panel lives in the DOM, not this mount-order race.
  */
 function realignSupplierMultiselect() {
   const maxAttempts = 24; // ~50ms * 24 ≈ 1.2s worst case before giving up and revealing anyway
@@ -508,12 +509,16 @@ function realignSupplierMultiselect() {
     const instance = supplierMultiselectRef.value;
     const panel = instance?.overlay;
     const target = instance?.$el;
-    if (!instance?.alignOverlay || !panel || !target) return;
 
-    if (attemptsLeft === maxAttempts) panel.style.visibility = 'hidden';
+    attemptsLeft -= 1;
+    if (!instance?.alignOverlay || !panel || !target) {
+      if (attemptsLeft > 0) setTimeout(attempt, 50);
+      return;
+    }
+
+    if (panel.style.visibility === '') panel.style.visibility = 'hidden';
 
     instance.alignOverlay();
-    attemptsLeft -= 1;
 
     const targetLeft = target.getBoundingClientRect().left;
     // A correctly-aligned panel's left edge sits at (or very near) the
