@@ -2,6 +2,7 @@
   "option": {
     "dashboard": "Panel",
     "inventory": "Inventario",
+    "kardex": "Kardex",
     "sales": "Ventas",
     "suppliers": "Proveedores",
     "alerts": "Alertas",
@@ -910,6 +911,27 @@
     "order-action-receive": "Recibir",
     "order-action-delay":   "Retrasar",
     "order-action-cancel":  "Cancelar"
+  },
+
+  "kardex": {
+    "title": "Kardex",
+    "subtitle": "Historial de movimientos de stock",
+    "filter-product": "Producto",
+    "filter-product-all": "Todos los productos",
+    "filter-category": "Categoría",
+    "filter-category-all": "Todas las categorías",
+    "filter-date-from": "Desde",
+    "filter-date-to": "Hasta",
+    "btn-clear-filters": "Limpiar filtros",
+    "btn-quick-loss": "Pérdida rápida",
+    "btn-quick-loss-hint": "Selecciona un producto para habilitar esta opción",
+    "col-unit-cost": "Costo unitario",
+    "col-balance": "Saldo",
+    "balance-hint": "El saldo corrido se calcula sobre los movimientos mostrados. Si filtras por fecha, arranca en 0 desde el primer movimiento visible, no desde el stock real anterior a ese filtro.",
+    "select-product-hint": "Selecciona un producto para ver su kardex completo: orden cronológico, costo unitario y saldo corrido.",
+    "empty": "Sin movimientos para estos filtros",
+    "loading": "Cargando movimientos…",
+    "toast-load-error": "No se pudieron cargar los movimientos. Intenta de nuevo."
   }
 
 }

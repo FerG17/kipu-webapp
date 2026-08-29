@@ -322,6 +322,19 @@ const useProductStore = defineStore('product', () => {
     }
 
     /**
+     * Backs Kardex — a filtered, unpaginated fetch that resolves to entities
+     * directly instead of populating shared state, since each Kardex query
+     * (a different product, a different date range) is its own one-off
+     * request rather than something other pages need to react to.
+     * @param {{productId?: number, dateFrom?: string, dateTo?: string, category?: string, ascending?: boolean}} [filters]
+     * @returns {Promise<import('../domain/model/stock-movement.entity.js').StockMovement[]>}
+     */
+    function fetchFilteredStockMovements(filters = {}) {
+        return productApi.getFilteredStockMovements(filters)
+            .then(response => StockMovementAssembler.toEntitiesFromResponse(response));
+    }
+
+    /**
      * Fetches every batch across all products, used to determine which
      * products have stock expiring soon (see getDaysToNearestExpiry).
      */
@@ -690,6 +703,7 @@ const useProductStore = defineStore('product', () => {
         fetchStockMovements,
         fetchAllStockMovements,
         invalidateStockMovements,
+        fetchFilteredStockMovements,
         fetchWarehousesForBusiness,
         createWarehouse,
         fetchSuppliersForBusiness,

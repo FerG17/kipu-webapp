@@ -2,6 +2,7 @@
   "option": {
     "dashboard": "Panel",
     "inventory": "Inventory",
+    "kardex": "Kardex",
     "sales": "Sales",
     "suppliers": "Suppliers",
     "alerts": "Alerts",
@@ -910,5 +911,26 @@
     "order-action-receive": "Receive",
     "order-action-delay":   "Delay",
     "order-action-cancel":  "Cancel"
+  },
+
+  "kardex": {
+    "title": "Kardex",
+    "subtitle": "Stock movement history",
+    "filter-product": "Product",
+    "filter-product-all": "All products",
+    "filter-category": "Category",
+    "filter-category-all": "All categories",
+    "filter-date-from": "From",
+    "filter-date-to": "To",
+    "btn-clear-filters": "Clear filters",
+    "btn-quick-loss": "Quick loss",
+    "btn-quick-loss-hint": "Select a product to enable this option",
+    "col-unit-cost": "Unit cost",
+    "col-balance": "Balance",
+    "balance-hint": "The running balance is computed over the movements shown. If you filter by date, it starts at 0 from the first visible movement, not from the real stock level before that filter.",
+    "select-product-hint": "Select a product to see its full kardex: chronological order, unit cost, and running balance.",
+    "empty": "No movements for these filters",
+    "loading": "Loading movements…",
+    "toast-load-error": "Couldn't load movements. Please try again."
   }
 }

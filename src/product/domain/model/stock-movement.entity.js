@@ -40,6 +40,8 @@ export class StockMovement {
      * @param {string}      [params.supplier='']  - Free-text supplier name, only meaningful for INTAKE.
      * @param {string}      [params.note='']
      * @param {string}      [params.registeredAt='']
+     * @param {number|null} [params.batchId=null]  - The lot this movement drew from/into, when it has one (never set for ADJUSTMENT).
+     * @param {number|null} [params.unitCost=null]  - That lot's purchase price — Kardex's per-row cost column.
      */
     constructor({
                     id           = null,
@@ -50,7 +52,9 @@ export class StockMovement {
                     type         = MovementType.INTAKE,
                     supplier     = '',
                     note         = '',
-                    registeredAt = ''
+                    registeredAt = '',
+                    batchId      = null,
+                    unitCost     = null
                 }) {
         this.id           = id;
         this.productId    = productId;
@@ -61,6 +65,8 @@ export class StockMovement {
         this.supplier     = supplier;
         this.note         = note;
         this.registeredAt = registeredAt;
+        this.batchId      = batchId;
+        this.unitCost     = unitCost;
     }
 
     /**
