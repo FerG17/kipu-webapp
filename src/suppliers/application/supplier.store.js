@@ -286,10 +286,11 @@ const useSupplierStore = defineStore('supplier', () => {
             currency:     'PEN',
             description:  orderPayload.description ?? '',
             lines: orderPayload.detailLines.map(line => ({
-                productId: parseInt(line.productId),
-                quantity:  parseInt(line.quantity),
-                unitPrice: parseFloat(line.unitPrice),
-                discount:  parseFloat(line.discount ?? 0)
+                productId:  parseInt(line.productId),
+                quantity:   parseInt(line.quantity),
+                unitPrice:  parseFloat(line.unitPrice),
+                discount:   parseFloat(line.discount ?? 0),
+                batchLabel: line.batchLabel ?? null
             }))
         };
 

@@ -377,8 +377,8 @@ const useProductStore = defineStore('product', () => {
      * @param {string|null} expiration ISO date string (YYYY-MM-DD), or null to clear it.
      * @returns {Promise<void>}
      */
-    function updateBatchExpiration(batchId, expiration) {
-        return productApi.updateBatchExpiration(batchId, expiration)
+    function updateBatchExpiration(batchId, expiration, label = null) {
+        return productApi.updateBatchExpiration(batchId, expiration, label)
             .then(response => {
                 const index = batches.value.findIndex(batch => batch.id === response.data.id);
                 if (index !== -1) batches.value[index] = response.data;
@@ -571,6 +571,7 @@ const useProductStore = defineStore('product', () => {
      * @param {string} [resource.supplier]
      * @param {number} [resource.supplierId]
      * @param {string} [resource.note]
+     * @param {string} [resource.label] - Free-text lot name the owner picks (X6 #3+#11).
      * @returns {Promise<import('../domain/model/inventory-item.entity.js').InventoryItem|null>}
      */
     function registerStockIntake(resource) {
@@ -586,6 +587,7 @@ const useProductStore = defineStore('product', () => {
             supplier:      resource.supplier ?? '',
             supplierId:    resource.supplierId ?? null,
             note:          resource.note ?? '',
+            label:         resource.label ?? null,
             // X5 Bloque D: quantity/minimumStock are only ever whole numbers
             // for a unit-sold product, but Number() (not parseInt, which
             // truncates) is used here regardless, since the value arriving
@@ -615,7 +617,19 @@ const useProductStore = defineStore('product', () => {
      * @param {string} reason
      * @returns {Promise<import('../domain/model/inventory-item.entity.js').InventoryItem>}
      */
-    function adjustStock(productId, warehouseId, delta, reason) {
+    /**
+     * @param {number|string} productId
+     * @param {number|string} warehouseId
+     * @param {number} delta - Signed: negative removes units, positive adds them.
+     * @param {string} reason
+     * @param {Object} [batchOptions] - Only meaningful for a positive delta (X6 #10): removal is
+     *   always automatic FEFO across active lots, decided server-side.
+     * @param {number} [batchOptions.batchId] - Credits this existing lot instead of opening a new one.
+     * @param {string} [batchOptions.newBatchExpiration]
+     * @param {number} [batchOptions.newBatchPurchasePrice]
+     * @param {string} [batchOptions.newBatchLabel]
+     */
+    function adjustStock(productId, warehouseId, delta, reason, batchOptions = {}) {
         // X5 Bloque D: Number(), not parseInt() — parseInt truncates a
         // fractional delta (e.g. 2.5 -> 2), which would silently corrupt a
         // weight-sold product's adjustment. The caller already validated
@@ -628,7 +642,17 @@ const useProductStore = defineStore('product', () => {
             return Promise.reject(new Error('Stock adjustment requires a reason.'));
         }
 
-        return productApi.adjustStock(parseInt(productId), { warehouseId: parseInt(warehouseId), delta: numericDelta, reason: reason.trim() })
+        const adjustResource = {
+            warehouseId: parseInt(warehouseId),
+            delta:       numericDelta,
+            reason:      reason.trim(),
+            batchId:               batchOptions.batchId ?? null,
+            newBatchExpiration:    batchOptions.newBatchExpiration ?? null,
+            newBatchPurchasePrice: batchOptions.newBatchPurchasePrice ?? null,
+            newBatchLabel:         batchOptions.newBatchLabel ?? null
+        };
+
+        return productApi.adjustStock(parseInt(productId), adjustResource)
             .then(response => {
                 const updatedItem = InventoryItemAssembler.toEntityFromResource(response.data);
                 const index = inventory.value.findIndex(item => item.id === updatedItem.id);

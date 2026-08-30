@@ -60,7 +60,7 @@ const newOrderForm = ref({
   supplierId:   '',
   expectedDate: '',
   description:  '',
-  lines:        [{ productId: '', productName: '', quantity: 1, unitPrice: 0, discount: 0 }]
+  lines:        [{ productId: '', productName: '', quantity: 1, unitPrice: 0, discount: 0, batchLabel: '' }]
 });
 
 const newOrderErrors = ref({
@@ -140,7 +140,7 @@ function openNewOrderModal() {
     supplierId:   activeSuppliers.value.length > 0 ? String(activeSuppliers.value[0].id) : '',
     expectedDate: '',
     description:  '',
-    lines:        [{ productId: '', productName: '', quantity: 1, unitPrice: 0, discount: 0 }]
+    lines:        [{ productId: '', productName: '', quantity: 1, unitPrice: 0, discount: 0, batchLabel: '' }]
   };
   showNewOrderModal.value = true;
 }
@@ -154,7 +154,8 @@ function addOrderLine() {
     productName: '',
     quantity:    1,
     unitPrice:   0,
-    discount:    0
+    discount:    0,
+    batchLabel:  ''
   });
 }
 
@@ -247,7 +248,8 @@ function submitNewOrder() {
       productName: line.productName,
       quantity:    parseInt(line.quantity),
       unitPrice:   parseFloat(line.unitPrice),
-      discount:    parseFloat(line.discount ?? 0)
+      discount:    parseFloat(line.discount ?? 0),
+      batchLabel:  line.batchLabel?.trim() || null
     }))
   })
       .then(() => {
@@ -747,6 +749,18 @@ function resolveProductName(detail) {
                     step="0.01"
                     class="orders-line-price-input"
                     :placeholder="t('suppliers.order-modal-price-placeholder')"
+                />
+              </div>
+
+              <!-- Lot name for the batch this line opens on RECEIVED (X6 #3+#11) -->
+              <div class="orders-line-field">
+                <label class="orders-line-field-label">{{ t('suppliers.order-detail-col-lot') }}</label>
+                <input
+                    v-model="line.batchLabel"
+                    type="text"
+                    maxlength="60"
+                    class="orders-line-label-input"
+                    :placeholder="t('suppliers.order-modal-lot-placeholder')"
                 />
               </div>
 
@@ -1473,6 +1487,14 @@ function resolveProductName(detail) {
   color:         var(--text);
   text-align:    center;
   outline:       none;
+}
+
+.orders-line-label-input {
+  width:         8rem;
+  padding:       0.45rem 0.5rem;
+  border:        1px solid var(--border);
+  border-radius: 0.5rem;
+  font-size:     0.82rem;
 }
 
 .orders-line-price-input {

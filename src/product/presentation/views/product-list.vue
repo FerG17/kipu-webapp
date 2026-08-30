@@ -90,6 +90,7 @@ const lotsTargetProduct    = ref(null);
 const discardingBatchId    = ref(null);
 const editingLotId          = ref(null);
 const editingExpirationValue = ref('');
+const editingLabelValue     = ref('');
 const savingLotExpiration   = ref(false);
 
 /**
@@ -393,6 +394,7 @@ const productModalForm = ref({
   basePrice:      '',
   cost:           '',
   expirationDate: '',
+  lotLabel:       '',
   warehouseId:    '',
   barcode:        '',
   unitOfSale:     UnitOfSale.UNIT
@@ -470,7 +472,7 @@ function realignSupplierMultiselect() {
 function openCreateProductModal(prefillBarcode = '') {
   editingProduct.value   = null;
   productModalForm.value = {
-    name: '', category: ProductCategory.OTHER, customCategory: '', supplierIds: [], currentStock: '', minimumStock: '', basePrice: '', cost: '', expirationDate: '',
+    name: '', category: ProductCategory.OTHER, customCategory: '', supplierIds: [], currentStock: '', minimumStock: '', basePrice: '', cost: '', expirationDate: '', lotLabel: '',
     warehouseId: warehouses.value[0] ? String(warehouses.value[0].id) : '',
     barcode: prefillBarcode,
     unitOfSale: UnitOfSale.UNIT
@@ -540,6 +542,7 @@ function openEditProductModal(product) {
     basePrice:      String(product.basePrice),
     cost:           '',
     expirationDate: '',
+    lotLabel:       '',
     warehouseId:    '',
     barcode:        product.barcode ?? '',
     unitOfSale:     product.unitOfSale ?? UnitOfSale.UNIT
@@ -709,7 +712,8 @@ function persistProductFromModal(resolvedCategory) {
         return registerStockIntake({
           productId: createdProduct.id, quantity: initialStock, minimumStock, warehouseId,
           purchasePrice: purchasePrice || null,
-          expiration: expirationDate || null
+          expiration: expirationDate || null,
+          label: productModalForm.value.lotLabel.trim() || null
         }).catch(error => {
           // addProduct above already committed (product + suppliers) by this
           // point — a failure registering stock afterward must not read as
@@ -728,11 +732,12 @@ function persistProductFromModal(resolvedCategory) {
         // cached history so it reloads next visit instead of showing stale
         // data (Kardex now owns the actual movements view, not this page).
         if (!editingProduct.value) invalidateStockMovements();
-        // A new product with a cost/expiration just opened its first lot
-        // server-side (X5 Bloque C) — refresh so the "Vencimiento" column
-        // and the "Ver lotes" panel reflect it immediately, without waiting
-        // for whatever next triggers a batches refetch elsewhere.
-        if (!editingProduct.value && (expirationDate || purchasePrice)) fetchBatches();
+        // A new product with a cost/expiration/lot name just opened its
+        // first lot server-side (X5 Bloque C; label alone does too since X6
+        // #3+#11) — refresh so the "Vencimiento" column and the "Ver lotes"
+        // panel reflect it immediately, without waiting for whatever next
+        // triggers a batches refetch elsewhere.
+        if (!editingProduct.value && (expirationDate || purchasePrice || productModalForm.value.lotLabel.trim())) fetchBatches();
         // A low/zero initial stock, or a near expiration date, may have
         // created an alert server-side — refresh so the sidebar badge picks
         // it up right away instead of only after visiting Alertas.
@@ -852,11 +857,13 @@ function handleDiscardLot(batch) {
 function startEditingLotExpiration(batch) {
   editingLotId.value = batch.id;
   editingExpirationValue.value = batch.expiration || '';
+  editingLabelValue.value = batch.label || '';
 }
 
 function cancelEditingLotExpiration() {
   editingLotId.value = null;
   editingExpirationValue.value = '';
+  editingLabelValue.value = '';
 }
 
 function saveLotExpiration(batch) {
@@ -866,7 +873,7 @@ function saveLotExpiration(batch) {
   }
 
   savingLotExpiration.value = true;
-  updateBatchExpiration(batch.id, editingExpirationValue.value || null)
+  updateBatchExpiration(batch.id, editingExpirationValue.value || null, editingLabelValue.value.trim() || null)
       .then(() => {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-lot-expiration-updated'), life: 3000 });
         alertsStore.fetchAlerts();
@@ -987,7 +994,12 @@ function handleActivateProduct(product) {
 const showAdjustModal   = ref(false);
 const adjustTargetProduct = ref(null);
 const savingAdjustment  = ref(false);
-const adjustForm = ref({ warehouseId: '', direction: 'REMOVE', quantity: '', reasonPreset: 'SHRINKAGE', reasonDetail: '' });
+const adjustForm = ref({
+  warehouseId: '', direction: 'REMOVE', quantity: '', reasonPreset: 'SHRINKAGE', reasonDetail: '',
+  // X6 #10 — only meaningful when direction is 'ADD'; a removal is always
+  // automatic FEFO, decided server-side, with no lot choice in the UI at all.
+  batchMode: 'NEW', batchId: '', newBatchExpiration: '', newBatchPurchasePrice: '', newBatchLabel: ''
+});
 
 /**
  * Warehouses the target product actually has an InventoryItem in — an
@@ -1006,6 +1018,42 @@ const adjustableWarehouses = computed(() => {
   return stocked.length > 0 ? stocked : warehouses.value;
 });
 
+/** X6 #10 — active lots of the InventoryItem the adjustment currently targets, offered as the "add to an existing lot" choice. */
+const adjustableActiveBatches = computed(() => {
+  if (!adjustTargetProduct.value || !adjustForm.value.warehouseId) return [];
+  const item = inventory.value.find(candidate => candidate.productId === adjustTargetProduct.value.id
+      && String(candidate.warehouseId) === String(adjustForm.value.warehouseId));
+  if (!item) return [];
+  return productStore.batches.filter(batch => batch.inventoryId === item.id && batch.status === 'ACTIVE');
+});
+
+const adjustSelectedExistingBatch = computed(() =>
+    adjustableActiveBatches.value.find(batch => batch.id === parseInt(adjustForm.value.batchId)) ?? null
+);
+
+/** Live "lote actual → lote después" preview — the explicit review step X6 #10 asked for before an "agregar a lote existente" adjustment saves. */
+const adjustExistingBatchPreview = computed(() => {
+  const batch = adjustSelectedExistingBatch.value;
+  if (!batch) return null;
+  const allowsFractionalQuantity = adjustTargetProduct.value?.isSoldByWeight ?? false;
+  const rawQuantity = adjustForm.value.quantity;
+  const quantity = allowsFractionalQuantity ? (parseMoneyInput(rawQuantity) || 0) : (parseInt(rawQuantity) || 0);
+  return { current: batch.remainingQuantity, after: batch.remainingQuantity + quantity };
+});
+
+// Falls back to "new lot" the moment there's nothing to add to — switching
+// warehouses, or a lot getting discarded elsewhere, can otherwise leave
+// 'EXISTING' selected with no valid choice in the picker.
+watch(adjustableActiveBatches, (batches) => {
+  if (batches.length === 0 && adjustForm.value.batchMode === 'EXISTING') {
+    adjustForm.value.batchMode = 'NEW';
+  }
+});
+
+watch(() => adjustForm.value.warehouseId, () => {
+  adjustForm.value.batchId = '';
+});
+
 const reasonPresetLabelKeys = {
   SHRINKAGE:        'inventory.adjust-reason-shrinkage',
   BREAKAGE:         'inventory.adjust-reason-breakage',
@@ -1022,7 +1070,8 @@ function openAdjustModal(product) {
     direction:    'REMOVE',
     quantity:     '',
     reasonPreset: 'SHRINKAGE',
-    reasonDetail: ''
+    reasonDetail: '',
+    batchMode: 'NEW', batchId: '', newBatchExpiration: '', newBatchPurchasePrice: '', newBatchLabel: ''
   };
   showAdjustModal.value = true;
 }
@@ -1064,8 +1113,25 @@ function saveAdjustment() {
     return;
   }
 
+  // X6 #10 — a positive adjustment always lands in a lot; the mode decides
+  // which one. Removal skips all of this: FEFO is automatic, server-side.
+  const batchOptions = {};
+  if (adjustForm.value.direction === 'ADD') {
+    if (adjustForm.value.batchMode === 'EXISTING') {
+      if (!adjustForm.value.batchId) {
+        toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-adjust-batch-required'), life: 4500 });
+        return;
+      }
+      batchOptions.batchId = parseInt(adjustForm.value.batchId);
+    } else {
+      batchOptions.newBatchExpiration = adjustForm.value.newBatchExpiration || null;
+      batchOptions.newBatchPurchasePrice = parseMoneyInput(adjustForm.value.newBatchPurchasePrice) || null;
+      batchOptions.newBatchLabel = adjustForm.value.newBatchLabel.trim() || null;
+    }
+  }
+
   savingAdjustment.value = true;
-  productStore.adjustStock(adjustTargetProduct.value.id, adjustForm.value.warehouseId, delta, reason)
+  productStore.adjustStock(adjustTargetProduct.value.id, adjustForm.value.warehouseId, delta, reason, batchOptions)
       .then(() => {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-adjust-success'), life: 3500 });
         showAdjustModal.value = false;
@@ -1075,9 +1141,17 @@ function saveAdjustment() {
         // data (Kardex now owns the actual movements view, not this page).
         invalidateStockMovements();
         alertsStore.fetchAlerts();
+        // X6 #10 — every adjustment now touches a batch (opens/credits one
+        // adding, draws one down removing) — refresh so "Ver lotes" and the
+        // "Vencimiento" column reflect it without waiting on another trigger.
+        fetchBatches();
       })
       .catch(error => {
-        const detail = error?.response?.status === 409
+        // A 409 while removing means "exceeds available stock" (the only
+        // conflict that path can hit); while adding it means the picked lot
+        // was discarded out from under the picker (a race, not a stock
+        // limit) — that gets the generic message instead of a misleading one.
+        const detail = error?.response?.status === 409 && adjustForm.value.direction === 'REMOVE'
             ? t('inventory.toast-adjust-error-exceeds-stock')
             : t('inventory.toast-adjust-error');
         toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
@@ -1805,9 +1879,15 @@ function saveWarehouse() {
 
             <!-- Expiration date (only when creating — a new lot for an existing
                  product is added via "Registrar ingreso", not by editing it) -->
-            <div v-if="!editingProduct">
-              <label class="modal-label">{{ t('inventory.modal-field-expiration') }}</label>
-              <input v-model="productModalForm.expirationDate" type="date" :min="todayIsoDate" class="modal-input"/>
+            <div v-if="!editingProduct" class="flex flex-column sm:flex-row gap-4">
+              <div style="flex: 1;">
+                <label class="modal-label">{{ t('inventory.modal-field-expiration') }}</label>
+                <input v-model="productModalForm.expirationDate" type="date" :min="todayIsoDate" class="modal-input"/>
+              </div>
+              <div style="flex: 1;">
+                <label class="modal-label">{{ t('inventory.modal-field-lot') }}</label>
+                <input v-model="productModalForm.lotLabel" type="text" maxlength="60" :placeholder="t('inventory.modal-field-lot-placeholder')" class="modal-input"/>
+              </div>
             </div>
           </div>
 
@@ -1955,6 +2035,19 @@ function saveWarehouse() {
                     </button>
                   </template>
                 </div>
+              </div>
+              <div v-if="editingLotId === batch.id" class="mb-2">
+                <input
+                    v-model="editingLabelValue"
+                    type="text"
+                    maxlength="60"
+                    :placeholder="t('inventory.modal-field-lot-placeholder')"
+                    class="modal-input"
+                    style="width: 100%;"
+                />
+              </div>
+              <div v-else-if="batch.label" class="lot-label mb-2">
+                <i class="pi pi-tag" style="font-size: 0.75rem; margin-right: 0.35rem;"/>{{ batch.label }}
               </div>
               <div class="flex gap-4 lot-details">
                 <span>{{ t('inventory.lots-remaining', { remaining: batch.remainingQuantity, total: batch.quantity }) }}</span>
@@ -2138,6 +2231,67 @@ function saveWarehouse() {
             </select>
           </div>
 
+          <!-- X6 #10 — a positive adjustment always lands in a lot; removal is
+               always automatic FEFO, so none of this applies there. -->
+          <template v-if="adjustForm.direction === 'ADD'">
+            <div>
+              <label class="modal-label">{{ t('inventory.adjust-field-batch-mode') }}</label>
+              <div class="flex gap-2">
+                <button
+                    type="button"
+                    class="flex-1 py-2 border-round-lg cursor-pointer btn-adjust-direction"
+                    :class="{ 'btn-adjust-direction-active-add': adjustForm.batchMode === 'EXISTING' }"
+                    @click="adjustForm.batchMode = 'EXISTING'"
+                >{{ t('inventory.adjust-batch-mode-existing') }}</button>
+                <button
+                    type="button"
+                    class="flex-1 py-2 border-round-lg cursor-pointer btn-adjust-direction"
+                    :class="{ 'btn-adjust-direction-active-add': adjustForm.batchMode === 'NEW' }"
+                    @click="adjustForm.batchMode = 'NEW'"
+                >{{ t('inventory.adjust-batch-mode-new') }}</button>
+              </div>
+            </div>
+
+            <div v-if="adjustForm.batchMode === 'EXISTING'">
+              <label class="modal-label">{{ t('inventory.adjust-field-existing-batch') }}</label>
+              <p v-if="adjustableActiveBatches.length === 0" class="modal-field-hint">
+                {{ t('inventory.adjust-existing-batch-no-lots') }}
+              </p>
+              <select v-else v-model="adjustForm.batchId" class="modal-input modal-select">
+                <option value="" disabled>{{ t('inventory.adjust-existing-batch-placeholder') }}</option>
+                <option v-for="batch in adjustableActiveBatches" :key="batch.id" :value="String(batch.id)">
+                  {{ t('inventory.adjust-existing-batch-option', {
+                    label: batch.label || t('inventory.lots-no-expiration'),
+                    remaining: batch.remainingQuantity,
+                    expiration: batch.expiration ? ` (${parseLocalDate(batch.expiration).toLocaleDateString(toDateLocale(locale), { day: '2-digit', month: '2-digit', year: 'numeric' })})` : ''
+                  }) }}
+                </option>
+              </select>
+              <!-- The explicit review step X6 #10 asked for: show the lot's
+                   current count and what it becomes, before saving. -->
+              <p v-if="adjustExistingBatchPreview" class="modal-field-hint modal-field-hint-emphasis">
+                {{ t('inventory.adjust-batch-preview', adjustExistingBatchPreview) }}
+              </p>
+            </div>
+
+            <div v-else class="flex flex-column gap-3">
+              <div class="flex flex-column sm:flex-row gap-4">
+                <div style="flex: 1;">
+                  <label class="modal-label">{{ t('inventory.adjust-field-new-batch-expiration') }}</label>
+                  <input v-model="adjustForm.newBatchExpiration" type="date" :min="todayIsoDate" class="modal-input"/>
+                </div>
+                <div style="flex: 1;">
+                  <label class="modal-label">{{ t('inventory.adjust-field-new-batch-cost') }}</label>
+                  <input v-model="adjustForm.newBatchPurchasePrice" type="number" min="0" step="0.01" placeholder="0.00" class="modal-input"/>
+                </div>
+              </div>
+              <div>
+                <label class="modal-label">{{ t('inventory.modal-field-lot') }}</label>
+                <input v-model="adjustForm.newBatchLabel" type="text" maxlength="60" :placeholder="t('inventory.modal-field-lot-placeholder')" class="modal-input"/>
+              </div>
+            </div>
+          </template>
+
           <div>
             <label class="modal-label">{{ t('inventory.adjust-field-reason') }}</label>
             <select v-model="adjustForm.reasonPreset" class="modal-input modal-select">
@@ -2162,7 +2316,9 @@ function saveWarehouse() {
             </button>
             <button
                 class="flex-1 py-2 border-round-xl border-none cursor-pointer btn-primary"
-                :disabled="savingAdjustment || !adjustForm.quantity || (adjustForm.reasonPreset === 'OTHER' && !adjustForm.reasonDetail.trim())"
+                :disabled="savingAdjustment || !adjustForm.quantity
+                    || (adjustForm.reasonPreset === 'OTHER' && !adjustForm.reasonDetail.trim())
+                    || (adjustForm.direction === 'ADD' && adjustForm.batchMode === 'EXISTING' && !adjustForm.batchId)"
                 @click="saveAdjustment"
             >
               <i v-if="savingAdjustment" class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>
@@ -2573,6 +2729,12 @@ function saveWarehouse() {
   font-size: 0.85rem;
 }
 
+.lot-label {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-style: italic;
+}
+
 .btn-lot-discard {
   background: none;
   color: var(--status-critical-fg);
@@ -2937,6 +3099,12 @@ function saveWarehouse() {
 .modal-field-hint {
   font-size: 0.7rem;
   color: var(--text-faint);
+}
+.modal-field-hint-emphasis {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--brand);
+  margin-top: 0.35rem;
 }
 .modal-input-error {
   border-color: var(--status-critical-fg);

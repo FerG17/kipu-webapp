@@ -197,8 +197,8 @@ export class ProductApi extends BaseApi {
      * @param {string|null} expiration ISO date string (YYYY-MM-DD), or null to clear it.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    updateBatchExpiration(batchId, expiration) {
-        return this.http.patch(`${batchesEndpointPath}/${batchId}/expiration`, { expiration });
+    updateBatchExpiration(batchId, expiration, label = null) {
+        return this.http.patch(`${batchesEndpointPath}/${batchId}/expiration`, { expiration, label });
     }
 
     /**

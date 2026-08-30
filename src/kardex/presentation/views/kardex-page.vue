@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, ref, toRefs, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useToast } from 'primevue/usetoast';
-import useProductStore from '../../../product/application/product.store.js';
+import useProductStore, { parseLocalDate } from '../../../product/application/product.store.js';
 import useIamStore from '../../../iam/application/iam.store.js';
 import useAlertsStore from '../../../alerts/application/alerts.store.js';
 import useSupplierStore from '../../../suppliers/application/supplier.store.js';
@@ -213,7 +213,7 @@ function movementTypeVisual(movement) {
 const showIntakeModal     = ref(false);
 const intakeTargetProduct = ref(null);
 const savingIntake        = ref(false);
-const intakeForm = ref({ productId: '', quantity: '', cost: '', expirationDate: '', supplierId: '', note: '', warehouseId: '', basePrice: '' });
+const intakeForm = ref({ productId: '', quantity: '', cost: '', expirationDate: '', lotLabel: '', supplierId: '', note: '', warehouseId: '', basePrice: '' });
 
 const intakeFormProduct = computed(() =>
     products.value.find(product => product.id === parseInt(intakeForm.value.productId)) ?? null
@@ -234,6 +234,12 @@ function resolveIntakeDefaultsForProduct(productId) {
     warehouseId:    resolveWarehouseIdForProduct(productId),
     cost:           activeBatch ? String(activeBatch.purchasePrice) : '',
     expirationDate: activeBatch ? activeBatch.expiration : '',
+    // Not prefilled from the active batch's own label, unlike cost/expiration
+    // above — every intake with expiration/cost/label opens a NEW lot (X5
+    // Bloque C), so copying the previous one's name here would just give two
+    // different batches the same label, defeating the whole point of X6
+    // #3+#11 (telling lots apart).
+    lotLabel:       '',
     supplierId:     product?.supplierIds?.[0] ?? '',
     basePrice:      product ? String(product.basePrice) : ''
   };
@@ -248,7 +254,7 @@ function openIntakeModal(product) {
     note:      '',
     ...(initialProductId
         ? resolveIntakeDefaultsForProduct(initialProductId)
-        : { warehouseId: '', cost: '', expirationDate: '', supplierId: '', basePrice: '' })
+        : { warehouseId: '', cost: '', expirationDate: '', lotLabel: '', supplierId: '', basePrice: '' })
   };
   showIntakeModal.value = true;
 }
@@ -298,7 +304,8 @@ function saveIntake() {
     expiration:    intakeForm.value.expirationDate || null,
     supplierId:    pickedSupplierId,
     supplier:      pickedSupplierName,
-    note:          intakeForm.value.note
+    note:          intakeForm.value.note,
+    label:         intakeForm.value.lotLabel.trim() || null
   })
       .then(() => basePriceEdited
           ? productStore.updateProduct(new Product({ ...targetProduct, basePrice: newBasePrice }))
@@ -307,7 +314,7 @@ function saveIntake() {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-intake-success'), life: 3500 });
         showIntakeModal.value = false;
         loadMovements();
-        if (intakeForm.value.cost || intakeForm.value.expirationDate) fetchBatches();
+        if (intakeForm.value.cost || intakeForm.value.expirationDate || intakeForm.value.lotLabel.trim()) fetchBatches();
         invalidateStockMovements();
         alertsStore.fetchAlerts();
       })
@@ -324,7 +331,12 @@ function saveIntake() {
 const showAdjustModal    = ref(false);
 const adjustTargetProduct = ref(null);
 const savingAdjustment   = ref(false);
-const adjustForm = ref({ warehouseId: '', direction: 'REMOVE', quantity: '', reasonPreset: 'SHRINKAGE', reasonDetail: '' });
+const adjustForm = ref({
+  warehouseId: '', direction: 'REMOVE', quantity: '', reasonPreset: 'SHRINKAGE', reasonDetail: '',
+  // X6 #10 — only meaningful when direction is 'ADD'; a removal is always
+  // automatic FEFO, decided server-side, with no lot choice in the UI at all.
+  batchMode: 'NEW', batchId: '', newBatchExpiration: '', newBatchPurchasePrice: '', newBatchLabel: ''
+});
 
 const adjustableWarehouses = computed(() => {
   if (!adjustTargetProduct.value) return [];
@@ -333,6 +345,41 @@ const adjustableWarehouses = computed(() => {
       .map(item => item.warehouseId);
   const stocked = warehouses.value.filter(warehouse => stockedWarehouseIds.includes(warehouse.id));
   return stocked.length > 0 ? stocked : warehouses.value;
+});
+
+/** X6 #10 — active lots of the InventoryItem the adjustment currently targets, offered as the "add to an existing lot" choice. */
+const adjustableActiveBatches = computed(() => {
+  if (!adjustTargetProduct.value || !adjustForm.value.warehouseId) return [];
+  const item = inventory.value.find(candidate => candidate.productId === adjustTargetProduct.value.id
+      && String(candidate.warehouseId) === String(adjustForm.value.warehouseId));
+  if (!item) return [];
+  return productStore.batches.filter(batch => batch.inventoryId === item.id && batch.status === 'ACTIVE');
+});
+
+const adjustSelectedExistingBatch = computed(() =>
+    adjustableActiveBatches.value.find(batch => batch.id === parseInt(adjustForm.value.batchId)) ?? null
+);
+
+/** Live "lote actual → lote después" preview — the explicit review step X6 #10 asked for before an "agregar a lote existente" adjustment saves. */
+const adjustExistingBatchPreview = computed(() => {
+  const batch = adjustSelectedExistingBatch.value;
+  if (!batch) return null;
+  const allowsFractionalQuantity = adjustTargetProduct.value?.isSoldByWeight ?? false;
+  const quantity = parseQuantityInput(adjustForm.value.quantity, allowsFractionalQuantity) || 0;
+  return { current: batch.remainingQuantity, after: batch.remainingQuantity + quantity };
+});
+
+// Falls back to "new lot" the moment there's nothing to add to — switching
+// warehouses, or a lot getting discarded elsewhere, can otherwise leave
+// 'EXISTING' selected with no valid choice in the picker.
+watch(adjustableActiveBatches, (batches) => {
+  if (batches.length === 0 && adjustForm.value.batchMode === 'EXISTING') {
+    adjustForm.value.batchMode = 'NEW';
+  }
+});
+
+watch(() => adjustForm.value.warehouseId, () => {
+  adjustForm.value.batchId = '';
 });
 
 const reasonPresetLabelKeys = {
@@ -351,7 +398,8 @@ function openAdjustModal(product) {
     direction:    'REMOVE',
     quantity:     '',
     reasonPreset: 'SHRINKAGE',
-    reasonDetail: ''
+    reasonDetail: '',
+    batchMode: 'NEW', batchId: '', newBatchExpiration: '', newBatchPurchasePrice: '', newBatchLabel: ''
   };
   showAdjustModal.value = true;
 }
@@ -389,17 +437,39 @@ function saveAdjustment() {
     return;
   }
 
+  // X6 #10 — a positive adjustment always lands in a lot; the mode decides
+  // which one. Removal skips all of this: FEFO is automatic, server-side.
+  const batchOptions = {};
+  if (adjustForm.value.direction === 'ADD') {
+    if (adjustForm.value.batchMode === 'EXISTING') {
+      if (!adjustForm.value.batchId) {
+        toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('inventory.toast-adjust-batch-required'), life: 4500 });
+        return;
+      }
+      batchOptions.batchId = parseInt(adjustForm.value.batchId);
+    } else {
+      batchOptions.newBatchExpiration = adjustForm.value.newBatchExpiration || null;
+      batchOptions.newBatchPurchasePrice = parseMoneyInput(adjustForm.value.newBatchPurchasePrice) || null;
+      batchOptions.newBatchLabel = adjustForm.value.newBatchLabel.trim() || null;
+    }
+  }
+
   savingAdjustment.value = true;
-  productStore.adjustStock(adjustTargetProduct.value.id, adjustForm.value.warehouseId, delta, reason)
+  productStore.adjustStock(adjustTargetProduct.value.id, adjustForm.value.warehouseId, delta, reason, batchOptions)
       .then(() => {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('inventory.toast-adjust-success'), life: 3500 });
         showAdjustModal.value = false;
         loadMovements();
         invalidateStockMovements();
         alertsStore.fetchAlerts();
+        // X6 #10 — every adjustment now touches a batch — refresh so a
+        // subsequent "Pérdida rápida"/edit sees the current lot state.
+        fetchBatches();
       })
       .catch(error => {
-        const detail = error?.response?.status === 409
+        // See product-list.vue's identical saveAdjustment for why REMOVE is
+        // the only direction this message actually describes.
+        const detail = error?.response?.status === 409 && adjustForm.value.direction === 'REMOVE'
             ? t('inventory.toast-adjust-error-exceeds-stock')
             : t('inventory.toast-adjust-error');
         toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
@@ -704,6 +774,10 @@ onMounted(() => {
             </div>
           </div>
           <div>
+            <label class="modal-label">{{ t('inventory.modal-field-lot') }}</label>
+            <input v-model="intakeForm.lotLabel" type="text" maxlength="60" :placeholder="t('inventory.modal-field-lot-placeholder')" class="modal-input"/>
+          </div>
+          <div>
             <label class="modal-label">{{ t('inventory.intake-field-sale-price') }}</label>
             <input v-model="intakeForm.basePrice" type="number" min="0" step="0.01" placeholder="0.00" class="modal-input"/>
           </div>
@@ -811,6 +885,67 @@ onMounted(() => {
             </select>
           </div>
 
+          <!-- X6 #10 — a positive adjustment always lands in a lot; removal is
+               always automatic FEFO, so none of this applies there. -->
+          <template v-if="adjustForm.direction === 'ADD'">
+            <div>
+              <label class="modal-label">{{ t('inventory.adjust-field-batch-mode') }}</label>
+              <div class="flex gap-2">
+                <button
+                    type="button"
+                    class="flex-1 py-2 border-round-lg cursor-pointer btn-adjust-direction"
+                    :class="{ 'btn-adjust-direction-active-add': adjustForm.batchMode === 'EXISTING' }"
+                    @click="adjustForm.batchMode = 'EXISTING'"
+                >{{ t('inventory.adjust-batch-mode-existing') }}</button>
+                <button
+                    type="button"
+                    class="flex-1 py-2 border-round-lg cursor-pointer btn-adjust-direction"
+                    :class="{ 'btn-adjust-direction-active-add': adjustForm.batchMode === 'NEW' }"
+                    @click="adjustForm.batchMode = 'NEW'"
+                >{{ t('inventory.adjust-batch-mode-new') }}</button>
+              </div>
+            </div>
+
+            <div v-if="adjustForm.batchMode === 'EXISTING'">
+              <label class="modal-label">{{ t('inventory.adjust-field-existing-batch') }}</label>
+              <p v-if="adjustableActiveBatches.length === 0" class="modal-field-hint">
+                {{ t('inventory.adjust-existing-batch-no-lots') }}
+              </p>
+              <select v-else v-model="adjustForm.batchId" class="modal-input modal-select">
+                <option value="" disabled>{{ t('inventory.adjust-existing-batch-placeholder') }}</option>
+                <option v-for="batch in adjustableActiveBatches" :key="batch.id" :value="String(batch.id)">
+                  {{ t('inventory.adjust-existing-batch-option', {
+                    label: batch.label || t('inventory.lots-no-expiration'),
+                    remaining: batch.remainingQuantity,
+                    expiration: batch.expiration ? ` (${parseLocalDate(batch.expiration).toLocaleDateString(toDateLocale(locale), { day: '2-digit', month: '2-digit', year: 'numeric' })})` : ''
+                  }) }}
+                </option>
+              </select>
+              <!-- The explicit review step X6 #10 asked for: show the lot's
+                   current count and what it becomes, before saving. -->
+              <p v-if="adjustExistingBatchPreview" class="modal-field-hint modal-field-hint-emphasis">
+                {{ t('inventory.adjust-batch-preview', adjustExistingBatchPreview) }}
+              </p>
+            </div>
+
+            <div v-else class="flex flex-column gap-3">
+              <div class="flex flex-column sm:flex-row gap-4">
+                <div style="flex: 1;">
+                  <label class="modal-label">{{ t('inventory.adjust-field-new-batch-expiration') }}</label>
+                  <input v-model="adjustForm.newBatchExpiration" type="date" :min="todayIsoDate" class="modal-input"/>
+                </div>
+                <div style="flex: 1;">
+                  <label class="modal-label">{{ t('inventory.adjust-field-new-batch-cost') }}</label>
+                  <input v-model="adjustForm.newBatchPurchasePrice" type="number" min="0" step="0.01" placeholder="0.00" class="modal-input"/>
+                </div>
+              </div>
+              <div>
+                <label class="modal-label">{{ t('inventory.modal-field-lot') }}</label>
+                <input v-model="adjustForm.newBatchLabel" type="text" maxlength="60" :placeholder="t('inventory.modal-field-lot-placeholder')" class="modal-input"/>
+              </div>
+            </div>
+          </template>
+
           <div>
             <label class="modal-label">{{ t('inventory.adjust-field-reason') }}</label>
             <select v-model="adjustForm.reasonPreset" class="modal-input modal-select">
@@ -835,7 +970,9 @@ onMounted(() => {
             </button>
             <button
                 class="flex-1 py-2 border-round-xl border-none cursor-pointer btn-primary"
-                :disabled="savingAdjustment || !adjustForm.quantity || (adjustForm.reasonPreset === 'OTHER' && !adjustForm.reasonDetail.trim())"
+                :disabled="savingAdjustment || !adjustForm.quantity
+                    || (adjustForm.reasonPreset === 'OTHER' && !adjustForm.reasonDetail.trim())
+                    || (adjustForm.direction === 'ADD' && adjustForm.batchMode === 'EXISTING' && !adjustForm.batchId)"
                 @click="saveAdjustment"
             >
               <i v-if="savingAdjustment" class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>
@@ -1138,6 +1275,17 @@ onMounted(() => {
   border-color: var(--status-ok-fg);
   color: var(--status-ok-fg);
   background: var(--status-ok-bg);
+}
+
+.modal-field-hint {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+}
+.modal-field-hint-emphasis {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--brand);
+  margin-top: 0.35rem;
 }
 
 .modal-input {
