@@ -101,7 +101,8 @@ const typeConfig = {
   OUT_OF_STOCK: { labelKey: 'alerts.type-out-of-stock', color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)', border: 'color-mix(in srgb, var(--status-critical-fg) 35%, transparent)', icon: 'pi-box'          },
   EXPIRATION:   { labelKey: 'alerts.type-expiration',   color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', border: 'var(--status-warning-bg)', icon: 'pi-calendar'     },
   EXPIRED:      { labelKey: 'alerts.type-expired',      color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)', border: 'color-mix(in srgb, var(--status-critical-fg) 35%, transparent)', icon: 'pi-times-circle' },
-  INSTALLMENT_DUE: { labelKey: 'alerts.type-installment-due', color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', border: 'var(--status-warning-bg)', icon: 'pi-wallet' }
+  INSTALLMENT_DUE: { labelKey: 'alerts.type-installment-due', color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', border: 'var(--status-warning-bg)', icon: 'pi-wallet' },
+  SUPPLIER_INSTALLMENT_DUE: { labelKey: 'alerts.type-supplier-installment-due', color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', border: 'var(--status-warning-bg)', icon: 'pi-wallet' }
 };
 const severityConfig = {
   HIGH:   { labelKey: 'alerts.severity-high',   color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)' },
@@ -147,13 +148,14 @@ const statsBarItems = computed(() => [
 const severityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 const statusOrder   = { ACTIVE: 0, ACKNOWLEDGED: 1, SENT: 2, RESOLVED: 3 };
 
-// INSTALLMENT_DUE alerts live in their own tab ("Cuotas") — never mixed into
-// this stock/expiration list, so a bodega owner never has to untangle money
-// alerts from inventory ones (X6 #7, decision 4).
+// INSTALLMENT_DUE/SUPPLIER_INSTALLMENT_DUE alerts live in their own tab
+// ("Cuotas") — never mixed into this stock/expiration list, so a bodega
+// owner never has to untangle money alerts from inventory ones (X6 #7,
+// decision 4; extended to Suppliers' own cuotas in X6 #12).
 const filteredAlerts = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   return alerts.value
-      .filter(alert => alert.type !== AlertType.INSTALLMENT_DUE)
+      .filter(alert => alert.type !== AlertType.INSTALLMENT_DUE && alert.type !== AlertType.SUPPLIER_INSTALLMENT_DUE)
       .filter(alert => {
         const matchesSearch = !query
             || alert.message.toLowerCase().includes(query)
@@ -173,10 +175,10 @@ const filteredAlerts = computed(() => {
 /** @type {import('vue').Ref<string>} Status filter for the "Cuotas" tab — separate from the stock tab's own filter above. */
 const installmentStatusFilter = ref('ACTIVE');
 
-/** INSTALLMENT_DUE alerts, most urgent (soonest/most overdue due date) first — the tab's own list, entirely separate from filteredAlerts above. */
+/** INSTALLMENT_DUE (Sales, X6 #7) and SUPPLIER_INSTALLMENT_DUE (Suppliers, X6 #12) alerts together, most urgent (soonest/most overdue due date) first — the tab's own list, entirely separate from filteredAlerts above. */
 const installmentAlerts = computed(() => {
   return alerts.value
-      .filter(alert => alert.type === AlertType.INSTALLMENT_DUE)
+      .filter(alert => alert.type === AlertType.INSTALLMENT_DUE || alert.type === AlertType.SUPPLIER_INSTALLMENT_DUE)
       .filter(alert => installmentStatusFilter.value === 'ALL' || alert.status === installmentStatusFilter.value)
       .slice()
       .sort((alertA, alertB) => (alertA.daysRemaining ?? 0) - (alertB.daysRemaining ?? 0));
@@ -736,7 +738,7 @@ function formatDateTime(isoDate) {
                 {{ t(getTypeConfig(selectedAlert.type).labelKey) }}
               </p>
               <p class="alerts-modal-product-name">
-                {{ selectedAlert.isInstallmentDue
+                {{ selectedAlert.isAnyInstallmentDue
                   ? (selectedAlert.customerOrSupplierName || t('alerts.field-anonymous-customer'))
                   : (selectedAlert.productName || `#${selectedAlert.productId}`) }}
               </p>
@@ -786,11 +788,11 @@ function formatDateTime(isoDate) {
                   : `${selectedAlert.daysToExpiry} ${t('alerts.field-days')}` }}
               </p>
             </div>
-            <div v-if="selectedAlert.isInstallmentDue" class="alerts-modal-info-cell">
+            <div v-if="selectedAlert.isAnyInstallmentDue" class="alerts-modal-info-cell">
               <p class="alerts-modal-info-label">{{ t('alerts.field-amount') }}</p>
               <p class="alerts-modal-info-value">S/ {{ Number(selectedAlert.amount ?? 0).toFixed(2) }}</p>
             </div>
-            <div v-if="selectedAlert.isInstallmentDue && selectedAlert.daysRemaining !== null" class="alerts-modal-info-cell">
+            <div v-if="selectedAlert.isAnyInstallmentDue && selectedAlert.daysRemaining !== null" class="alerts-modal-info-cell">
               <p class="alerts-modal-info-label">{{ t('alerts.field-days-remaining') }}</p>
               <p class="alerts-modal-info-value">
                 {{ selectedAlert.daysRemaining < 0

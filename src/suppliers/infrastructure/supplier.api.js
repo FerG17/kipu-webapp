@@ -4,14 +4,16 @@ import { BaseEndpoint } from '../../shared/infrastructure/base-endpoint.js';
 const suppliersEndpointPath      = import.meta.env.VITE_SUPPLIERS_ENDPOINT_PATH;
 const purchasesEndpointPath      = import.meta.env.VITE_PURCHASES_ENDPOINT_PATH;
 const purchaseDetailsEndpointPath = import.meta.env.VITE_PURCHASE_DETAILS_ENDPOINT_PATH;
+const supplierPaymentPlansEndpointPath = import.meta.env.VITE_SUPPLIER_PAYMENT_PLANS_ENDPOINT_PATH;
 
 /**
  * Infrastructure gateway for the Supplier & Replenishment Management bounded-context endpoints.
  *
  * Exposes CRUD operations for:
- *  - Suppliers      → /suppliers
- *  - Purchases      → /purchases  (purchase orders)
- *  - PurchaseDetails → /purchaseDetails (order line items)
+ *  - Suppliers          → /suppliers
+ *  - Purchases          → /purchases  (purchase orders)
+ *  - PurchaseDetails    → /purchaseDetails (order line items)
+ *  - SupplierPaymentPlans → /supplier-payment-plans (X6 #12 — compra a crédito)
  *
  * @class SupplierApi
  * @extends BaseApi
@@ -23,12 +25,15 @@ export class SupplierApi extends BaseApi {
     #purchasesEndpoint;
     /** @type {BaseEndpoint} @private */
     #purchaseDetailsEndpoint;
+    /** @type {BaseEndpoint} @private */
+    #supplierPaymentPlansEndpoint;
 
     constructor() {
         super();
-        this.#suppliersEndpoint       = new BaseEndpoint(this, suppliersEndpointPath);
-        this.#purchasesEndpoint        = new BaseEndpoint(this, purchasesEndpointPath);
-        this.#purchaseDetailsEndpoint  = new BaseEndpoint(this, purchaseDetailsEndpointPath);
+        this.#suppliersEndpoint            = new BaseEndpoint(this, suppliersEndpointPath);
+        this.#purchasesEndpoint             = new BaseEndpoint(this, purchasesEndpointPath);
+        this.#purchaseDetailsEndpoint       = new BaseEndpoint(this, purchaseDetailsEndpointPath);
+        this.#supplierPaymentPlansEndpoint  = new BaseEndpoint(this, supplierPaymentPlansEndpointPath);
     }
 
     // ─── Supplier operations ──────────────────────────────────────────────────
@@ -167,5 +172,72 @@ export class SupplierApi extends BaseApi {
      */
     getPurchaseDetailsByOrder(purchaseId) {
         return this.#purchaseDetailsEndpoint.getAllByParam('purchaseId', purchaseId);
+    }
+
+    // ─── Supplier Payment Plans ───────────────────────────────────────────────
+
+    /**
+     * Attaches a payment plan to an already-existing purchase order — at most
+     * one plan per order (the backend 409s otherwise). Deliberately separate
+     * from createPurchaseOrder: this never touches how the order was created,
+     * totaled, or had its status set (X6 #12).
+     * @param {Object} resource - { purchaseOrderId, schedule: [{ dueDate, amount }] }.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    createSupplierPaymentPlan(resource) {
+        return this.#supplierPaymentPlansEndpoint.create(resource);
+    }
+
+    /**
+     * Edits an unpaid cuota's date/amount — allowed even when other cuotas in
+     * the same plan are already paid.
+     * @param {number|string} planId
+     * @param {number|string} installmentId
+     * @param {Object} resource - { dueDate, amount }.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    updateSupplierPaymentInstallment(planId, installmentId, resource) {
+        return this.http.patch(`${supplierPaymentPlansEndpointPath}/${planId}/installments/${installmentId}`, resource);
+    }
+
+    /**
+     * Fetches the payment plan for a specific purchase order. 404 if that order has none.
+     * @param {number|string} purchaseOrderId
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    getSupplierPaymentPlanByPurchaseOrder(purchaseOrderId) {
+        return this.http.get(`${supplierPaymentPlansEndpointPath}/by-purchase-order/${purchaseOrderId}`);
+    }
+
+    /**
+     * Fetches pending (not fully paid) supplier payment plans — for the whole
+     * business, or for one supplier's orders when supplierId is given.
+     * @param {number|string} [supplierId]
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    getPendingSupplierPaymentPlans(supplierId) {
+        return this.http.get(`${supplierPaymentPlansEndpointPath}/pending`, {
+            params: supplierId ? { supplierId } : {}
+        });
+    }
+
+    /**
+     * Registers the payment of one installment — a domain action (POST),
+     * not a field update. {id} is the plan's own id, not the order's.
+     * @param {number|string} id - Supplier payment plan identifier.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    registerSupplierInstallmentPayment(id) {
+        return this.http.post(`${supplierPaymentPlansEndpointPath}/${id}/register-payment`);
+    }
+
+    /**
+     * Reverts the most recently registered payment on a plan — Admin only
+     * server-side (see SupplierPaymentPlansController.RevertSupplierInstallmentPayment).
+     * @param {number|string} id - Supplier payment plan identifier.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    revertSupplierInstallmentPayment(id) {
+        return this.http.post(`${supplierPaymentPlansEndpointPath}/${id}/revert-last-payment`);
     }
 }

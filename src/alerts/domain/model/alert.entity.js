@@ -8,15 +8,17 @@
  * - EXPIRATION:   A product batch is approaching its expiry date.
  * - EXPIRED:      A product batch has already passed its expiry date — critical priority.
  * - INSTALLMENT_DUE: A credit sale's next cuota is coming due (X6 #7) — no product involved.
+ * - SUPPLIER_INSTALLMENT_DUE: A credit purchase order's next cuota is coming due (X6 #12) — no product involved.
  *
  * @enum {string}
  */
 export const AlertType = Object.freeze({
-    LOW_STOCK:       'LOW_STOCK',
-    OUT_OF_STOCK:    'OUT_OF_STOCK',
-    EXPIRATION:      'EXPIRATION',
-    EXPIRED:         'EXPIRED',
-    INSTALLMENT_DUE: 'INSTALLMENT_DUE'
+    LOW_STOCK:                'LOW_STOCK',
+    OUT_OF_STOCK:             'OUT_OF_STOCK',
+    EXPIRATION:               'EXPIRATION',
+    EXPIRED:                  'EXPIRED',
+    INSTALLMENT_DUE:          'INSTALLMENT_DUE',
+    SUPPLIER_INSTALLMENT_DUE: 'SUPPLIER_INSTALLMENT_DUE'
 });
 
 /**
@@ -80,9 +82,9 @@ export class Alert {
      * @param {string}      [params.notifiedAt='']
      * @param {string}      [params.resolvedAt='']
      * @param {number|null} [params.saleId=null] - The credit sale an INSTALLMENT_DUE alert is about.
-     * @param {number|null} [params.purchaseOrderId=null] - Reserved for X6 #12 (Bloque G2) — always null for now.
+     * @param {number|null} [params.purchaseOrderId=null] - The credit purchase order a SUPPLIER_INSTALLMENT_DUE alert is about (X6 #12).
      * @param {string}      [params.customerOrSupplierName=''] - Who owes the cuota — null-safe fallback for an anonymous sale.
-     * @param {number|null} [params.amount=null] - The due cuota's amount — only set for INSTALLMENT_DUE.
+     * @param {number|null} [params.amount=null] - The due cuota's amount — only set for INSTALLMENT_DUE/SUPPLIER_INSTALLMENT_DUE.
      * @param {number|null} [params.daysRemaining=null] - Days until (positive) or since (negative) the cuota's due date.
      */
     constructor({
@@ -136,6 +138,21 @@ export class Alert {
     /** @returns {boolean} */
     get isInstallmentDue() {
         return this.type === AlertType.INSTALLMENT_DUE;
+    }
+
+    /** @returns {boolean} */
+    get isSupplierInstallmentDue() {
+        return this.type === AlertType.SUPPLIER_INSTALLMENT_DUE;
+    }
+
+    /**
+     * Either installment-due flavor — the "Cuotas" tab and its detail modal
+     * treat both the same way (customer/supplier name instead of a product,
+     * amount + days-remaining fields), only the underlying entity differs.
+     * @returns {boolean}
+     */
+    get isAnyInstallmentDue() {
+        return this.isInstallmentDue || this.isSupplierInstallmentDue;
     }
 
     /** @returns {boolean} */
