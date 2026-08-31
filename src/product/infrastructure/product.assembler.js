@@ -29,7 +29,8 @@ export class ProductAssembler {
     /**
      * Builds the exact payload the real backend accepts for create/update
      * (`CreateProductResource`/`UpdateProductResource`: Name, Description,
-     * Category, BasePrice, Barcode, SupplierIds, UnitOfSale — nothing else). The Product
+     * Category, BasePrice, Barcode, SupplierIds, UnitOfSale, UnidadDeMedida,
+     * Presentacion — nothing else). The Product
      * entity legitimately carries id/businessId/status too, but those come
      * from the JWT or the URL, not the body; sending them used to just be
      * silently ignored by the backend's model binding, not a functional bug,
@@ -40,13 +41,15 @@ export class ProductAssembler {
      */
     static toResourceFromEntity(product) {
         return {
-            name:        product.name,
-            description: product.description,
-            category:    product.category,
-            basePrice:   product.basePrice,
-            barcode:     product.barcode || null,
-            supplierIds: product.supplierIds ?? [],
-            unitOfSale:  product.unitOfSale
+            name:           product.name,
+            description:    product.description,
+            category:       product.category,
+            basePrice:      product.basePrice,
+            barcode:        product.barcode || null,
+            supplierIds:    product.supplierIds ?? [],
+            unitOfSale:     product.unitOfSale,
+            unidadDeMedida: product.unidadDeMedida,
+            presentacion:   product.presentacion
         };
     }
 }

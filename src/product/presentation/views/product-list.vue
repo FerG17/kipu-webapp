@@ -10,7 +10,10 @@ import useAlertsStore     from '../../../alerts/application/alerts.store.js';
 import useSupplierStore   from '../../../suppliers/application/supplier.store.js';
 import useCategoryStore   from '../../application/category.store.js';
 import { Supplier }       from '../../../suppliers/domain/model/supplier.entity.js';
-import { Product, ProductCategory, ProductStatus, UnitOfSale } from '../../domain/model/product.entity.js';
+import {
+  Product, ProductCategory, ProductStatus, UnitOfSale,
+  UnidadDeMedida, Presentacion, PresentacionOptionsByUnidadDeMedida
+} from '../../domain/model/product.entity.js';
 import { toDateLocale }   from '../../../shared/presentation/date-locale.js';
 import { isCustomCategory, orderedCategoryOptionsFromValues, filterableCategoryOptions } from '../category-options.js';
 import { canWriteInventory, canAccessSuppliers } from '../../../iam/application/permissions.js';
@@ -438,7 +441,26 @@ const productModalForm = ref({
   lotLabel:       '',
   warehouseId:    '',
   barcode:        '',
-  unitOfSale:     UnitOfSale.UNIT
+  unitOfSale:     UnitOfSale.UNIT,
+  unidadDeMedida: UnidadDeMedida.UNIDAD,
+  presentacion:   Presentacion.UNIDAD
+});
+
+/**
+ * Which Presentacion options make sense for the modal's currently-selected
+ * UnidadDeMedida — purely a display/filter cascade (X6 #9), no arithmetic.
+ * @type {import('vue').ComputedRef<string[]>}
+ */
+const presentacionModalOptions = computed(
+    () => PresentacionOptionsByUnidadDeMedida[productModalForm.value.unidadDeMedida] ?? [Presentacion.UNIDAD]
+);
+
+// Keeps Presentacion valid whenever UnidadDeMedida changes — e.g. switching
+// to "Saco" while "Unidad" was selected would otherwise leave a Presentacion
+// the new UnidadDeMedida doesn't offer.
+watch(() => productModalForm.value.unidadDeMedida, () => {
+  if (!presentacionModalOptions.value.includes(productModalForm.value.presentacion))
+    productModalForm.value.presentacion = presentacionModalOptions.value[0];
 });
 
 const productModalErrors = ref({ basePrice: '', name: '' });
@@ -516,7 +538,9 @@ function openCreateProductModal(prefillBarcode = '') {
     name: '', category: ProductCategory.OTHER, supplierIds: [], currentStock: '', minimumStock: '', basePrice: '', cost: '', expirationDate: '', lotLabel: '',
     warehouseId: warehouses.value[0] ? String(warehouses.value[0].id) : '',
     barcode: prefillBarcode,
-    unitOfSale: UnitOfSale.UNIT
+    unitOfSale: UnitOfSale.UNIT,
+    unidadDeMedida: UnidadDeMedida.UNIDAD,
+    presentacion: Presentacion.UNIDAD
   };
   productModalErrors.value = { basePrice: '', name: '' };
   showAddSupplierInline.value = false;
@@ -585,7 +609,9 @@ function openEditProductModal(product) {
     lotLabel:       '',
     warehouseId:    '',
     barcode:        product.barcode ?? '',
-    unitOfSale:     product.unitOfSale ?? UnitOfSale.UNIT
+    unitOfSale:     product.unitOfSale ?? UnitOfSale.UNIT,
+    unidadDeMedida: product.unidadDeMedida ?? UnidadDeMedida.UNIDAD,
+    presentacion:   product.presentacion ?? Presentacion.UNIDAD
   };
   productModalErrors.value = { basePrice: '', name: '' };
   showAddSupplierInline.value = false;
@@ -708,19 +734,21 @@ function persistProductFromModal(resolvedCategory) {
   const initialStock = parseQuantityInput(productModalForm.value.currentStock, productModalForm.value.unitOfSale);
 
   const productEntity = new Product({
-    id:          editingProduct.value ? editingProduct.value.id : null,
-    businessId:  businessId,
-    name:        productModalForm.value.name.trim(),
-    category:    resolvedCategory,
+    id:             editingProduct.value ? editingProduct.value.id : null,
+    businessId:     businessId,
+    name:           productModalForm.value.name.trim(),
+    category:       resolvedCategory,
     // Description no longer doubles as "distributor" (see supplierIds) —
     // there's no dedicated description field in this form, so a new product
     // starts blank and an edit leaves whatever was already there untouched.
-    description: editingProduct.value ? editingProduct.value.description : '',
-    basePrice:   parseMoneyInput(productModalForm.value.basePrice),
-    status:      ProductStatus.ACTIVE,
-    barcode:     productModalForm.value.barcode.trim() || null,
-    supplierIds: productModalForm.value.supplierIds,
-    unitOfSale:  productModalForm.value.unitOfSale
+    description:    editingProduct.value ? editingProduct.value.description : '',
+    basePrice:      parseMoneyInput(productModalForm.value.basePrice),
+    status:         ProductStatus.ACTIVE,
+    barcode:        productModalForm.value.barcode.trim() || null,
+    supplierIds:    productModalForm.value.supplierIds,
+    unitOfSale:     productModalForm.value.unitOfSale,
+    unidadDeMedida: productModalForm.value.unidadDeMedida,
+    presentacion:   productModalForm.value.presentacion
   });
 
   const minimumStock   = parseQuantityInput(productModalForm.value.minimumStock, productModalForm.value.unitOfSale);
@@ -1867,6 +1895,27 @@ function saveWarehouse() {
                 <option :value="UnitOfSale.WEIGHT">{{ t('inventory.modal-field-unit-of-sale-weight') }}</option>
               </select>
               <p class="m-0 mt-1 modal-field-hint">{{ t('inventory.modal-field-unit-of-sale-hint') }}</p>
+            </div>
+
+            <!-- Unidad de medida + Presentación — puramente descriptivas de catálogo, sin conversión de cantidades (X6 #8/#9) -->
+            <div>
+              <label class="modal-label">{{ t('inventory.modal-field-unidad-medida') }}</label>
+              <select v-model="productModalForm.unidadDeMedida" class="modal-input modal-select">
+                <option :value="UnidadDeMedida.CAJA">{{ t('inventory.modal-field-unidad-medida-caja') }}</option>
+                <option :value="UnidadDeMedida.SACO">{{ t('inventory.modal-field-unidad-medida-saco') }}</option>
+                <option :value="UnidadDeMedida.PAQUETE">{{ t('inventory.modal-field-unidad-medida-paquete') }}</option>
+                <option :value="UnidadDeMedida.UNIDAD">{{ t('inventory.modal-field-unidad-medida-unidad') }}</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="modal-label">{{ t('inventory.modal-field-presentacion') }}</label>
+              <select v-model="productModalForm.presentacion" class="modal-input modal-select">
+                <option v-if="presentacionModalOptions.includes(Presentacion.KG)" :value="Presentacion.KG">{{ t('inventory.modal-field-presentacion-kg') }}</option>
+                <option v-if="presentacionModalOptions.includes(Presentacion.LITRO)" :value="Presentacion.LITRO">{{ t('inventory.modal-field-presentacion-litro') }}</option>
+                <option v-if="presentacionModalOptions.includes(Presentacion.UNIDAD)" :value="Presentacion.UNIDAD">{{ t('inventory.modal-field-presentacion-unidad') }}</option>
+              </select>
+              <p class="m-0 mt-1 modal-field-hint">{{ t('inventory.modal-field-presentacion-hint') }}</p>
             </div>
 
             <!-- Stock actual + Stock mínimo -->

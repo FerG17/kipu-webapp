@@ -34,6 +34,45 @@ export const UnitOfSale = Object.freeze({
 });
 
 /**
+ * How the product is physically packaged for purchase/intake. Purely
+ * descriptive catalog data — carries no conversion factor and never feeds
+ * into stock arithmetic (X6 #9).
+ * @enum {string}
+ */
+export const UnidadDeMedida = Object.freeze({
+    CAJA:    'CAJA',
+    SACO:    'SACO',
+    PAQUETE: 'PAQUETE',
+    UNIDAD:  'UNIDAD'
+});
+
+/**
+ * What the product is measured in for display purposes (e.g. a "Saco de
+ * harina de 50kg" is unidadDeMedida=SACO, presentacion=KG). Distinct from
+ * UnitOfSale above: purely informational, never affects quantity math
+ * (X6 #8/#9).
+ * @enum {string}
+ */
+export const Presentacion = Object.freeze({
+    KG:     'KG',
+    LITRO:  'LITRO',
+    UNIDAD: 'UNIDAD'
+});
+
+/**
+ * Which Presentacion values make sense for each UnidadDeMedida — purely for
+ * cascading the dropdown UI (X6 #9), no arithmetic implication. E.g. a "Saco"
+ * doesn't make sense measured in loose "unidades".
+ * @type {Record<string, string[]>}
+ */
+export const PresentacionOptionsByUnidadDeMedida = Object.freeze({
+    [UnidadDeMedida.CAJA]:    [Presentacion.KG, Presentacion.LITRO, Presentacion.UNIDAD],
+    [UnidadDeMedida.SACO]:    [Presentacion.KG, Presentacion.LITRO],
+    [UnidadDeMedida.PAQUETE]: [Presentacion.KG, Presentacion.LITRO, Presentacion.UNIDAD],
+    [UnidadDeMedida.UNIDAD]:  [Presentacion.UNIDAD]
+});
+
+/**
  * Product entity within the Product & Inventory Management bounded context.
  *
  * Business rules:
@@ -57,29 +96,35 @@ export class Product {
      * @param {string|null} [params.barcode=null]
      * @param {number[]}    [params.supplierIds=[]] - The suppliers this product can be sourced from (zero or more).
      * @param {string}      [params.unitOfSale=UnitOfSale.UNIT]
+     * @param {string}      [params.unidadDeMedida=UnidadDeMedida.UNIDAD]
+     * @param {string}      [params.presentacion=Presentacion.UNIDAD]
      */
     constructor({
-                    id          = null,
-                    businessId  = null,
-                    name        = '',
-                    description = '',
-                    category    = ProductCategory.OTHER,
-                    basePrice   = 0,
-                    status      = ProductStatus.ACTIVE,
-                    barcode     = null,
-                    supplierIds = [],
-                    unitOfSale  = UnitOfSale.UNIT
+                    id             = null,
+                    businessId     = null,
+                    name           = '',
+                    description    = '',
+                    category       = ProductCategory.OTHER,
+                    basePrice      = 0,
+                    status         = ProductStatus.ACTIVE,
+                    barcode        = null,
+                    supplierIds    = [],
+                    unitOfSale     = UnitOfSale.UNIT,
+                    unidadDeMedida = UnidadDeMedida.UNIDAD,
+                    presentacion   = Presentacion.UNIDAD
                 }) {
-        this.id          = id;
-        this.businessId  = businessId;
-        this.name        = name;
-        this.description = description;
-        this.category    = category;
-        this.basePrice   = basePrice;
-        this.status      = status;
-        this.barcode     = barcode;
-        this.supplierIds = supplierIds;
-        this.unitOfSale  = unitOfSale;
+        this.id             = id;
+        this.businessId     = businessId;
+        this.name           = name;
+        this.description    = description;
+        this.category       = category;
+        this.basePrice      = basePrice;
+        this.status         = status;
+        this.barcode        = barcode;
+        this.supplierIds    = supplierIds;
+        this.unitOfSale     = unitOfSale;
+        this.unidadDeMedida = unidadDeMedida;
+        this.presentacion   = presentacion;
     }
 
     /**
