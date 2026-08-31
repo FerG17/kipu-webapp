@@ -229,7 +229,7 @@
     "recent-alerts": "Alertas Recientes",
     "see-all": "Ver todas",
     "no-alerts": "Sin alertas activas",
-    "no-stock-data": "Aún no hay productos registrados con stock.",
+    "no-selling-data": "Aún no hay ventas registradas.",
     "severity-high": "Alta",
     "severity-medium": "Media",
     "severity-low": "Baja",
@@ -257,8 +257,8 @@
     "action-inventory-sub": "Ver todo el stock",
     "action-view-reports": "Ver reportes",
     "action-view-reports-sub": "Exportar y analizar",
-    "top-stock": "Mayor stock",
-    "units": "unidades",
+    "top-selling": "Más vendidos",
+    "units-sold": "unidades vendidas",
     "unknown-product": "Producto desconocido"
   },
   "reports": {

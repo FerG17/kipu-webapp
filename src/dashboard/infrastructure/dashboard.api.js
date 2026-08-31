@@ -36,12 +36,12 @@ export class DashboardApi extends BaseApi {
     }
 
     /**
-     * Top products ranked by real current stock.
+     * Top products ranked by total units sold, all-time.
      * @param {number} count
      * @returns {Promise<import('axios').AxiosResponse>}
      */
-    getTopStockProducts(count) {
-        return this.http.get(`${dashboardEndpointPath}/top-stock-products?count=${count}`);
+    getTopSellingProducts(count) {
+        return this.http.get(`${dashboardEndpointPath}/top-selling-products?count=${count}`);
     }
 
     /**
