@@ -23,13 +23,13 @@ const {
   salesByDay,
   salesByDayLoaded,
   salesByDayError,
-  topStockProducts,
-  topStockLoaded
+  topSellingProducts,
+  topSellingLoaded
 } = toRefs(dashboardStore);
 
 const { alerts, alertsLoaded } = toRefs(alertsStore);
 
-const { fetchKpis, fetchSalesByDay, fetchTopStockProducts } = dashboardStore;
+const { fetchKpis, fetchSalesByDay, fetchTopSellingProducts } = dashboardStore;
 
 const { fetchAlerts } = alertsStore;
 
@@ -62,20 +62,20 @@ onMounted(() => {
     });
     fetchKpis();
     fetchSalesByDay();
-    fetchTopStockProducts();
+    fetchTopSellingProducts();
   }
 });
 
 /**
  * Re-fetches everything the Panel shows from the server: the 6 KPIs, the
- * weekly chart, "Mayor stock" and the alerts.
+ * weekly chart, "Más vendidos" and the alerts.
  */
 function handleRefresh() {
   const businessId = iamStore.currentUser?.businessId ?? null;
   if (!businessId) return;
   fetchKpis();
   fetchSalesByDay();
-  fetchTopStockProducts();
+  fetchTopSellingProducts();
   fetchAlerts();
 }
 
@@ -253,20 +253,19 @@ const currentUserFirstName = computed(() => {
 });
 
 /**
- * Top 5 products by real current stock for the "Mayor stock" panel, fetched
- * from GET /dashboard/top-stock-products (see topStockProducts above) —
- * mapped to the shape the template already expects (currentStock instead of
- * the resource's totalStock, plus a client-computed stockPercent relative to
- * the highest-stocked item in the response).
+ * Top 5 products by units sold (all-time) for the "Más vendidos" panel,
+ * fetched from GET /dashboard/top-selling-products (see topSellingProducts
+ * above) — mapped to the shape the template expects, plus a client-computed
+ * soldPercent relative to the best-selling item in the response.
  * @type {import('vue').ComputedRef<Array>}
  */
-const topStockDisplay = computed(() => {
-  const maxStock = topStockProducts.value[0]?.totalStock ?? 0;
-  return topStockProducts.value.map(product => ({
-    productId:    product.productId,
-    productName:  product.productName,
-    currentStock: product.totalStock,
-    stockPercent: maxStock > 0 ? Math.round((product.totalStock / maxStock) * 100) : 0
+const topSellingDisplay = computed(() => {
+  const maxSold = topSellingProducts.value[0]?.totalSold ?? 0;
+  return topSellingProducts.value.map(product => ({
+    productId:   product.productId,
+    productName: product.productName,
+    totalSold:   product.totalSold,
+    soldPercent: maxSold > 0 ? Math.round((product.totalSold / maxSold) * 100) : 0
   }));
 });
 
@@ -523,39 +522,39 @@ const quickActions = computed(() => [
         </div>
       </div>
 
-      <!-- Mayor stock -->
+      <!-- Más vendidos -->
       <div class="col-12 lg:col-4">
         <div class="panel h-full">
           <div class="flex align-items-center justify-content-between mb-3">
-            <h3 class="panel__title m-0">{{ t('dashboard.top-stock') }}</h3>
+            <h3 class="panel__title m-0">{{ t('dashboard.top-selling') }}</h3>
             <button class="link-btn" @click="navigateToNewProduct">
               {{ t('dashboard.see-all') }}
               <i class="pi pi-arrow-right" style="font-size: 0.7rem;"/>
             </button>
           </div>
 
-          <div v-if="topStockDisplay.length" class="flex flex-column gap-3">
+          <div v-if="topSellingDisplay.length" class="flex flex-column gap-3">
             <div
-                v-for="stockItem in topStockDisplay"
-                :key="stockItem.productId"
+                v-for="soldItem in topSellingDisplay"
+                :key="soldItem.productId"
                 class="stock-row"
             >
               <div class="stock-row__info">
-                <p class="stock-row__name">{{ stockItem.productName }}</p>
+                <p class="stock-row__name">{{ soldItem.productName }}</p>
                 <p class="stock-row__qty">
-                  {{ stockItem.currentStock }} {{ t('dashboard.units') }}
+                  {{ soldItem.totalSold }} {{ t('dashboard.units-sold') }}
                 </p>
               </div>
-              <span class="stock-row__badge">{{ stockItem.stockPercent }}%</span>
+              <span class="stock-row__badge">{{ soldItem.soldPercent }}%</span>
             </div>
           </div>
 
-          <div v-else-if="!topStockLoaded" class="panel__loading">
+          <div v-else-if="!topSellingLoaded" class="panel__loading">
             <i class="pi pi-spin pi-spinner"/>
           </div>
 
           <p v-else class="m-0" style="font-size: 0.88rem; color: var(--text-muted);">
-            {{ t('dashboard.no-stock-data') }}
+            {{ t('dashboard.no-selling-data') }}
           </p>
         </div>
       </div>

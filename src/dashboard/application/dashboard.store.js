@@ -1,6 +1,6 @@
 /**
  * Application service store for the Dashboard & Analytics bounded context.
- * Every figure here — KPIs, the weekly chart, top-stock, report history and
+ * Every figure here — KPIs, the weekly chart, top sellers, report history and
  * exports — is fetched from the real backend (DashboardController /
  * ReportsController), which itself composes Product/Inventory/Sales live,
  * never from a snapshot. This store used to compute all of this client-side
@@ -55,7 +55,7 @@ const useDashboardStore = defineStore('dashboard', () => {
     /**
      * True once any Dashboard/Reports request has come back 403 — both
      * controllers are Admin-only server-side, so this single flag covers
-     * every fetch in this store (kpis, salesByDay, topStockProducts,
+     * every fetch in this store (kpis, salesByDay, topSellingProducts,
      * reports), not just one card the way the old sales-only banner did.
      * @type {import('vue').Ref<boolean>}
      */
@@ -87,9 +87,9 @@ const useDashboardStore = defineStore('dashboard', () => {
     const salesByDayError = ref(null);
 
     /** @type {import('vue').Ref<Array>} */
-    const topStockProducts = ref([]);
+    const topSellingProducts = ref([]);
     /** @type {import('vue').Ref<boolean>} */
-    const topStockLoaded = ref(false);
+    const topSellingLoaded = ref(false);
 
     /** @type {import('vue').Ref<Report[]>} */
     const reports = ref([]);
@@ -156,18 +156,18 @@ const useDashboardStore = defineStore('dashboard', () => {
     }
 
     /**
-     * Top products ranked by real current stock.
+     * Top products ranked by total units sold, all-time.
      * @param {number} [count=5]
      */
-    function fetchTopStockProducts(count = 5) {
-        return dashboardApi.getTopStockProducts(count)
+    function fetchTopSellingProducts(count = 5) {
+        return dashboardApi.getTopSellingProducts(count)
             .then(response => {
-                topStockProducts.value = response.data instanceof Array ? response.data : [];
-                topStockLoaded.value = true;
+                topSellingProducts.value = response.data instanceof Array ? response.data : [];
+                topSellingLoaded.value = true;
                 dashboardForbidden.value = false;
             })
             .catch(error => {
-                topStockLoaded.value = true;
+                topSellingLoaded.value = true;
                 if (isForbidden(error)) dashboardForbidden.value = true;
             });
     }
@@ -234,14 +234,14 @@ const useDashboardStore = defineStore('dashboard', () => {
         salesByDay,
         salesByDayLoaded,
         salesByDayError,
-        topStockProducts,
-        topStockLoaded,
+        topSellingProducts,
+        topSellingLoaded,
         reports,
         reportsLoaded,
         reportsCount,
         fetchKpis,
         fetchSalesByDay,
-        fetchTopStockProducts,
+        fetchTopSellingProducts,
         fetchReports,
         generateReport,
         downloadReportExcel,
