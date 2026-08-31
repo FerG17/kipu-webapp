@@ -567,16 +567,35 @@ const useSalesStore = defineStore('sales', () => {
      * had its stock decremented (see PaymentPlanCommandService).
      *
      * @param {number|string} saleId
-     * @param {number} totalInstallments - Must be >= 1.
+     * @param {Array<{dueDate: string, amount: number|string}>} schedule - Must add up exactly to the sale's total (X6 #7).
      * @returns {Promise<import('../domain/model/payment-plan.entity.js').PaymentPlan>}
      */
-    function createPaymentPlan(saleId, totalInstallments) {
-        const resource = PaymentPlanAssembler.toResourceFromEntity({ saleId, totalInstallments });
+    function createPaymentPlan(saleId, schedule) {
+        const resource = PaymentPlanAssembler.toResourceFromEntity({ saleId, schedule });
         return salesApi.createPaymentPlan(resource)
             .then(response => {
                 const createdPlan = PaymentPlanAssembler.toEntityFromResource(response.data);
                 paymentPlans.value.push(createdPlan);
                 return createdPlan;
+            });
+    }
+
+    /**
+     * Edits an unpaid cuota's date/amount (X6 #7, decision 5 — allowed even
+     * when other cuotas in the plan are already paid) and syncs local state.
+     * @param {number|string} planId
+     * @param {number|string} installmentId
+     * @param {{dueDate: string, amount: number|string}} line
+     * @returns {Promise<import('../domain/model/payment-plan.entity.js').PaymentPlan>}
+     */
+    function updatePaymentInstallment(planId, installmentId, line) {
+        const resource = PaymentPlanAssembler.toUpdateInstallmentResource(line);
+        return salesApi.updatePaymentInstallment(planId, installmentId, resource)
+            .then(response => {
+                const updatedPlan = PaymentPlanAssembler.toEntityFromResource(response.data);
+                const index = paymentPlans.value.findIndex(plan => plan.id === updatedPlan.id);
+                if (index !== -1) paymentPlans.value[index] = updatedPlan;
+                return updatedPlan;
             });
     }
 
@@ -671,6 +690,7 @@ const useSalesStore = defineStore('sales', () => {
         fetchPendingPaymentPlans,
         fetchPaymentPlanBySale,
         createPaymentPlan,
+        updatePaymentInstallment,
         registerInstallmentPayment,
         revertInstallmentPayment
     };

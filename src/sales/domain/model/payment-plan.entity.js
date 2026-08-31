@@ -15,6 +15,19 @@
  */
 
 /**
+ * One scheduled cuota of a PaymentPlan — date + amount entered/edited by the
+ * cashier (X6 #7), the real source of what registering the next payment
+ * charges, instead of an even split computed at payment time.
+ *
+ * @typedef {Object} PaymentInstallment
+ * @property {number}  id
+ * @property {number}  number   - 1-based order within the plan.
+ * @property {string}  dueDate  - 'yyyy-MM-dd'.
+ * @property {number}  amount
+ * @property {boolean} isPaid
+ */
+
+/**
  * PaymentPlan entity within the Sales & POS Management bounded context.
  * Tracks how many installments a credit sale is split into and how many
  * have been paid — attached to an already-existing Sale sold on credit
@@ -41,6 +54,7 @@ export class PaymentPlan {
      * @param {boolean}                [params.isFullyPaid=false]
      * @param {boolean}                [params.isCancelled=false] - Set when the sale this plan belongs to was cancelled.
      * @param {InstallmentPayment[]}   [params.payments=[]]
+     * @param {PaymentInstallment[]}   [params.installments=[]]
      */
     constructor({
                     id                = null,
@@ -50,7 +64,8 @@ export class PaymentPlan {
                     paidInstallments  = 0,
                     isFullyPaid       = false,
                     isCancelled       = false,
-                    payments          = []
+                    payments          = [],
+                    installments      = []
                 }) {
         this.id                = id;
         this.saleId            = saleId;
@@ -60,6 +75,21 @@ export class PaymentPlan {
         this.isFullyPaid       = isFullyPaid;
         this.isCancelled       = isCancelled;
         this.payments          = payments;
+        this.installments      = installments;
+    }
+
+    /**
+     * The cuota RegisterPayment would pay next — the earliest unpaid one by
+     * DueDate — or null once fully paid. Used to warn the cashier before
+     * paying a cuota that isn't due yet (X6 #7, decision 2).
+     * @returns {PaymentInstallment|null}
+     */
+    get nextUnpaidInstallment() {
+        const unpaid = this.installments.filter(installment => !installment.isPaid);
+        if (unpaid.length === 0) return null;
+        return unpaid.reduce((earliest, installment) =>
+            installment.dueDate < earliest.dueDate ? installment : earliest
+        );
     }
 
     /**

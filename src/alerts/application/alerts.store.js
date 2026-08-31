@@ -104,6 +104,15 @@ const useAlertsStore = defineStore('alerts', () => {
             active:       true,
             threshold:    7,
             hasThreshold: true
+        },
+        {
+            type:         AlertType.INSTALLMENT_DUE,
+            nameKey:      'alerts.rule-installment-due-name',
+            descKey:      'alerts.rule-installment-due-desc',
+            unitKey:      'alerts.rule-unit-days',
+            active:       true,
+            threshold:    7,
+            hasThreshold: true
         }
     ]);
 
@@ -152,6 +161,16 @@ const useAlertsStore = defineStore('alerts', () => {
             alert => (alert.type === AlertType.EXPIRATION || alert.type === AlertType.EXPIRED)
                 && alert.status === AlertStatus.ACTIVE
         ).length
+    );
+
+    /**
+     * Number of active INSTALLMENT_DUE alerts — a separate count from the
+     * stock ones above, since this alert type gets its own tab, not mixed
+     * with LOW_STOCK/EXPIRATION (X6 #7, decision 4).
+     * @type {import('vue').ComputedRef<number>}
+     */
+    const installmentDueActiveCount = computed(() =>
+        alerts.value.filter(alert => alert.type === AlertType.INSTALLMENT_DUE && alert.status === AlertStatus.ACTIVE).length
     );
 
     // ----- Queries  -----
@@ -301,8 +320,9 @@ const useAlertsStore = defineStore('alerts', () => {
     }
 
     /**
-     * Updates the threshold (days) of the EXPIRATION rule — the only rule
-     * type where a threshold is meaningful server-side.
+     * Updates the threshold (days) of a rule that has one (EXPIRATION or
+     * INSTALLMENT_DUE) — LOW_STOCK/OUT_OF_STOCK have no configurable
+     * threshold here (hasThreshold: false).
      * Business rule: threshold must be ≥ 0.
      * @param {string} type - One of AlertType values.
      * @param {number} newThreshold
@@ -335,6 +355,7 @@ const useAlertsStore = defineStore('alerts', () => {
         criticalActiveCount,
         lowStockActiveCount,
         expirationActiveCount,
+        installmentDueActiveCount,
         getAlertById,
         filterByType,
         filterByStatus,

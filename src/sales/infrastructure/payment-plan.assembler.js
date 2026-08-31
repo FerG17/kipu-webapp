@@ -25,16 +25,27 @@ export class PaymentPlanAssembler {
 
     /**
      * Builds the exact payload the real backend accepts for creation
-     * (`CreatePaymentPlanResource`: SaleId, TotalInstallments — nothing else).
-     * @param {Object}        params
-     * @param {number|string} params.saleId
-     * @param {number}        params.totalInstallments
+     * (`CreatePaymentPlanResource`: SaleId, Schedule[] — X6 #7 replaced the
+     * old bare TotalInstallments with a real cuota-by-cuota calendar).
+     * @param {Object}                                          params
+     * @param {number|string}                                   params.saleId
+     * @param {Array<{dueDate: string, amount: number|string}>} params.schedule
      * @returns {Object}
      */
-    static toResourceFromEntity({ saleId, totalInstallments }) {
+    static toResourceFromEntity({ saleId, schedule }) {
         return {
-            saleId:            parseInt(saleId),
-            totalInstallments: parseInt(totalInstallments)
+            saleId:   parseInt(saleId),
+            schedule: schedule.map(line => ({ dueDate: line.dueDate, amount: parseFloat(line.amount) }))
         };
+    }
+
+    /**
+     * Builds the payload for PATCH /payment-plans/{id}/installments/{installmentId}
+     * (`UpdatePaymentInstallmentResource`: DueDate, Amount).
+     * @param {{dueDate: string, amount: number|string}} line
+     * @returns {Object}
+     */
+    static toUpdateInstallmentResource({ dueDate, amount }) {
+        return { dueDate, amount: parseFloat(amount) };
     }
 }
