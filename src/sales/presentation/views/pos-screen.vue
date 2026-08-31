@@ -2,9 +2,10 @@
 import { ref, computed, onMounted } from 'vue';
 import { useI18n }        from 'vue-i18n';
 import { useToast }       from 'primevue/usetoast';
-import CartPanel          from '../components/cart-panel.vue';
-import PaymentModal       from '../components/payment-modal.vue';
-import SaleSuccessModal   from '../components/sale-success-modal.vue';
+import CartPanel                from '../components/cart-panel.vue';
+import PaymentModal             from '../components/payment-modal.vue';
+import InstallmentScheduleModal from '../components/installment-schedule-modal.vue';
+import SaleSuccessModal         from '../components/sale-success-modal.vue';
 import useSalesStore      from '../../application/sales.store.js';
 import useProductStore    from '../../../product/application/product.store.js';
 import useIamStore        from '../../../iam/application/iam.store.js';
@@ -50,6 +51,12 @@ const showMobileCart = ref(false);
 
 /** @type {import('vue').Ref<boolean>} Whether the PaymentModal is visible. */
 const showPaymentModal = ref(false);
+
+/** @type {import('vue').Ref<boolean>} Whether the cuota-schedule modal (Screen 2 of the credit-sale flow, X6 #7) is open. */
+const showScheduleModal = ref(false);
+
+/** @type {import('vue').Ref<{customerId: number|null, totalInstallments: number}|null>} Credit-sale context carried from Screen 1 (PaymentModal) into Screen 2 (the schedule modal). */
+const pendingCreditSale = ref(null);
 
 /** @type {import('vue').Ref<import('../../domain/model/sale.entity.js').Sale|null>} The last completed sale for the success modal. */
 const completedSale = ref(null);
@@ -301,19 +308,37 @@ function openPaymentModal() {
 }
 
 /**
- * Handles the confirm event from PaymentModal.
- * Persists the sale and shows the success modal on success. When the
- * cashier chose to sell on credit, attaches a payment plan afterward via
- * its own separate call — never part of confirmSale itself, mirroring how
- * the backend keeps PaymentPlanCommandService entirely apart from
- * SaleCommandService.
+ * Handles the confirm event from PaymentModal (Screen 1 of the credit-sale
+ * flow, X6 #7). A normal sale confirms right away; a credit sale defers to
+ * Screen 2 first — the cuota schedule modal — instead of confirming the
+ * sale immediately, since the schedule (dates/amounts) has to exist before
+ * the payment plan can be created right after the sale.
  * @param {{ paymentMethod: string, cashGiven: number, customerId: number|null,
  *           sellOnCredit: boolean, totalInstallments: number|null }} payload
  */
 async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, totalInstallments }) {
   if (isSubmitting.value) return;
 
-  isSubmitting.value    = true;
+  if (sellOnCredit && totalInstallments) {
+    pendingCreditSale.value = { customerId: customerId ?? null, totalInstallments };
+    showPaymentModal.value  = false;
+    showScheduleModal.value = true;
+    return;
+  }
+
+  await performConfirmSale({ paymentMethod, customerId });
+}
+
+/**
+ * Confirms the sale and, for a credit sale, attaches the payment plan right
+ * after — via its own separate call, never part of confirmSale itself,
+ * mirroring how the backend keeps PaymentPlanCommandService entirely apart
+ * from SaleCommandService.
+ * @param {{ paymentMethod: string, customerId: number|null,
+ *           schedule?: Array<{dueDate: string, amount: number}> }} params
+ */
+async function performConfirmSale({ paymentMethod, customerId, schedule = null }) {
+  isSubmitting.value = true;
 
   // Captured before confirmSale() clears currentSale (and with it cartTotal)
   // — this is what the cashier saw and agreed to charge, kept around only to
@@ -327,7 +352,9 @@ async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, t
   });
 
   if (result.success) {
-    showPaymentModal.value = false;
+    showPaymentModal.value  = false;
+    showScheduleModal.value = false;
+    pendingCreditSale.value = null;
 
     // The backend already decremented inventory server-side as part of
     // confirming the sale (SaleRegisteredEvent -> Product's stock decrement) —
@@ -346,10 +373,10 @@ async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, t
       showStockError(t('pos.error-stock-deduction-failed'));
     }
 
-    if (sellOnCredit && totalInstallments) {
+    if (schedule) {
       try {
-        await salesStore.createPaymentPlan(result.sale.id, totalInstallments);
-        toast.add({ severity: 'success', summary: t('pos.success-title'), detail: t('pos.success-credit-plan-created', { installments: totalInstallments }), life: 4000 });
+        await salesStore.createPaymentPlan(result.sale.id, schedule);
+        toast.add({ severity: 'success', summary: t('pos.success-title'), detail: t('pos.success-credit-plan-created', { installments: schedule.length }), life: 4000 });
       } catch (error) {
         toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('pos.success-credit-plan-failed'), life: 6000 });
       }
@@ -394,6 +421,27 @@ async function handlePaymentConfirm({ paymentMethod, customerId, sellOnCredit, t
   }
 
   isSubmitting.value = false;
+}
+
+/**
+ * Handles the confirm event from the schedule modal (Screen 2) — the
+ * cashier's final "Vender": creates the sale as CREDIT, then attaches the
+ * payment plan with this exact schedule.
+ * @param {Array<{dueDate: string, amount: number}>} schedule
+ */
+async function handleScheduleConfirm(schedule) {
+  if (!pendingCreditSale.value) return;
+  await performConfirmSale({
+    paymentMethod: PaymentMethod.CREDIT,
+    customerId:    pendingCreditSale.value.customerId,
+    schedule
+  });
+}
+
+/** Backs out of Screen 2 to Screen 1 — nothing has been created yet, so there's nothing to undo. */
+function handleScheduleCancel() {
+  showScheduleModal.value = false;
+  showPaymentModal.value  = true;
 }
 
 /**
@@ -669,7 +717,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- ── Payment modal ── -->
+    <!-- ── Payment modal (Screen 1: credit toggle + installment count) ── -->
     <payment-modal
         v-if="showPaymentModal"
         :total="cartTotal"
@@ -677,6 +725,17 @@ onMounted(() => {
         :saving="isSubmitting"
         @confirm="handlePaymentConfirm"
         @cancel="showPaymentModal = false"
+    />
+
+    <!-- ── Cuota schedule modal (Screen 2: editable date+amount per cuota, X6 #7) ── -->
+    <installment-schedule-modal
+        v-if="showScheduleModal && pendingCreditSale"
+        :total="cartTotal"
+        :total-installments="pendingCreditSale.totalInstallments"
+        :customer-name="pendingCreditSale.customerId ? salesStore.getCustomerById(pendingCreditSale.customerId)?.fullName : null"
+        :saving="isSubmitting"
+        @confirm="handleScheduleConfirm"
+        @cancel="handleScheduleCancel"
     />
 
     <!-- ── Sale success modal ── -->

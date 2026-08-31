@@ -158,11 +158,23 @@ export class SalesApi extends BaseApi {
      * per sale (the backend 409s otherwise). Deliberately separate from
      * createSale: this never touches how the sale was created, totaled, or
      * had its stock decremented.
-     * @param {Object} resource - { saleId, totalInstallments }.
+     * @param {Object} resource - { saleId, schedule: [{ dueDate, amount }] }.
      * @returns {Promise<import('axios').AxiosResponse>}
      */
     createPaymentPlan(resource) {
         return this.#paymentPlansEndpoint.create(resource);
+    }
+
+    /**
+     * Edits an unpaid cuota's date/amount (X6 #7) — allowed even when other
+     * cuotas in the same plan are already paid.
+     * @param {number|string} planId
+     * @param {number|string} installmentId
+     * @param {Object} resource - { dueDate, amount }.
+     * @returns {Promise<import('axios').AxiosResponse>}
+     */
+    updatePaymentInstallment(planId, installmentId, resource) {
+        return this.http.patch(`${paymentPlansEndpointPath}/${planId}/installments/${installmentId}`, resource);
     }
 
     /**

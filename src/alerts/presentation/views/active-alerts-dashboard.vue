@@ -25,7 +25,8 @@ const {
   activeAlertsCount,
   criticalActiveCount,
   lowStockActiveCount,
-  expirationActiveCount
+  expirationActiveCount,
+  installmentDueActiveCount
 } = toRefs(alertsStore);
 
 const { fetchAlerts, fetchAlertRules, acknowledgeAlert, resolveAlert, toggleAlertRule, updateAlertRuleThreshold } = alertsStore;
@@ -99,7 +100,8 @@ const typeConfig = {
   LOW_STOCK:    { labelKey: 'alerts.type-low-stock',    color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', border: 'var(--status-warning-bg)', icon: 'pi-chart-line'  },
   OUT_OF_STOCK: { labelKey: 'alerts.type-out-of-stock', color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)', border: 'color-mix(in srgb, var(--status-critical-fg) 35%, transparent)', icon: 'pi-box'          },
   EXPIRATION:   { labelKey: 'alerts.type-expiration',   color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', border: 'var(--status-warning-bg)', icon: 'pi-calendar'     },
-  EXPIRED:      { labelKey: 'alerts.type-expired',      color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)', border: 'color-mix(in srgb, var(--status-critical-fg) 35%, transparent)', icon: 'pi-times-circle' }
+  EXPIRED:      { labelKey: 'alerts.type-expired',      color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)', border: 'color-mix(in srgb, var(--status-critical-fg) 35%, transparent)', icon: 'pi-times-circle' },
+  INSTALLMENT_DUE: { labelKey: 'alerts.type-installment-due', color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', border: 'var(--status-warning-bg)', icon: 'pi-wallet' }
 };
 const severityConfig = {
   HIGH:   { labelKey: 'alerts.severity-high',   color: 'var(--status-critical-fg)', background: 'var(--status-critical-bg)' },
@@ -145,9 +147,13 @@ const statsBarItems = computed(() => [
 const severityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 const statusOrder   = { ACTIVE: 0, ACKNOWLEDGED: 1, SENT: 2, RESOLVED: 3 };
 
+// INSTALLMENT_DUE alerts live in their own tab ("Cuotas") — never mixed into
+// this stock/expiration list, so a bodega owner never has to untangle money
+// alerts from inventory ones (X6 #7, decision 4).
 const filteredAlerts = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   return alerts.value
+      .filter(alert => alert.type !== AlertType.INSTALLMENT_DUE)
       .filter(alert => {
         const matchesSearch = !query
             || alert.message.toLowerCase().includes(query)
@@ -162,6 +168,18 @@ const filteredAlerts = computed(() => {
         if (statusDiff !== 0) return statusDiff;
         return (severityOrder[alertA.severity] ?? 9) - (severityOrder[alertB.severity] ?? 9);
       });
+});
+
+/** @type {import('vue').Ref<string>} Status filter for the "Cuotas" tab — separate from the stock tab's own filter above. */
+const installmentStatusFilter = ref('ACTIVE');
+
+/** INSTALLMENT_DUE alerts, most urgent (soonest/most overdue due date) first — the tab's own list, entirely separate from filteredAlerts above. */
+const installmentAlerts = computed(() => {
+  return alerts.value
+      .filter(alert => alert.type === AlertType.INSTALLMENT_DUE)
+      .filter(alert => installmentStatusFilter.value === 'ALL' || alert.status === installmentStatusFilter.value)
+      .slice()
+      .sort((alertA, alertB) => (alertA.daysRemaining ?? 0) - (alertB.daysRemaining ?? 0));
 });
 
 // ─── Modal actions ─────────────────────────────────────────────────────────────
@@ -351,6 +369,11 @@ function formatDateTime(isoDate) {
           <span>{{ t('alerts.tab-active') }}</span>
           <span v-if="activeAlertsCount > 0" class="alerts-tab-badge">{{ activeAlertsCount }}</span>
         </button>
+        <button class="alerts-tab-btn" :class="{ 'alerts-tab-btn-active': activeTab === 'cuotas' }" @click="activeTab = 'cuotas'">
+          <i class="pi pi-wallet" />
+          <span>{{ t('alerts.tab-installments') }}</span>
+          <span v-if="installmentDueActiveCount > 0" class="alerts-tab-badge">{{ installmentDueActiveCount }}</span>
+        </button>
         <button class="alerts-tab-btn" :class="{ 'alerts-tab-btn-active': activeTab === 'reglas' }" @click="activeTab = 'reglas'">
           <i class="pi pi-cog" />
           <span>{{ t('alerts.tab-rules') }}</span>
@@ -519,6 +542,109 @@ function formatDateTime(isoDate) {
         </div>
       </div>
 
+      <!-- ════════════════════════════════ TAB: Cuotas por vencer ═════ -->
+      <div v-if="activeTab === 'cuotas'">
+        <div class="alerts-filters">
+          <div class="alerts-filter-pills">
+            <button
+                v-for="statusOption in ['ALL', 'ACTIVE', 'ACKNOWLEDGED', 'RESOLVED']"
+                :key="statusOption"
+                class="alerts-pill"
+                :class="{ 'alerts-pill-active-default': installmentStatusFilter === statusOption && statusOption === 'ALL' }"
+                :style="installmentStatusFilter === statusOption && statusOption !== 'ALL'
+                                ? { backgroundColor: getStatusConfig(statusOption).background, color: getStatusConfig(statusOption).color, borderColor: getStatusConfig(statusOption).color }
+                                : {}"
+                @click="installmentStatusFilter = statusOption"
+            >
+              {{ statusOption === 'ALL' ? t('alerts.filter-all') : t(getStatusConfig(statusOption).labelKey) }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Desktop table -->
+        <div class="alerts-table-wrapper">
+          <table class="alerts-table">
+            <thead>
+            <tr class="alerts-thead-row">
+              <th class="alerts-th">{{ t('alerts.col-customer') }}</th>
+              <th class="alerts-th">{{ t('alerts.col-amount') }}</th>
+              <th class="alerts-th">{{ t('alerts.col-days-remaining') }}</th>
+              <th class="alerts-th">{{ t('alerts.col-severity') }}</th>
+              <th class="alerts-th">{{ t('alerts.col-status') }}</th>
+              <th class="alerts-th" />
+            </tr>
+            </thead>
+            <tbody>
+            <tr
+                v-for="alert in installmentAlerts"
+                :key="alert.id"
+                class="alerts-tr"
+                :style="alert.status === 'ACTIVE' ? { backgroundColor: `${getTypeConfig(alert.type).background}60` } : {}"
+            >
+              <td class="alerts-td alerts-td-product">{{ alert.customerOrSupplierName || t('alerts.field-anonymous-customer') }}</td>
+              <td class="alerts-td">S/ {{ Number(alert.amount ?? 0).toFixed(2) }}</td>
+              <td class="alerts-td alerts-td-muted">
+                {{ alert.daysRemaining < 0
+                  ? t('alerts.field-overdue-days', { days: Math.abs(alert.daysRemaining) })
+                  : t('alerts.field-due-in-days', { days: alert.daysRemaining }) }}
+              </td>
+              <td class="alerts-td">
+                <span class="alerts-severity-badge" :style="{ backgroundColor: getSeverityConfig(alert.severity).background, color: getSeverityConfig(alert.severity).color }">
+                  {{ t(getSeverityConfig(alert.severity).labelKey) }}
+                </span>
+              </td>
+              <td class="alerts-td">
+                <span class="alerts-status-badge" :style="{ backgroundColor: getStatusConfig(alert.status).background, color: getStatusConfig(alert.status).color }">
+                  <i :class="`pi ${getStatusConfig(alert.status).icon}`" style="font-size: 0.6rem;" />
+                  {{ t(getStatusConfig(alert.status).labelKey) }}
+                </span>
+              </td>
+              <td class="alerts-td">
+                <button class="alerts-btn-view" @click="openDetail(alert)">
+                  <i class="pi pi-eye" />
+                  <span>{{ t('alerts.btn-view') }}</span>
+                </button>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+          <div v-if="installmentAlerts.length === 0" class="alerts-empty">
+            <i class="pi pi-wallet alerts-empty-icon" />
+            <p class="alerts-empty-text">{{ t('alerts.no-results') }}</p>
+          </div>
+        </div>
+
+        <!-- Mobile cards -->
+        <div class="alerts-mobile-cards">
+          <button
+              v-for="alert in installmentAlerts"
+              :key="alert.id"
+              class="alerts-mobile-card"
+              :style="{ borderColor: alert.status === 'ACTIVE' ? getTypeConfig(alert.type).border : 'var(--border)', backgroundColor: alert.status === 'ACTIVE' ? getTypeConfig(alert.type).background : 'var(--surface)' }"
+              @click="openDetail(alert)"
+          >
+            <div class="alerts-mobile-card-top">
+              <div class="alerts-mobile-card-left">
+                <div class="alerts-mobile-icon-wrapper">
+                  <i class="pi pi-wallet" :style="{ color: getTypeConfig(alert.type).color, fontSize: '1rem' }" />
+                </div>
+                <div class="alerts-mobile-card-info">
+                  <p class="alerts-mobile-card-product">{{ alert.customerOrSupplierName || t('alerts.field-anonymous-customer') }}</p>
+                  <p class="alerts-mobile-card-message">{{ alert.message }}</p>
+                </div>
+              </div>
+              <span class="alerts-status-badge" :style="{ backgroundColor: getStatusConfig(alert.status).background, color: getStatusConfig(alert.status).color }">
+                {{ t(getStatusConfig(alert.status).labelKey) }}
+              </span>
+            </div>
+          </button>
+          <div v-if="installmentAlerts.length === 0" class="alerts-empty">
+            <i class="pi pi-wallet alerts-empty-icon" />
+            <p class="alerts-empty-text">{{ t('alerts.no-results') }}</p>
+          </div>
+        </div>
+      </div>
+
       <!-- ════════════════════════════════════ TAB: Reglas ════════════ -->
       <div v-if="activeTab === 'reglas'" class="alerts-rules-container">
         <div class="alerts-rules-info-banner">
@@ -609,7 +735,11 @@ function formatDateTime(isoDate) {
               <p class="alerts-modal-type-label" :style="{ color: getTypeConfig(selectedAlert.type).color }">
                 {{ t(getTypeConfig(selectedAlert.type).labelKey) }}
               </p>
-              <p class="alerts-modal-product-name">{{ selectedAlert.productName || `#${selectedAlert.productId}` }}</p>
+              <p class="alerts-modal-product-name">
+                {{ selectedAlert.isInstallmentDue
+                  ? (selectedAlert.customerOrSupplierName || t('alerts.field-anonymous-customer'))
+                  : (selectedAlert.productName || `#${selectedAlert.productId}`) }}
+              </p>
               <p v-if="resolveWarehouseName(selectedAlert)" class="alerts-modal-detail-text" style="font-weight: 600;">
                 <i class="pi pi-building" style="font-size: 0.75rem; margin-right: 0.3rem;" />{{ resolveWarehouseName(selectedAlert) }}
               </p>
@@ -654,6 +784,18 @@ function formatDateTime(isoDate) {
                 {{ selectedAlert.daysToExpiry < 0
                   ? t('alerts.field-expired-days-ago', { days: Math.abs(selectedAlert.daysToExpiry) })
                   : `${selectedAlert.daysToExpiry} ${t('alerts.field-days')}` }}
+              </p>
+            </div>
+            <div v-if="selectedAlert.isInstallmentDue" class="alerts-modal-info-cell">
+              <p class="alerts-modal-info-label">{{ t('alerts.field-amount') }}</p>
+              <p class="alerts-modal-info-value">S/ {{ Number(selectedAlert.amount ?? 0).toFixed(2) }}</p>
+            </div>
+            <div v-if="selectedAlert.isInstallmentDue && selectedAlert.daysRemaining !== null" class="alerts-modal-info-cell">
+              <p class="alerts-modal-info-label">{{ t('alerts.field-days-remaining') }}</p>
+              <p class="alerts-modal-info-value">
+                {{ selectedAlert.daysRemaining < 0
+                  ? t('alerts.field-overdue-days', { days: Math.abs(selectedAlert.daysRemaining) })
+                  : t('alerts.field-due-in-days', { days: selectedAlert.daysRemaining }) }}
               </p>
             </div>
             <div v-if="selectedAlert.resolvedAt" class="alerts-modal-info-cell">

@@ -30,7 +30,12 @@ export class AlertAssembler {
             daysToExpiry: resource.daysToExpiry ?? null,
             notified:     resource.notified     ?? false,
             notifiedAt:   resource.notifiedAt   ?? '',
-            resolvedAt:   resource.resolvedAt   ?? ''
+            resolvedAt:   resource.resolvedAt   ?? '',
+            saleId:               resource.saleId               ?? null,
+            purchaseOrderId:      resource.purchaseOrderId       ?? null,
+            customerOrSupplierName: resource.customerOrSupplierName ?? '',
+            amount:               resource.amount               ?? null,
+            daysRemaining:        resource.daysRemaining         ?? null
         });
     }
 

@@ -424,7 +424,7 @@ function handleConfirm() {
             @click="handleConfirm"
         >
           <i v-if="saving" class="pi pi-spin pi-spinner" style="margin-right: 0.4rem;"/>
-          {{ saving ? t('pos.payment-confirming') : t('pos.payment-confirm') }}
+          {{ saving ? t('pos.payment-confirming') : (sellOnCredit ? t('pos.payment-modal-continue') : t('pos.payment-confirm')) }}
         </button>
       </div>
 

@@ -7,14 +7,16 @@
  * - OUT_OF_STOCK: Stock has reached zero — critical priority.
  * - EXPIRATION:   A product batch is approaching its expiry date.
  * - EXPIRED:      A product batch has already passed its expiry date — critical priority.
+ * - INSTALLMENT_DUE: A credit sale's next cuota is coming due (X6 #7) — no product involved.
  *
  * @enum {string}
  */
 export const AlertType = Object.freeze({
-    LOW_STOCK:    'LOW_STOCK',
-    OUT_OF_STOCK: 'OUT_OF_STOCK',
-    EXPIRATION:   'EXPIRATION',
-    EXPIRED:      'EXPIRED'
+    LOW_STOCK:       'LOW_STOCK',
+    OUT_OF_STOCK:    'OUT_OF_STOCK',
+    EXPIRATION:      'EXPIRATION',
+    EXPIRED:         'EXPIRED',
+    INSTALLMENT_DUE: 'INSTALLMENT_DUE'
 });
 
 /**
@@ -77,6 +79,11 @@ export class Alert {
      * @param {boolean}     [params.notified=false]
      * @param {string}      [params.notifiedAt='']
      * @param {string}      [params.resolvedAt='']
+     * @param {number|null} [params.saleId=null] - The credit sale an INSTALLMENT_DUE alert is about.
+     * @param {number|null} [params.purchaseOrderId=null] - Reserved for X6 #12 (Bloque G2) — always null for now.
+     * @param {string}      [params.customerOrSupplierName=''] - Who owes the cuota — null-safe fallback for an anonymous sale.
+     * @param {number|null} [params.amount=null] - The due cuota's amount — only set for INSTALLMENT_DUE.
+     * @param {number|null} [params.daysRemaining=null] - Days until (positive) or since (negative) the cuota's due date.
      */
     constructor({
                     id           = null,
@@ -95,7 +102,12 @@ export class Alert {
                     daysToExpiry = null,
                     notified     = false,
                     notifiedAt   = '',
-                    resolvedAt   = ''
+                    resolvedAt   = '',
+                    saleId                 = null,
+                    purchaseOrderId        = null,
+                    customerOrSupplierName = '',
+                    amount                 = null,
+                    daysRemaining          = null
                 }) {
         this.id           = id;
         this.businessId   = businessId;
@@ -114,6 +126,16 @@ export class Alert {
         this.notified     = notified;
         this.notifiedAt   = notifiedAt;
         this.resolvedAt   = resolvedAt;
+        this.saleId                 = saleId;
+        this.purchaseOrderId        = purchaseOrderId;
+        this.customerOrSupplierName = customerOrSupplierName;
+        this.amount                 = amount;
+        this.daysRemaining          = daysRemaining;
+    }
+
+    /** @returns {boolean} */
+    get isInstallmentDue() {
+        return this.type === AlertType.INSTALLMENT_DUE;
     }
 
     /** @returns {boolean} */

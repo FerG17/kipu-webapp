@@ -8,6 +8,7 @@ import useIamStore   from '../../../iam/application/iam.store.js';
 import { canRevertInstallmentPayments } from '../../../iam/application/permissions.js';
 import { SaleStatus } from '../../domain/model/sale.entity.js';
 import { toDateLocale } from '../../../shared/presentation/date-locale.js';
+import InstallmentScheduleModal from '../components/installment-schedule-modal.vue';
 
 /**
  * PaymentPlansList view for the Sales & POS Management bounded context.
@@ -54,6 +55,12 @@ const newPlanSaleId = ref('');
 /** @type {import('vue').Ref<string>} Installment count entered in the create-plan modal. */
 const newPlanInstallments = ref('2');
 
+/** @type {import('vue').Ref<boolean>} Whether the cuota-schedule modal (Screen 2, X6 #7) is open. */
+const showScheduleModal = ref(false);
+
+/** Sale the schedule modal is currently building a plan for — set right before opening it. */
+const scheduleTargetSale = computed(() => salesStore.getSaleById(parseInt(newPlanSaleId.value)));
+
 /**
  * Sales that can have a payment plan attached (or re-attached, after a
  * partial failure — see pos-screen.vue's handlePaymentConfirm, which already
@@ -91,14 +98,24 @@ function closeCreatePlanModal() {
   showCreateModal.value = false;
 }
 
-/** Submits the create-plan form. */
+/** Proceeds from the sale/count picker (Screen 1) to the cuota schedule modal (Screen 2, X6 #7). */
 function confirmCreatePlan() {
   if (!canConfirmCreate.value || creatingPlan.value) return;
+  showCreateModal.value  = false;
+  showScheduleModal.value = true;
+}
+
+/**
+ * Handles the schedule modal's confirm — creates the plan with this exact
+ * schedule against the sale chosen on Screen 1.
+ * @param {Array<{dueDate: string, amount: number}>} schedule
+ */
+function handleScheduleConfirm(schedule) {
   creatingPlan.value = true;
-  salesStore.createPaymentPlan(parseInt(newPlanSaleId.value), parseInt(newPlanInstallments.value) || 2)
+  salesStore.createPaymentPlan(parseInt(newPlanSaleId.value), schedule)
       .then(() => {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('payment-plans.toast-create-success'), life: 3500 });
-        showCreateModal.value = false;
+        showScheduleModal.value = false;
       })
       .catch(error => {
         const detail = error.response?.data?.detail ?? t('payment-plans.toast-create-error');
@@ -107,6 +124,12 @@ function confirmCreatePlan() {
       .finally(() => {
         creatingPlan.value = false;
       });
+}
+
+/** Backs out of Screen 2 to Screen 1 — nothing has been created yet. */
+function handleScheduleCancel() {
+  showScheduleModal.value = false;
+  showCreateModal.value   = true;
 }
 
 /**
@@ -137,46 +160,31 @@ function customerNameForSale(sale) {
 }
 
 /**
- * Resolves the sale's total for a plan, or null if the sale isn't loaded
- * yet. Prices already include IGV (the business bakes it into BasePrice),
- * so this is just the persisted total — no extra tax gets layered on here.
- * @param {import('../../domain/model/payment-plan.entity.js').PaymentPlan} plan
- * @returns {number|null}
- */
-function saleTotalForPlan(plan) {
-  const sale = salesStore.getSaleById(plan.saleId);
-  return sale ? sale.totalAmount : null;
-}
-
-/**
- * Splits a total into `count` installment amounts that sum back to it
- * exactly — mirrors the backend's own calculation
- * (PaymentPlanCommandService.Handle(RegisterInstallmentPaymentCommand):
- * round-to-nearest-cent per installment, remainder folded into the last
- * one) so this preview never disagrees with what actually gets recorded.
- * @param {number} total
- * @param {number} count
- * @returns {number[]}
- */
-function splitIntoInstallments(total, count) {
-  const base = Math.round((total / count) * 100) / 100;
-  const last = Math.round((total - base * (count - 1)) * 100) / 100;
-  return Array.from({ length: count }, (_, index) => index === count - 1 ? last : base);
-}
-
-/**
- * Amount of the plan's next unpaid installment. Once that installment is
- * actually registered, the real amount lives in `plan.payments` instead —
- * this is only a preview of what registering it next would produce.
+ * Amount of the plan's next unpaid cuota, straight from its real schedule
+ * (X6 #7) — not a client-side guess anymore.
  * @param {import('../../domain/model/payment-plan.entity.js').PaymentPlan} plan
  * @returns {string}
  */
 function installmentAmountLabel(plan) {
-  const total = saleTotalForPlan(plan);
-  if (total == null) return '—';
-  const amounts = splitIntoInstallments(total, plan.totalInstallments);
-  const nextIndex = Math.min(plan.paidInstallments, amounts.length - 1);
-  return formatCurrency(amounts[nextIndex]);
+  const next = plan.nextUnpaidInstallment;
+  return next ? formatCurrency(next.amount) : '—';
+}
+
+/** Today as 'yyyy-MM-dd', for comparing against a cuota's dueDate string. */
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Whether registering the next payment on this plan would be paying ahead
+ * of schedule — the cuota that's actually due hasn't reached its DueDate
+ * yet (X6 #7, decision 2). Used to show an extra confirmation before it.
+ * @param {import('../../domain/model/payment-plan.entity.js').PaymentPlan} plan
+ * @returns {boolean}
+ */
+function isPayingAheadOfSchedule(plan) {
+  const next = plan.nextUnpaidInstallment;
+  return !!next && next.dueDate > todayIso();
 }
 
 /**
@@ -199,10 +207,17 @@ function formatCurrency(amount) {
  * @param {import('../../domain/model/payment-plan.entity.js').PaymentPlan} plan
  */
 function confirmRegisterPayment(plan) {
+  // X6 #7, decision 2: paying a cuota that isn't due yet gets an extra,
+  // more explicit warning — the normal confirm below still applies either
+  // way, this doesn't block the payment, only makes sure it's on purpose.
+  const message = isPayingAheadOfSchedule(plan)
+      ? t('payment-plans.confirm-register-ahead-body', { customer: customerNameForPlan(plan), date: formatDateOnly(plan.nextUnpaidInstallment.dueDate) })
+      : t('payment-plans.confirm-register-body', { customer: customerNameForPlan(plan) });
+
   confirm.require({
-    message: t('payment-plans.confirm-register-body', { customer: customerNameForPlan(plan) }),
-    header:  t('payment-plans.confirm-register-header'),
-    icon:    'pi pi-check-circle',
+    message,
+    header: isPayingAheadOfSchedule(plan) ? t('payment-plans.confirm-register-ahead-header') : t('payment-plans.confirm-register-header'),
+    icon:   isPayingAheadOfSchedule(plan) ? 'pi pi-exclamation-triangle' : 'pi pi-check-circle',
     accept:  () => {
       registeringPlanId.value = plan.id;
       salesStore.registerInstallmentPayment(plan.id)
@@ -219,9 +234,57 @@ function confirmRegisterPayment(plan) {
   });
 }
 
-/** Toggles a plan's payment-history panel. */
+/** Toggles a plan's payment-history/schedule panel. */
 function toggleHistory(plan) {
   expandedPlanId.value = expandedPlanId.value === plan.id ? null : plan.id;
+  editingInstallmentId.value = null;
+}
+
+/** @type {import('vue').Ref<number|null>} Id of the installment currently being edited inline, or null. */
+const editingInstallmentId = ref(null);
+
+/** @type {import('vue').Ref<{dueDate: string, amount: string}>} Local form state for the installment being edited. */
+const editForm = ref({ dueDate: '', amount: '' });
+
+/** @type {import('vue').Ref<boolean>} Whether an update-installment request is in flight. */
+const savingInstallment = ref(false);
+
+/**
+ * Opens inline editing for one unpaid cuota — allowed even when other
+ * cuotas in the same plan are already paid (X6 #7, decision 5).
+ * @param {import('../../domain/model/payment-plan.entity.js').PaymentInstallment} installment
+ */
+function startEditInstallment(installment) {
+  editingInstallmentId.value = installment.id;
+  editForm.value = { dueDate: installment.dueDate, amount: String(installment.amount) };
+}
+
+function cancelEditInstallment() {
+  editingInstallmentId.value = null;
+}
+
+/**
+ * Saves the edited date/amount for one cuota. The backend re-validates that
+ * the plan's total still matches the sale's exactly (decision 1) — a
+ * mismatch comes back as a 400, surfaced via the error toast.
+ * @param {import('../../domain/model/payment-plan.entity.js').PaymentPlan} plan
+ * @param {number} installmentId
+ */
+function saveEditInstallment(plan, installmentId) {
+  if (savingInstallment.value) return;
+  savingInstallment.value = true;
+  salesStore.updatePaymentInstallment(plan.id, installmentId, editForm.value)
+      .then(() => {
+        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('payment-plans.toast-edit-installment-success'), life: 3500 });
+        editingInstallmentId.value = null;
+      })
+      .catch(error => {
+        const detail = error.response?.data?.detail ?? t('payment-plans.toast-edit-installment-error');
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
+      })
+      .finally(() => {
+        savingInstallment.value = false;
+      });
 }
 
 /**
@@ -245,6 +308,18 @@ function userLabel(userId) {
 function formatDateTime(dateString) {
   return new Date(dateString).toLocaleString(toDateLocale(locale.value), {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
+  });
+}
+
+/**
+ * Formats a 'yyyy-MM-dd' cuota due date as a short locale date — no time
+ * component, unlike formatDateTime (which is for payment timestamps).
+ * @param {string} dateOnlyString
+ * @returns {string}
+ */
+function formatDateOnly(dateOnlyString) {
+  return new Date(`${dateOnlyString}T00:00:00`).toLocaleDateString(toDateLocale(locale.value), {
+    day: '2-digit', month: '2-digit', year: 'numeric'
   });
 }
 
@@ -407,6 +482,47 @@ onMounted(() => {
           <!-- Payment history panel -->
           <tr v-if="expandedPlanId === plan.id" :key="`${plan.id}-history`" style="background-color: var(--surface-alt);">
             <td colspan="5" class="px-4 py-3">
+              <!-- Cuota schedule — editable while unpaid, even with other cuotas already paid (X6 #7, decision 5) -->
+              <p class="m-0 mb-2" style="font-size: 0.7rem; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em;">
+                {{ t('payment-plans.schedule-title') }}
+              </p>
+              <div style="display: flex; flex-direction: column; gap: 6px;" class="mb-3">
+                <div
+                    v-for="installment in [...plan.installments].sort((a, b) => a.number - b.number)"
+                    :key="installment.id"
+                    class="flex align-items-center justify-content-between"
+                    style="font-size: 0.78rem;"
+                >
+                  <template v-if="editingInstallmentId === installment.id">
+                    <div class="flex align-items-center gap-2 flex-1">
+                      <span style="color: var(--text-faint); width: 20px;">#{{ installment.number }}</span>
+                      <input v-model="editForm.dueDate" type="date" class="border-round-lg px-2 py-1" style="border: 1px solid var(--border); font-size: 0.78rem;" />
+                      <input v-model="editForm.amount" type="number" step="0.01" min="0" class="border-round-lg px-2 py-1" style="border: 1px solid var(--border); font-size: 0.78rem; width: 90px;" />
+                      <button style="background: none; border: none; cursor: pointer; color: var(--status-ok-fg);" :disabled="savingInstallment" @click="saveEditInstallment(plan, installment.id)">
+                        <i :class="savingInstallment ? 'pi pi-spin pi-spinner' : 'pi pi-check'" />
+                      </button>
+                      <button style="background: none; border: none; cursor: pointer; color: var(--text-faint);" :disabled="savingInstallment" @click="cancelEditInstallment">
+                        <i class="pi pi-times" />
+                      </button>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <span :style="{ color: installment.isPaid ? 'var(--text-faint)' : 'var(--text-muted)', textDecoration: installment.isPaid ? 'line-through' : 'none' }">
+                      #{{ installment.number }} — {{ formatDateOnly(installment.dueDate) }}
+                    </span>
+                    <div class="flex align-items-center gap-2">
+                      <span :style="{ fontWeight: 600, color: installment.isPaid ? 'var(--text-faint)' : 'var(--text)', textDecoration: installment.isPaid ? 'line-through' : 'none' }">
+                        {{ formatCurrency(installment.amount) }}
+                      </span>
+                      <span v-if="installment.isPaid" class="pi pi-check-circle" style="color: var(--status-ok-fg); font-size: 0.78rem;" />
+                      <button v-else style="background: none; border: none; cursor: pointer; color: var(--text-faint);" :title="t('payment-plans.btn-edit-installment')" @click="startEditInstallment(installment)">
+                        <i class="pi pi-pencil" style="font-size: 0.75rem;" />
+                      </button>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
               <p class="m-0 mb-2" style="font-size: 0.7rem; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em;">
                 {{ t('payment-plans.history-title') }}
               </p>
@@ -496,9 +612,46 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- Payment history panel -->
+          <!-- Cuota schedule panel -->
           <div v-if="expandedPlanId === plan.id" class="mt-3 pt-3" style="border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px;">
             <p class="m-0" style="font-size: 0.68rem; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em;">
+              {{ t('payment-plans.schedule-title') }}
+            </p>
+            <div
+                v-for="installment in [...plan.installments].sort((a, b) => a.number - b.number)"
+                :key="installment.id"
+                class="flex align-items-center justify-content-between"
+                style="font-size: 0.75rem;"
+            >
+              <template v-if="editingInstallmentId === installment.id">
+                <div class="flex align-items-center gap-2 flex-1">
+                  <input v-model="editForm.dueDate" type="date" class="border-round-lg px-2 py-1" style="border: 1px solid var(--border); font-size: 0.75rem;" />
+                  <input v-model="editForm.amount" type="number" step="0.01" min="0" class="border-round-lg px-2 py-1" style="border: 1px solid var(--border); font-size: 0.75rem; width: 80px;" />
+                  <button style="background: none; border: none; cursor: pointer; color: var(--status-ok-fg);" :disabled="savingInstallment" @click="saveEditInstallment(plan, installment.id)">
+                    <i :class="savingInstallment ? 'pi pi-spin pi-spinner' : 'pi pi-check'" />
+                  </button>
+                  <button style="background: none; border: none; cursor: pointer; color: var(--text-faint);" :disabled="savingInstallment" @click="cancelEditInstallment">
+                    <i class="pi pi-times" />
+                  </button>
+                </div>
+              </template>
+              <template v-else>
+                <span :style="{ color: installment.isPaid ? 'var(--text-faint)' : 'var(--text-muted)', textDecoration: installment.isPaid ? 'line-through' : 'none' }">
+                  #{{ installment.number }} — {{ formatDateOnly(installment.dueDate) }}
+                </span>
+                <div class="flex align-items-center gap-2">
+                  <span :style="{ fontWeight: 600, color: installment.isPaid ? 'var(--text-faint)' : 'var(--text)', textDecoration: installment.isPaid ? 'line-through' : 'none' }">
+                    {{ formatCurrency(installment.amount) }}
+                  </span>
+                  <span v-if="installment.isPaid" class="pi pi-check-circle" style="color: var(--status-ok-fg); font-size: 0.75rem;" />
+                  <button v-else style="background: none; border: none; cursor: pointer; color: var(--text-faint);" @click="startEditInstallment(installment)">
+                    <i class="pi pi-pencil" style="font-size: 0.72rem;" />
+                  </button>
+                </div>
+              </template>
+            </div>
+
+            <p class="m-0 mt-2" style="font-size: 0.68rem; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em;">
               {{ t('payment-plans.history-title') }}
             </p>
             <div
@@ -627,5 +780,16 @@ onMounted(() => {
         </template>
       </div>
     </div>
+
+    <!-- Cuota schedule modal (Screen 2, X6 #7) -->
+    <installment-schedule-modal
+        v-if="showScheduleModal && scheduleTargetSale"
+        :total="scheduleTargetSale.totalAmount"
+        :total-installments="parseInt(newPlanInstallments) || 2"
+        :customer-name="customerNameForSale(scheduleTargetSale)"
+        :saving="creatingPlan"
+        @confirm="handleScheduleConfirm"
+        @cancel="handleScheduleCancel"
+    />
   </div>
 </template>
