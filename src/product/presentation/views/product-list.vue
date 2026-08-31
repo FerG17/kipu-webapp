@@ -8,10 +8,11 @@ import useProductStore, { parseLocalDate } from '../../application/product.store
 import useIamStore        from '../../../iam/application/iam.store.js';
 import useAlertsStore     from '../../../alerts/application/alerts.store.js';
 import useSupplierStore   from '../../../suppliers/application/supplier.store.js';
+import useCategoryStore   from '../../application/category.store.js';
 import { Supplier }       from '../../../suppliers/domain/model/supplier.entity.js';
 import { Product, ProductCategory, ProductStatus, UnitOfSale } from '../../domain/model/product.entity.js';
 import { toDateLocale }   from '../../../shared/presentation/date-locale.js';
-import { isCustomCategory, orderedCategoryOptions, filterableCategoryOptions } from '../category-options.js';
+import { isCustomCategory, orderedCategoryOptionsFromValues, filterableCategoryOptions } from '../category-options.js';
 import { canWriteInventory, canAccessSuppliers } from '../../../iam/application/permissions.js';
 import { useModalScrollLock } from '../../../shared/presentation/use-modal-scroll-lock.js';
 import { useTodayLocalDateString } from '../../../shared/presentation/use-today-local-date.js';
@@ -24,6 +25,7 @@ const productStore  = useProductStore();
 const iamStore      = useIamStore();
 const alertsStore   = useAlertsStore();
 const supplierStore = useSupplierStore();
+const categoryStore = useCategoryStore();
 
 const { products, productsLoaded, inactiveProducts, inactiveProductsLoaded, inventory } = toRefs(productStore);
 const { fetchProducts, fetchInventory, fetchBatches, discardBatch, updateBatchExpiration, invalidateStockMovements,
@@ -33,6 +35,9 @@ const { fetchProducts, fetchInventory, fetchBatches, discardBatch, updateBatchEx
 
 const { suppliers: allSuppliers, suppliersLoaded: suppliersLoadedRef } = toRefs(supplierStore);
 const { addSupplier } = supplierStore;
+
+const { categories, categoriesLoaded: categoriesLoadedRef } = toRefs(categoryStore);
+const { fetchCategories, addCategory } = categoryStore;
 
 // Backend rejects a stock intake whose expiration date is already in the
 // past (RegisterStockIntakeCommand) — caught here too so the date picker
@@ -75,6 +80,9 @@ const deletingProductId = ref(null);
 const addingSupplier = ref(false);
 const showAddSupplierInline = ref(false);
 const newSupplierName = ref('');
+const addingCategory = ref(false);
+const showAddCategoryInline = ref(false);
+const newCategoryName = ref('');
 
 const activeTab            = ref('products');
 const searchQuery          = ref('');
@@ -124,14 +132,15 @@ const canViewSuppliers = computed(() => canAccessSuppliers(iamStore.currentUserP
 const categoryFilterOptions = computed(() => ['Todos', ...filterableCategoryOptions(products.value)]);
 
 /**
- * Category options for the create/edit product modal — same ordered list
- * as the filter (fixed categories, then custom ones in use, OTHER last),
- * minus "Todos". Lets an admin pick a previously-created custom category
- * (e.g. "Frutas y verduras") directly, instead of having to reselect
- * "Otros" and retype the same label every time.
+ * Category options for the create/edit product modal — the business's own
+ * catalog (X6 #5), not just the categories already in use by products.
+ * Every fixed category is seeded at sign-up, so it's always offered here
+ * even before any product uses it; a quick-created custom category (e.g.
+ * "Frutas y verduras") appears the moment it's added, via the "+" button
+ * below the dropdown.
  * @type {import('vue').ComputedRef<string[]>}
  */
-const categoryModalOptions = computed(() => orderedCategoryOptions(products.value));
+const categoryModalOptions = computed(() => orderedCategoryOptionsFromValues(categories.value.map(category => category.name)));
 
 /**
  * Translated label for a product category (or 'Todos'), reusing the same
@@ -214,6 +223,7 @@ onMounted(() => {
   if (iamStore.currentUser?.businessId) {
     if (!productsLoaded.value) fetchProducts();
     fetchInventory();
+    if (!categoriesLoadedRef.value) fetchCategories();
     productStore.fetchWarehousesForBusiness().then(list => {
       warehouses.value = list.filter(warehouse => warehouse.status === 'ACTIVE');
       warehousesLoading.value = false;
@@ -274,6 +284,38 @@ function confirmAddSupplierInline() {
       })
       .finally(() => {
         addingSupplier.value = false;
+      });
+}
+
+/** Resets and toggles the inline "add a new category" mini-form under the category dropdown (X6 #5). */
+function toggleAddCategoryInline() {
+  showAddCategoryInline.value = !showAddCategoryInline.value;
+  newCategoryName.value = '';
+}
+
+/**
+ * Quick-creates a category from just a name and selects it on the product
+ * being edited — mirrors confirmAddSupplierInline's flow. Replaces the old
+ * "pick Otros, then type a custom label" pattern: the typed name becomes a
+ * real catalog entry immediately, selectable from the dropdown from then on
+ * instead of being retyped every time.
+ */
+function confirmAddCategoryInline() {
+  const name = newCategoryName.value.trim();
+  if (!name) return;
+
+  addingCategory.value = true;
+  addCategory(name)
+      .then(created => {
+        productModalForm.value.category = created.name;
+        showAddCategoryInline.value = false;
+        newCategoryName.value = '';
+      })
+      .catch(() => {
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('inventory.toast-category-add-error'), life: 4500 });
+      })
+      .finally(() => {
+        addingCategory.value = false;
       });
 }
 
@@ -387,7 +429,6 @@ function countByStatus(statusKey) {
 const productModalForm = ref({
   name:           '',
   category:       ProductCategory.OTHER,
-  customCategory: '',
   supplierIds:    [],
   currentStock:   '',
   minimumStock:   '',
@@ -472,13 +513,14 @@ function realignSupplierMultiselect() {
 function openCreateProductModal(prefillBarcode = '') {
   editingProduct.value   = null;
   productModalForm.value = {
-    name: '', category: ProductCategory.OTHER, customCategory: '', supplierIds: [], currentStock: '', minimumStock: '', basePrice: '', cost: '', expirationDate: '', lotLabel: '',
+    name: '', category: ProductCategory.OTHER, supplierIds: [], currentStock: '', minimumStock: '', basePrice: '', cost: '', expirationDate: '', lotLabel: '',
     warehouseId: warehouses.value[0] ? String(warehouses.value[0].id) : '',
     barcode: prefillBarcode,
     unitOfSale: UnitOfSale.UNIT
   };
   productModalErrors.value = { basePrice: '', name: '' };
   showAddSupplierInline.value = false;
+  showAddCategoryInline.value = false;
   showProductModal.value = true;
 }
 
@@ -523,9 +565,8 @@ function handleScanSubmit() {
 function openEditProductModal(product) {
   editingProduct.value = product;
 
-  // A product's custom category (if any) is already one of the dropdown's
-  // own options (see categoryModalOptions), so it's selected directly —
-  // no need to route through "Otros" + a prefilled text field on edit.
+  // A product's category is always one of the catalog's own options (see
+  // categoryModalOptions), so it's selected directly.
   //
   // cost/expirationDate stay blank and unused here (X5 Bloque C): editing a
   // product no longer touches its lots — a product can have several active
@@ -535,7 +576,6 @@ function openEditProductModal(product) {
   productModalForm.value = {
     name:           product.name,
     category:       product.category,
-    customCategory: '',
     supplierIds:    [...(product.supplierIds ?? [])],
     currentStock:   String(resolveCurrentStock(product.id)),
     minimumStock:   String(resolveMinimumStock(product.id)),
@@ -549,6 +589,7 @@ function openEditProductModal(product) {
   };
   productModalErrors.value = { basePrice: '', name: '' };
   showAddSupplierInline.value = false;
+  showAddCategoryInline.value = false;
   showProductModal.value = true;
 }
 
@@ -629,14 +670,10 @@ function saveProductFromModal() {
     return;
   }
 
-  // When "Otros" is picked and the admin actually typed a custom label
-  // (e.g. "Frutas"), that label becomes the real category instead of the
-  // generic OTHER — effectively letting admins create new categories on
-  // the fly. Leaving the text blank keeps the plain OTHER behavior.
-  const customCategory = productModalForm.value.customCategory.trim();
-  const resolvedCategory = productModalForm.value.category === ProductCategory.OTHER && customCategory
-      ? customCategory
-      : productModalForm.value.category;
+  // The category is always a real catalog entry now (X6 #5) — picked from
+  // the dropdown, or just quick-created via the "+" button, which selects
+  // it immediately. No more "Otros + typed label" resolution step.
+  const resolvedCategory = productModalForm.value.category;
 
   if (!editingProduct.value) {
     const duplicate = findDuplicateProduct(resolvedCategory);
@@ -1760,6 +1797,28 @@ function saveWarehouse() {
                 <select v-model="productModalForm.category" class="modal-input modal-select">
                   <option v-for="cat in categoryModalOptions" :key="cat" :value="cat">{{ categoryLabel(cat) }}</option>
                 </select>
+                <button type="button" class="modal-link-btn mt-1" @click="toggleAddCategoryInline">
+                  <i class="pi pi-plus" style="font-size: 0.65rem;"/> {{ t('inventory.modal-field-category-add-new') }}
+                </button>
+                <div v-if="showAddCategoryInline" class="flex gap-2 mt-2">
+                  <input
+                      v-model="newCategoryName"
+                      :placeholder="t('inventory.modal-field-category-new-placeholder')"
+                      maxlength="50"
+                      class="modal-input"
+                      style="flex: 1;"
+                      @keyup.enter="confirmAddCategoryInline"
+                  />
+                  <button
+                      type="button"
+                      class="border-round-lg border-none cursor-pointer btn-modal-primary"
+                      style="padding: 0 0.9rem;"
+                      :disabled="addingCategory || !newCategoryName.trim()"
+                      @click="confirmAddCategoryInline"
+                  >
+                    <i :class="addingCategory ? 'pi pi-spin pi-spinner' : 'pi pi-check'"/>
+                  </button>
+                </div>
               </div>
               <div style="flex: 1;">
                 <label class="modal-label">{{ t('inventory.modal-field-supplier') }}</label>
@@ -1808,17 +1867,6 @@ function saveWarehouse() {
                 <option :value="UnitOfSale.WEIGHT">{{ t('inventory.modal-field-unit-of-sale-weight') }}</option>
               </select>
               <p class="m-0 mt-1 modal-field-hint">{{ t('inventory.modal-field-unit-of-sale-hint') }}</p>
-            </div>
-
-            <!-- Custom category (only shown when "Otros" is selected) -->
-            <div v-if="productModalForm.category === 'OTHER'">
-              <label class="modal-label">{{ t('inventory.modal-field-custom-category') }}</label>
-              <input
-                  v-model="productModalForm.customCategory"
-                  :placeholder="t('inventory.modal-field-custom-category-placeholder')"
-                  class="modal-input"
-              />
-              <p class="m-0 mt-1 modal-field-hint">{{ t('inventory.modal-field-custom-category-hint') }}</p>
             </div>
 
             <!-- Stock actual + Stock mínimo -->
