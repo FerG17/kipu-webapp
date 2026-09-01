@@ -23,6 +23,7 @@ import { todayLocalDateString }     from '../../shared/domain/model/local-date.j
 import { PurchaseOrderAssembler }   from '../infrastructure/purchase-order.assembler.js';
 import { PurchaseOrder, PurchaseOrderStatus } from '../domain/model/purchase-order.entity.js';
 import { warnIfTruncated }          from '../../shared/infrastructure/pagination.js';
+import { SupplierPaymentPlanAssembler } from '../infrastructure/supplier-payment-plan.assembler.js';
 
 const supplierApi = new SupplierApi();
 
@@ -39,6 +40,17 @@ const useSupplierStore = defineStore('supplier', () => {
 
     /** @type {import('vue').Ref<boolean>} */
     const purchaseOrdersLoaded = ref(false);
+
+    /**
+     * Pending (not fully paid) supplier payment plans — loaded on demand
+     * (fetchPendingSupplierPaymentPlans), not as part of fetchPurchaseOrders.
+     * Mirrors Sales' paymentPlans (X6 #7), applied to purchase orders (X6 #12).
+     * @type {import('vue').Ref<import('../domain/model/supplier-payment-plan.entity.js').SupplierPaymentPlan[]>}
+     */
+    const supplierPaymentPlans = ref([]);
+
+    /** @type {import('vue').Ref<boolean>} */
+    const supplierPaymentPlansLoaded = ref(false);
 
     // ─── Computed ──────────────────────────────────────────────────────────────
 
@@ -347,11 +359,128 @@ const useSupplierStore = defineStore('supplier', () => {
             });
     }
 
+    // ─── Supplier Payment Plans ────────────────────────────────────────────────
+
+    /**
+     * Loads pending (not fully paid) supplier payment plans into local state —
+     * for the whole business, or narrowed to one supplier's orders when
+     * supplierId is given.
+     * @param {number|string} [supplierId]
+     * @returns {Promise<void>}
+     */
+    function fetchPendingSupplierPaymentPlans(supplierId) {
+        return supplierApi.getPendingSupplierPaymentPlans(supplierId)
+            .then(response => {
+                supplierPaymentPlans.value = SupplierPaymentPlanAssembler.toEntitiesFromResponse(response);
+                supplierPaymentPlansLoaded.value = true;
+            })
+            .catch(() => {
+                supplierPaymentPlansLoaded.value = true;
+            });
+    }
+
+    /**
+     * Fetches the payment plan attached to a specific purchase order, if any.
+     * @param {number|string} purchaseOrderId
+     * @returns {Promise<import('../domain/model/supplier-payment-plan.entity.js').SupplierPaymentPlan|null>}
+     */
+    function fetchSupplierPaymentPlanByPurchaseOrder(purchaseOrderId) {
+        return supplierApi.getSupplierPaymentPlanByPurchaseOrder(purchaseOrderId)
+            .then(response => SupplierPaymentPlanAssembler.toEntityFromResource(response.data))
+            .catch(() => null);
+    }
+
+    /**
+     * Attaches a payment plan (compra "a crédito") to an already-confirmed
+     * purchase order. Deliberately a separate call from createPurchaseOrder —
+     * the backend itself never lets plan creation touch how the order was
+     * totaled (see SupplierPaymentPlanCommandService). Unlike Sales' #7, this
+     * is allowed on a PENDING, DELAYED, or RECEIVED order — only CANCELLED
+     * orders reject it (X6 #12, decision 12.5).
+     *
+     * @param {number|string} purchaseOrderId
+     * @param {Array<{dueDate: string, amount: number|string}>} schedule - Must add up exactly to the order's total.
+     * @returns {Promise<import('../domain/model/supplier-payment-plan.entity.js').SupplierPaymentPlan>}
+     */
+    function createSupplierPaymentPlan(purchaseOrderId, schedule) {
+        const resource = SupplierPaymentPlanAssembler.toResourceFromEntity({ purchaseOrderId, schedule });
+        return supplierApi.createSupplierPaymentPlan(resource)
+            .then(response => {
+                const createdPlan = SupplierPaymentPlanAssembler.toEntityFromResource(response.data);
+                supplierPaymentPlans.value.push(createdPlan);
+                return createdPlan;
+            });
+    }
+
+    /**
+     * Edits an unpaid cuota's date/amount — allowed even when other cuotas in
+     * the same plan are already paid — and syncs local state.
+     * @param {number|string} planId
+     * @param {number|string} installmentId
+     * @param {{dueDate: string, amount: number|string}} line
+     * @returns {Promise<import('../domain/model/supplier-payment-plan.entity.js').SupplierPaymentPlan>}
+     */
+    function updateSupplierPaymentInstallment(planId, installmentId, line) {
+        const resource = SupplierPaymentPlanAssembler.toUpdateInstallmentResource(line);
+        return supplierApi.updateSupplierPaymentInstallment(planId, installmentId, resource)
+            .then(response => {
+                const updatedPlan = SupplierPaymentPlanAssembler.toEntityFromResource(response.data);
+                const index = supplierPaymentPlans.value.findIndex(plan => plan.id === updatedPlan.id);
+                if (index !== -1) supplierPaymentPlans.value[index] = updatedPlan;
+                return updatedPlan;
+            });
+    }
+
+    /**
+     * Registers the payment of one installment on a pending plan and
+     * synchronises local state — removing it from the pending list once
+     * fully paid, since this store only tracks pending plans.
+     * @param {number|string} planId
+     * @returns {Promise<import('../domain/model/supplier-payment-plan.entity.js').SupplierPaymentPlan>}
+     */
+    function registerSupplierInstallmentPayment(planId) {
+        return supplierApi.registerSupplierInstallmentPayment(planId)
+            .then(response => {
+                const updatedPlan = SupplierPaymentPlanAssembler.toEntityFromResource(response.data);
+                const index = supplierPaymentPlans.value.findIndex(plan => plan.id === updatedPlan.id);
+                if (updatedPlan.isFullyPaid) {
+                    if (index !== -1) supplierPaymentPlans.value.splice(index, 1);
+                } else if (index !== -1) {
+                    supplierPaymentPlans.value[index] = updatedPlan;
+                }
+                return updatedPlan;
+            });
+    }
+
+    /**
+     * Reverts the most recently registered payment on a plan — Admin only,
+     * enforced server-side. A previously-fully-paid plan that drops out of
+     * paidInstallments === totalInstallments becomes pending again, so it
+     * needs to be (re-)inserted into the local list, not just updated in place.
+     * @param {number|string} planId
+     * @returns {Promise<import('../domain/model/supplier-payment-plan.entity.js').SupplierPaymentPlan>}
+     */
+    function revertSupplierInstallmentPayment(planId) {
+        return supplierApi.revertSupplierInstallmentPayment(planId)
+            .then(response => {
+                const updatedPlan = SupplierPaymentPlanAssembler.toEntityFromResource(response.data);
+                const index = supplierPaymentPlans.value.findIndex(plan => plan.id === updatedPlan.id);
+                if (index !== -1) {
+                    supplierPaymentPlans.value[index] = updatedPlan;
+                } else {
+                    supplierPaymentPlans.value.push(updatedPlan);
+                }
+                return updatedPlan;
+            });
+    }
+
     return {
         suppliers,
         purchaseOrders,
         suppliersLoaded,
         purchaseOrdersLoaded,
+        supplierPaymentPlans,
+        supplierPaymentPlansLoaded,
         activeSupplierCount,
         pendingOrderCount,
         pendingOrderTotal,
@@ -366,7 +495,13 @@ const useSupplierStore = defineStore('supplier', () => {
         deactivateSupplier,
         reactivateSupplier,
         createPurchaseOrder,
-        updatePurchaseOrderStatus
+        updatePurchaseOrderStatus,
+        fetchPendingSupplierPaymentPlans,
+        fetchSupplierPaymentPlanByPurchaseOrder,
+        createSupplierPaymentPlan,
+        updateSupplierPaymentInstallment,
+        registerSupplierInstallmentPayment,
+        revertSupplierInstallmentPayment
     };
 });
 

@@ -113,6 +113,15 @@ const useAlertsStore = defineStore('alerts', () => {
             active:       true,
             threshold:    7,
             hasThreshold: true
+        },
+        {
+            type:         AlertType.SUPPLIER_INSTALLMENT_DUE,
+            nameKey:      'alerts.rule-supplier-installment-due-name',
+            descKey:      'alerts.rule-supplier-installment-due-desc',
+            unitKey:      'alerts.rule-unit-days',
+            active:       true,
+            threshold:    7,
+            hasThreshold: true
         }
     ]);
 
@@ -171,6 +180,16 @@ const useAlertsStore = defineStore('alerts', () => {
      */
     const installmentDueActiveCount = computed(() =>
         alerts.value.filter(alert => alert.type === AlertType.INSTALLMENT_DUE && alert.status === AlertStatus.ACTIVE).length
+    );
+
+    /**
+     * Number of active SUPPLIER_INSTALLMENT_DUE alerts (X6 #12) — counted
+     * separately from installmentDueActiveCount, but the "Cuotas" tab itself
+     * shows both types together (see filterByType's caller in the dashboard).
+     * @type {import('vue').ComputedRef<number>}
+     */
+    const supplierInstallmentDueActiveCount = computed(() =>
+        alerts.value.filter(alert => alert.type === AlertType.SUPPLIER_INSTALLMENT_DUE && alert.status === AlertStatus.ACTIVE).length
     );
 
     // ----- Queries  -----
@@ -356,6 +375,7 @@ const useAlertsStore = defineStore('alerts', () => {
         lowStockActiveCount,
         expirationActiveCount,
         installmentDueActiveCount,
+        supplierInstallmentDueActiveCount,
         getAlertById,
         filterByType,
         filterByStatus,

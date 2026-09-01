@@ -9,14 +9,20 @@ import useProductStore    from '../../../product/application/product.store.js';
 import useAlertsStore     from '../../../alerts/application/alerts.store.js';
 import { PurchaseOrderStatus } from '../../domain/model/purchase-order.entity.js';
 import { useTodayLocalDateString } from '../../../shared/presentation/use-today-local-date.js';
+import { toDateLocale } from '../../../shared/presentation/date-locale.js';
+import { canRevertInstallmentPayments } from '../../../iam/application/permissions.js';
+import SupplierInstallmentScheduleModal from '../components/supplier-installment-schedule-modal.vue';
 
-const { t }         = useI18n();
+const { t, locale } = useI18n();
 const toast         = useToast();
 const confirm       = useConfirm();
 const supplierStore = useSupplierStore();
 const iamStore      = useIamStore();
 const productStore  = useProductStore();
 const alertsStore   = useAlertsStore();
+
+/** X4 A5's rule, reused as-is: reverting a registered installment payment — admin only. */
+const canRevert = computed(() => canRevertInstallmentPayments(iamStore.currentUserPosition));
 
 /**
  * Local (not UTC) today's date, used as the minimum selectable expected
@@ -40,7 +46,12 @@ const {
 const {
   fetchPurchaseOrders,
   createPurchaseOrder,
-  updatePurchaseOrderStatus
+  updatePurchaseOrderStatus,
+  createSupplierPaymentPlan,
+  fetchSupplierPaymentPlanByPurchaseOrder,
+  updateSupplierPaymentInstallment,
+  registerSupplierInstallmentPayment,
+  revertSupplierInstallmentPayment
 } = supplierStore;
 
 // ─── Filter state ──────────────────────────────────────────────────────────────
@@ -54,19 +65,58 @@ const showNewOrderModal    = ref(false);
 const showOrderDetailModal = ref(false);
 const selectedOrder        = ref(null);
 
+/** Whether the cuota-schedule modal (Screen 2 of the credit-purchase flow, X6 #12) is open. */
+const showScheduleModal = ref(false);
+
+/** @type {import('vue').Ref<{orderId: number, totalInstallments: number, expectedDate: string, supplierName: string, total: number}|null>} Context carried from the created order into Screen 2. */
+const pendingCreditPlan = ref(null);
+
+const savingSchedule = ref(false);
+
+// ─── Order detail: attached credit payment plan (X6 #12) ──────────────────────
+
+/** @type {import('vue').Ref<import('../../domain/model/supplier-payment-plan.entity.js').SupplierPaymentPlan|null>} Plan attached to the order currently open in the detail modal, or null if it has none. */
+const detailPaymentPlan = ref(null);
+
+/** @type {import('vue').Ref<boolean>} Whether detailPaymentPlan is still being fetched for the open order. */
+const loadingDetailPlan = ref(false);
+
+const registeringDetailPayment = ref(false);
+const revertingDetailPayment   = ref(false);
+
+/** @type {import('vue').Ref<number|null>} Id of the installment being edited inline, or null. */
+const editingInstallmentId = ref(null);
+
+/** @type {import('vue').Ref<{dueDate: string, amount: string}>} Local form state for the installment being edited. */
+const editInstallmentForm = ref({ dueDate: '', amount: '' });
+
+const savingInstallmentEdit = ref(false);
+
+// Adding a credit plan to an order that doesn't have one yet (e.g. the
+// create-order flow's plan creation failed, or credit wasn't toggled at
+// creation time but is needed later) — same two-screen pattern (count picker
+// then schedule modal), scoped to this one already-existing order.
+const showAddCreditCountModal = ref(false);
+const addCreditInstallments   = ref('3');
+const showAddCreditScheduleModal = ref(false);
+const savingAddCreditPlan = ref(false);
+
 // ─── New order form ────────────────────────────────────────────────────────────
 
 const newOrderForm = ref({
   supplierId:   '',
   expectedDate: '',
   description:  '',
+  buyOnCredit:  false,
+  installments: '3',
   lines:        [{ productId: '', productName: '', quantity: 1, unitPrice: 0, discount: 0, batchLabel: '' }]
 });
 
 const newOrderErrors = ref({
   supplierId:   '',
   expectedDate: '',
-  lines:        ''
+  lines:        '',
+  installments: ''
 });
 
 // ─── Status config map ─────────────────────────────────────────────────────────
@@ -104,6 +154,12 @@ onMounted(() => {
     if (!productStore.inventoryLoaded) {
       productStore.fetchInventory();
     }
+    // GET /users is Admin-only — only fetched for an Admin (who can also
+    // revert a payment and so actually needs to identify who registered
+    // each one); a non-admin keeps the numbered fallback in userLabel().
+    if (canRevert.value && !iamStore.usersLoaded) {
+      iamStore.fetchUsers(iamStore.currentUser.businessId);
+    }
   }
 });
 
@@ -135,11 +191,13 @@ const availableProducts = computed(() =>
  * Opens the new purchase order modal with a blank form.
  */
 function openNewOrderModal() {
-  newOrderErrors.value = { supplierId: '', expectedDate: '', lines: '' };
+  newOrderErrors.value = { supplierId: '', expectedDate: '', lines: '', installments: '' };
   newOrderForm.value   = {
     supplierId:   activeSuppliers.value.length > 0 ? String(activeSuppliers.value[0].id) : '',
     expectedDate: '',
     description:  '',
+    buyOnCredit:  false,
+    installments: '3',
     lines:        [{ productId: '', productName: '', quantity: 1, unitPrice: 0, discount: 0, batchLabel: '' }]
   };
   showNewOrderModal.value = true;
@@ -199,7 +257,7 @@ const newOrderComputedTotal = computed(() => {
  * @returns {boolean}
  */
 function validateNewOrderForm() {
-  const formErrors = { supplierId: '', expectedDate: '', lines: '' };
+  const formErrors = { supplierId: '', expectedDate: '', lines: '', installments: '' };
   let isValid      = true;
 
   if (!newOrderForm.value.supplierId) {
@@ -225,23 +283,35 @@ function validateNewOrderForm() {
     isValid          = false;
   }
 
+  if (newOrderForm.value.buyOnCredit && (parseInt(newOrderForm.value.installments) || 0) < 2) {
+    formErrors.installments = t('suppliers.order-error-installments');
+    isValid                 = false;
+  }
+
   newOrderErrors.value = formErrors;
   return isValid;
 }
 
 /**
- * Submits the new purchase order.
+ * Submits the new purchase order. When "Comprar a crédito" is on, this only
+ * creates the order itself — the schedule (Screen 2) still has to be
+ * filled in before the payment plan can be attached, mirroring how Sales'
+ * #7 defers plan creation until after the schedule modal confirms (X6 #12).
  */
 function submitNewOrder() {
   if (!validateNewOrderForm()) return;
 
-  const businessId = iamStore.currentUser?.businessId ?? null;
+  const businessId          = iamStore.currentUser?.businessId ?? null;
+  const supplierEntity      = activeSuppliers.value.find(supplier => supplier.id === parseInt(newOrderForm.value.supplierId));
+  const buyOnCredit         = newOrderForm.value.buyOnCredit;
+  const installments        = parseInt(newOrderForm.value.installments) || 0;
+  const expectedDate        = newOrderForm.value.expectedDate;
 
   savingNewOrder.value = true;
   createPurchaseOrder({
     businessId:   businessId,
     supplierId:   parseInt(newOrderForm.value.supplierId),
-    expectedDate: newOrderForm.value.expectedDate,
+    expectedDate: expectedDate,
     description:  newOrderForm.value.description.trim(),
     detailLines:  newOrderForm.value.lines.map(line => ({
       productId:   parseInt(line.productId),
@@ -252,9 +322,20 @@ function submitNewOrder() {
       batchLabel:  line.batchLabel?.trim() || null
     }))
   })
-      .then(() => {
+      .then(createdOrder => {
         toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.order-toast-create-success'), life: 3500 });
         showNewOrderModal.value = false;
+
+        if (buyOnCredit && installments >= 2) {
+          pendingCreditPlan.value = {
+            orderId:           createdOrder.id,
+            totalInstallments: installments,
+            expectedDate:      expectedDate,
+            supplierName:      supplierEntity ? supplierEntity.fullName : '',
+            total:             createdOrder.totalAmount
+          };
+          showScheduleModal.value = true;
+        }
       })
       .catch(error => {
         const detail = error.response?.data?.detail ?? t('suppliers.order-toast-create-error');
@@ -263,6 +344,44 @@ function submitNewOrder() {
       .finally(() => {
         savingNewOrder.value = false;
       });
+}
+
+/**
+ * Handles the confirm event from the schedule modal (Screen 2) — attaches
+ * the payment plan to the just-created purchase order with this exact
+ * schedule. The order itself already exists at this point (unlike Sales'
+ * #7, where confirming the schedule is also what creates the sale) — a
+ * failure here doesn't undo the order, it just leaves it without a plan,
+ * addable later from the order's detail view.
+ * @param {Array<{dueDate: string, amount: number}>} schedule
+ */
+function handleScheduleConfirm(schedule) {
+  if (!pendingCreditPlan.value) return;
+
+  savingSchedule.value = true;
+  createSupplierPaymentPlan(pendingCreditPlan.value.orderId, schedule)
+      .then(() => {
+        toast.add({
+          severity: 'success',
+          summary:  t('common.toast-success-title'),
+          detail:   t('suppliers.order-toast-credit-plan-created', { installments: schedule.length }),
+          life:     4000
+        });
+        showScheduleModal.value = false;
+        pendingCreditPlan.value = null;
+      })
+      .catch(() => {
+        toast.add({ severity: 'warn', summary: t('common.toast-error-title'), detail: t('suppliers.order-toast-credit-plan-failed'), life: 6000 });
+      })
+      .finally(() => {
+        savingSchedule.value = false;
+      });
+}
+
+/** Backs out of Screen 2 — the order was already created and stays as-is, just without a payment plan. */
+function handleScheduleCancel() {
+  showScheduleModal.value = false;
+  pendingCreditPlan.value = null;
 }
 
 // ─── Order detail modal ────────────────────────────────────────────────────────
@@ -274,6 +393,20 @@ function submitNewOrder() {
 function openOrderDetail(order) {
   selectedOrder.value        = order;
   showOrderDetailModal.value = true;
+
+  // The order resource itself carries no plan reference (X6 #12, decision
+  // 3 — a plan's mere existence is the "a crédito" signal, no flag on the
+  // order) — always ask, a 404 just means this order has none.
+  detailPaymentPlan.value = null;
+  loadingDetailPlan.value = true;
+  editingInstallmentId.value = null;
+  fetchSupplierPaymentPlanByPurchaseOrder(order.id)
+      .then(plan => {
+        detailPaymentPlan.value = plan;
+      })
+      .finally(() => {
+        loadingDetailPlan.value = false;
+      });
 }
 
 /**
@@ -423,6 +556,202 @@ function resolveProductName(detail) {
   if (detail.productName) return detail.productName;
   const product = productStore.getProductById(detail.productId);
   return product ? product.name : `#${detail.productId}`;
+}
+
+// ─── Order detail: credit payment plan (X6 #12) ────────────────────────────────
+
+/** Today as 'yyyy-MM-dd', for comparing against a cuota's dueDate string. */
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Whether registering the plan's next payment would be paying ahead of
+ * schedule — mirrors Sales' #7 decision 2 (extra confirmation, doesn't block it).
+ * @returns {boolean}
+ */
+const isPayingAheadOfSchedule = computed(() => {
+  const next = detailPaymentPlan.value?.nextUnpaidInstallment;
+  return !!next && next.dueDate > todayIso();
+});
+
+/**
+ * Formats a 'yyyy-MM-dd' cuota due date as a short locale date.
+ * @param {string} dateOnlyString
+ * @returns {string}
+ */
+function formatDateOnly(dateOnlyString) {
+  return new Date(`${dateOnlyString}T00:00:00`).toLocaleDateString(toDateLocale(locale.value), {
+    day: '2-digit', month: '2-digit', year: 'numeric'
+  });
+}
+
+/**
+ * Formats an ISO timestamp as a short locale date + time.
+ * @param {string} dateString
+ * @returns {string}
+ */
+function formatDateTime(dateString) {
+  return new Date(dateString).toLocaleString(toDateLocale(locale.value), {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
+  });
+}
+
+/**
+ * Who registered/reversed a payment — "Tú" for the signed-in user, the
+ * resolved name when it's loaded, or a numbered fallback.
+ * @param {number} userId
+ * @returns {string}
+ */
+function userLabel(userId) {
+  if (iamStore.currentUser && userId === iamStore.currentUser.id) return t('payment-plans.you');
+  const user = iamStore.getUserById(userId);
+  return user ? `${user.name} ${user.lastName}` : t('payment-plans.unknown-user', { id: userId });
+}
+
+/**
+ * Prompts for confirmation, then registers the payment of the plan's next
+ * installment — visible in the order's detail regardless of the order's own
+ * status (X6 #12, decision 12.5).
+ */
+function confirmRegisterDetailPayment() {
+  if (!detailPaymentPlan.value) return;
+  const plan = detailPaymentPlan.value;
+
+  const message = isPayingAheadOfSchedule.value
+      ? t('suppliers.confirm-register-ahead-body', { date: formatDateOnly(plan.nextUnpaidInstallment.dueDate) })
+      : t('suppliers.confirm-register-body');
+
+  confirm.require({
+    message,
+    header: isPayingAheadOfSchedule.value ? t('suppliers.confirm-register-ahead-header') : t('suppliers.confirm-register-header'),
+    icon:   isPayingAheadOfSchedule.value ? 'pi pi-exclamation-triangle' : 'pi pi-check-circle',
+    accept: () => {
+      registeringDetailPayment.value = true;
+      registerSupplierInstallmentPayment(plan.id)
+          .then(updatedPlan => {
+            detailPaymentPlan.value = updatedPlan;
+            toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.toast-payment-success'), life: 3500 });
+          })
+          .catch(() => {
+            toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.toast-payment-error'), life: 4500 });
+          })
+          .finally(() => {
+            registeringDetailPayment.value = false;
+          });
+    }
+  });
+}
+
+/** Prompts for confirmation, then reverts the plan's most recently registered payment (Admin only). */
+function confirmRevertDetailPayment() {
+  if (!detailPaymentPlan.value) return;
+  const plan = detailPaymentPlan.value;
+
+  confirm.require({
+    message: t('suppliers.confirm-revert-body'),
+    header:  t('suppliers.confirm-revert-header'),
+    icon:    'pi pi-exclamation-triangle',
+    accept:  () => {
+      revertingDetailPayment.value = true;
+      revertSupplierInstallmentPayment(plan.id)
+          .then(updatedPlan => {
+            detailPaymentPlan.value = updatedPlan;
+            toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.toast-revert-success'), life: 3500 });
+          })
+          .catch(() => {
+            toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail: t('suppliers.toast-revert-error'), life: 4500 });
+          })
+          .finally(() => {
+            revertingDetailPayment.value = false;
+          });
+    }
+  });
+}
+
+/**
+ * Opens inline editing for one unpaid cuota — allowed even when other
+ * cuotas in the same plan are already paid (mirrors Sales' #7 decision 5).
+ * @param {import('../../domain/model/supplier-payment-plan.entity.js').SupplierPaymentInstallment} installment
+ */
+function startEditInstallment(installment) {
+  editingInstallmentId.value = installment.id;
+  editInstallmentForm.value  = { dueDate: installment.dueDate, amount: String(installment.amount) };
+}
+
+function cancelEditInstallment() {
+  editingInstallmentId.value = null;
+}
+
+/**
+ * Saves the edited date/amount for one cuota. The backend re-validates that
+ * the plan's total still matches the order's exactly — a mismatch comes
+ * back as a 400, surfaced via the error toast.
+ * @param {number} installmentId
+ */
+function saveEditInstallment(installmentId) {
+  if (!detailPaymentPlan.value || savingInstallmentEdit.value) return;
+  savingInstallmentEdit.value = true;
+  updateSupplierPaymentInstallment(detailPaymentPlan.value.id, installmentId, editInstallmentForm.value)
+      .then(updatedPlan => {
+        detailPaymentPlan.value    = updatedPlan;
+        editingInstallmentId.value = null;
+        toast.add({ severity: 'success', summary: t('common.toast-success-title'), detail: t('suppliers.toast-edit-installment-success'), life: 3500 });
+      })
+      .catch(error => {
+        const detail = error.response?.data?.detail ?? t('suppliers.toast-edit-installment-error');
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
+      })
+      .finally(() => {
+        savingInstallmentEdit.value = false;
+      });
+}
+
+/** Opens the cuota-count picker for attaching a credit plan to an order that doesn't have one yet. */
+function openAddCreditCountModal() {
+  addCreditInstallments.value  = '3';
+  showAddCreditCountModal.value = true;
+}
+
+/** Proceeds from the count picker to the schedule modal (Screen 2). */
+function confirmAddCreditCount() {
+  if ((parseInt(addCreditInstallments.value) || 0) < 2) return;
+  showAddCreditCountModal.value    = false;
+  showAddCreditScheduleModal.value = true;
+}
+
+/**
+ * Handles the add-credit-plan schedule modal's confirm — attaches the plan
+ * to the order currently open in the detail modal.
+ * @param {Array<{dueDate: string, amount: number}>} schedule
+ */
+function handleAddCreditScheduleConfirm(schedule) {
+  if (!selectedOrder.value) return;
+  savingAddCreditPlan.value = true;
+  createSupplierPaymentPlan(selectedOrder.value.id, schedule)
+      .then(createdPlan => {
+        detailPaymentPlan.value = createdPlan;
+        toast.add({
+          severity: 'success',
+          summary:  t('common.toast-success-title'),
+          detail:   t('suppliers.order-toast-credit-plan-created', { installments: schedule.length }),
+          life:     4000
+        });
+        showAddCreditScheduleModal.value = false;
+      })
+      .catch(error => {
+        const detail = error.response?.data?.detail ?? t('suppliers.order-toast-credit-plan-failed');
+        toast.add({ severity: 'error', summary: t('common.toast-error-title'), detail, life: 4500 });
+      })
+      .finally(() => {
+        savingAddCreditPlan.value = false;
+      });
+}
+
+/** Backs out of the add-credit-plan schedule modal to the count picker. */
+function handleAddCreditScheduleCancel() {
+  showAddCreditScheduleModal.value = false;
+  showAddCreditCountModal.value    = true;
 }
 
 </script>
@@ -686,6 +1015,36 @@ function resolveProductName(detail) {
             </div>
           </div>
 
+          <!-- Buy on credit toggle (X6 #12) -->
+          <div class="orders-credit-section">
+            <label class="orders-credit-toggle-label">
+              <input
+                  v-model="newOrderForm.buyOnCredit"
+                  type="checkbox"
+                  class="orders-credit-checkbox"
+              />
+              {{ t('suppliers.order-modal-credit-toggle') }}
+            </label>
+            <p v-if="newOrderForm.buyOnCredit" class="orders-credit-hint">
+              {{ t('suppliers.order-modal-credit-hint') }}
+            </p>
+            <div v-if="newOrderForm.buyOnCredit" class="orders-modal-field" style="max-width: 220px;">
+              <label class="orders-modal-label">
+                {{ t('suppliers.order-modal-credit-installments-label') }} *
+              </label>
+              <input
+                  v-model="newOrderForm.installments"
+                  type="number"
+                  min="2"
+                  class="orders-modal-input"
+                  :class="{ 'orders-modal-input-error': newOrderErrors.installments }"
+              />
+              <p v-if="newOrderErrors.installments" class="orders-modal-error-msg">
+                {{ newOrderErrors.installments }}
+              </p>
+            </div>
+          </div>
+
           <!-- Order lines header -->
           <div class="orders-lines-header">
             <label class="orders-modal-label">
@@ -805,6 +1164,84 @@ function resolveProductName(detail) {
         </div>
       </div>
     </div>
+
+    <!-- ── Cuota schedule modal (Screen 2: editable date+amount per cuota, X6 #12) ── -->
+    <supplier-installment-schedule-modal
+        v-if="showScheduleModal && pendingCreditPlan"
+        :total="pendingCreditPlan.total"
+        :total-installments="pendingCreditPlan.totalInstallments"
+        :start-date="pendingCreditPlan.expectedDate"
+        :supplier-name="pendingCreditPlan.supplierName"
+        :saving="savingSchedule"
+        @confirm="handleScheduleConfirm"
+        @cancel="handleScheduleCancel"
+    />
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Add a credit plan to an already-existing order (X6 #12) —
+         Screen 1: cuota count picker
+    ════════════════════════════════════════════════════════════════════ -->
+    <div
+        v-if="showAddCreditCountModal"
+        class="fixed inset-0 flex align-items-center justify-content-center px-4"
+        style="background-color: rgba(0,0,0,0.35); z-index: 60;"
+        @click.self="showAddCreditCountModal = false"
+    >
+      <div
+          class="w-full border-round-2xl p-4 shadow-8"
+          style="max-width: 380px; background-color: var(--surface); border: 1px solid var(--border);"
+      >
+        <div class="flex align-items-center justify-content-between mb-4">
+          <h2 class="m-0" style="font-size: 1.05rem; font-weight: 700; color: var(--text);">
+            {{ t('suppliers.credit-plan-add-btn') }}
+          </h2>
+          <button style="background: none; border: none; cursor: pointer; padding: 4px;" @click="showAddCreditCountModal = false">
+            <i class="pi pi-times" style="color: var(--text-faint); font-size: 1.1rem;" />
+          </button>
+        </div>
+
+        <div class="mb-4">
+          <label class="block mb-1" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">
+            {{ t('suppliers.order-modal-credit-installments-label') }}
+          </label>
+          <input
+              v-model="addCreditInstallments"
+              type="number"
+              min="2"
+              class="w-full border-round-lg px-3"
+              style="border: 1px solid var(--border); font-size: 0.95rem; font-weight: 700; color: var(--brand); padding: 8px 12px; outline: none;"
+          />
+        </div>
+
+        <button
+            class="w-full border-round-xl py-3"
+            :style="{
+                backgroundColor: (parseInt(addCreditInstallments) || 0) >= 2 ? 'var(--brand)' : 'var(--text-faint)',
+                color: 'var(--brand-ink)',
+                fontSize: '0.88rem',
+                fontWeight: 600,
+                border: 'none',
+                cursor: (parseInt(addCreditInstallments) || 0) >= 2 ? 'pointer' : 'not-allowed'
+            }"
+            :disabled="(parseInt(addCreditInstallments) || 0) < 2"
+            @click="confirmAddCreditCount"
+        >
+          {{ t('suppliers.order-modal-submit') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Screen 2: schedule modal, scoped to the order open in the detail modal -->
+    <supplier-installment-schedule-modal
+        v-if="showAddCreditScheduleModal && selectedOrder"
+        :total="selectedOrder.totalAmount"
+        :total-installments="parseInt(addCreditInstallments) || 2"
+        :start-date="selectedOrder.expectedDate || todayLocalDate"
+        :supplier-name="selectedOrder.supplierName"
+        :saving="savingAddCreditPlan"
+        @confirm="handleAddCreditScheduleConfirm"
+        @cancel="handleAddCreditScheduleCancel"
+    />
 
     <!-- ═══════════════════════════════════════════════════════════════════
          Modal: Order Detail & Status Actions
@@ -935,6 +1372,145 @@ function resolveProductName(detail) {
           >
             <p class="orders-detail-notes-label">{{ t('suppliers.order-detail-notes') }}</p>
             <p class="orders-detail-notes-text">{{ selectedOrder.description }}</p>
+          </div>
+
+          <!-- Credit payment plan (X6 #12) — shown regardless of the order's own
+               status (decision 12.5), except there's simply nothing to offer
+               on a cancelled order that never had one. -->
+          <div
+              v-if="loadingDetailPlan || detailPaymentPlan || selectedOrder.status !== PurchaseOrderStatus.CANCELLED"
+              class="orders-credit-plan-section"
+          >
+            <p class="orders-detail-section-label">{{ t('suppliers.credit-plan-title') }}</p>
+
+            <div v-if="loadingDetailPlan" class="flex align-items-center gap-2 py-2">
+              <i class="pi pi-spin pi-spinner" style="font-size: 0.9rem; color: var(--brand);" />
+              <span style="font-size: 0.8rem; color: var(--text-muted);">{{ t('suppliers.credit-plan-loading') }}</span>
+            </div>
+
+            <!-- No plan yet: offer to attach one (unless the order is cancelled) -->
+            <div v-else-if="!detailPaymentPlan">
+              <p v-if="selectedOrder.status === PurchaseOrderStatus.CANCELLED" style="font-size: 0.8rem; color: var(--text-faint);">
+                {{ t('suppliers.credit-plan-none') }}
+              </p>
+              <template v-else>
+                <p class="mb-2" style="font-size: 0.8rem; color: var(--text-muted);">
+                  {{ t('suppliers.credit-plan-none') }}
+                </p>
+                <button class="orders-btn-add-line" @click="openAddCreditCountModal">
+                  <i class="pi pi-plus" style="font-size: 0.7rem;" />
+                  {{ t('suppliers.credit-plan-add-btn') }}
+                </button>
+              </template>
+            </div>
+
+            <!-- Existing plan: progress + schedule + payment history -->
+            <div v-else>
+              <div class="flex align-items-center gap-2 mb-3">
+                <div class="border-round-3xl" style="width: 100px; height: 6px; background-color: var(--border); overflow: hidden;">
+                  <div
+                      class="h-full border-round-3xl"
+                      style="background-color: var(--brand);"
+                      :style="{ width: `${(detailPaymentPlan.paidInstallments / detailPaymentPlan.totalInstallments) * 100}%` }"
+                  />
+                </div>
+                <span style="font-size: 0.78rem; color: var(--text-muted);">
+                  {{ detailPaymentPlan.paidInstallments }}/{{ detailPaymentPlan.totalInstallments }}
+                </span>
+                <span v-if="detailPaymentPlan.isCancelled" class="orders-status-badge" style="background-color: var(--status-critical-bg); color: var(--status-critical-fg);">
+                  {{ t('suppliers.credit-plan-cancelled-tag') }}
+                </span>
+                <button
+                    v-else-if="!detailPaymentPlan.isFullyPaid"
+                    class="orders-action-btn orders-action-btn-receive"
+                    style="flex-direction: row; padding: 0.4rem 0.75rem; font-size: 0.72rem;"
+                    :disabled="registeringDetailPayment"
+                    @click="confirmRegisterDetailPayment"
+                >
+                  <i :class="registeringDetailPayment ? 'pi pi-spin pi-spinner' : 'pi pi-check'" />
+                  <span>{{ t('suppliers.btn-register-payment') }}</span>
+                </button>
+              </div>
+
+              <!-- Cuota schedule — editable while unpaid, even with other cuotas already paid -->
+              <p class="m-0 mb-2" style="font-size: 0.7rem; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em;">
+                {{ t('suppliers.credit-plan-schedule-title') }}
+              </p>
+              <div style="display: flex; flex-direction: column; gap: 6px;" class="mb-3">
+                <div
+                    v-for="installment in [...detailPaymentPlan.installments].sort((a, b) => a.number - b.number)"
+                    :key="installment.id"
+                    class="flex align-items-center justify-content-between"
+                    style="font-size: 0.78rem;"
+                >
+                  <template v-if="editingInstallmentId === installment.id">
+                    <div class="flex align-items-center gap-2 flex-1">
+                      <span style="color: var(--text-faint); width: 20px;">#{{ installment.number }}</span>
+                      <input v-model="editInstallmentForm.dueDate" type="date" class="border-round-lg px-2 py-1" style="border: 1px solid var(--border); font-size: 0.78rem;" />
+                      <input v-model="editInstallmentForm.amount" type="number" step="0.01" min="0" class="border-round-lg px-2 py-1" style="border: 1px solid var(--border); font-size: 0.78rem; width: 90px;" />
+                      <button style="background: none; border: none; cursor: pointer; color: var(--status-ok-fg);" :disabled="savingInstallmentEdit" @click="saveEditInstallment(installment.id)">
+                        <i :class="savingInstallmentEdit ? 'pi pi-spin pi-spinner' : 'pi pi-check'" />
+                      </button>
+                      <button style="background: none; border: none; cursor: pointer; color: var(--text-faint);" :disabled="savingInstallmentEdit" @click="cancelEditInstallment">
+                        <i class="pi pi-times" />
+                      </button>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <span :style="{ color: installment.isPaid ? 'var(--text-faint)' : 'var(--text-muted)', textDecoration: installment.isPaid ? 'line-through' : 'none' }">
+                      #{{ installment.number }} — {{ formatDateOnly(installment.dueDate) }}
+                    </span>
+                    <div class="flex align-items-center gap-2">
+                      <span :style="{ fontWeight: 600, color: installment.isPaid ? 'var(--text-faint)' : 'var(--text)', textDecoration: installment.isPaid ? 'line-through' : 'none' }">
+                        {{ formatCurrency(installment.amount) }}
+                      </span>
+                      <span v-if="installment.isPaid" class="pi pi-check-circle" style="color: var(--status-ok-fg); font-size: 0.78rem;" />
+                      <button v-else-if="!detailPaymentPlan.isCancelled" style="background: none; border: none; cursor: pointer; color: var(--text-faint);" :title="t('suppliers.btn-edit-installment')" @click="startEditInstallment(installment)">
+                        <i class="pi pi-pencil" style="font-size: 0.75rem;" />
+                      </button>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Payment history -->
+              <template v-if="detailPaymentPlan.payments.length > 0">
+                <p class="m-0 mb-2" style="font-size: 0.7rem; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em;">
+                  {{ t('suppliers.credit-plan-history-title') }}
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <div
+                      v-for="payment in [...detailPaymentPlan.payments].reverse()"
+                      :key="payment.id"
+                      class="flex align-items-center justify-content-between"
+                      style="font-size: 0.78rem;"
+                      :style="{ opacity: payment.isReversed ? 0.55 : 1 }"
+                  >
+                    <span :style="{ color: 'var(--text-muted)', textDecoration: payment.isReversed ? 'line-through' : 'none' }">
+                      {{ formatDateTime(payment.paidAt) }} — {{ userLabel(payment.paidByUserId) }}
+                    </span>
+                    <div class="flex align-items-center gap-2">
+                      <span :style="{ fontWeight: 600, color: payment.isReversed ? 'var(--text-faint)' : 'var(--text)', textDecoration: payment.isReversed ? 'line-through' : 'none' }">
+                        {{ formatCurrency(payment.amount) }}
+                      </span>
+                      <span v-if="payment.isReversed" style="font-size: 0.68rem; color: var(--status-critical-fg);">
+                        {{ t('suppliers.credit-plan-reverted-tag') }}
+                      </span>
+                      <button
+                          v-else-if="canRevert && detailPaymentPlan.lastReversiblePayment && detailPaymentPlan.lastReversiblePayment.id === payment.id"
+                          class="border-round-lg px-2 py-1"
+                          style="background-color: var(--status-critical-bg); color: var(--status-critical-fg); font-size: 0.68rem; font-weight: 600; border: none; cursor: pointer;"
+                          :disabled="revertingDetailPayment"
+                          @click="confirmRevertDetailPayment"
+                      >
+                        <i :class="revertingDetailPayment ? 'pi pi-spin pi-spinner' : 'pi pi-undo'" style="font-size: 0.7rem;" />
+                        {{ t('suppliers.btn-revert') }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
           </div>
 
           <!-- Status action buttons (only for actionable orders) -->
@@ -1410,6 +1986,37 @@ function resolveProductName(detail) {
   margin:       0 0 0.5rem;
 }
 
+/* ─── Buy on credit (X6 #12) ────────────────────────────────────────────────── */
+.orders-credit-section {
+  margin-bottom: 1rem;
+  padding:       0.75rem;
+  border:        1px solid var(--border);
+  border-radius: 0.6rem;
+}
+
+.orders-credit-toggle-label {
+  display:     flex;
+  align-items: center;
+  gap:         0.5rem;
+  font-size:   0.85rem;
+  font-weight: 600;
+  color:       var(--text);
+  cursor:      pointer;
+}
+
+.orders-credit-checkbox {
+  width:  1rem;
+  height: 1rem;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+.orders-credit-hint {
+  font-size: 0.75rem;
+  color:     var(--text-muted);
+  margin:    0.4rem 0 0.75rem;
+}
+
 /* ─── Order lines ───────────────────────────────────────────────────────────── */
 .orders-lines-header {
   display:         flex;
@@ -1799,6 +2406,14 @@ function resolveProductName(detail) {
   font-size: 0.82rem;
   color:     var(--status-warning-fg);
   margin:    0;
+}
+
+/* ─── Credit payment plan (X6 #12) ─────────────────────────────────────────── */
+.orders-credit-plan-section {
+  margin-bottom: 1rem;
+  padding:       0.75rem;
+  border:        1px solid var(--border);
+  border-radius: 0.6rem;
 }
 
 /* ─── Action buttons ────────────────────────────────────────────────────────── */
